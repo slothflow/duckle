@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Edge, Node } from '@xyflow/react';
 import { CheckCircle2, MousePointer2 } from 'lucide-react';
+import { resolveUpstreamSchema, resolveUpstreamSampleRows } from '../schema-resolve';
 import type { Column, DuckleNodeData } from '../pipeline-types';
 import SchemaEditor from './SchemaEditor';
 import FieldRenderer from './fields/FieldRenderer';
@@ -51,23 +52,15 @@ export default function PropertiesPanel({
         }
     }, [focusNameRequest]);
 
-    const upstreamSchema = useMemo<Column[]>(() => {
-        if (!selected) return [];
-        const upstreamIds = edges.filter(e => e.target === selected.id).map(e => e.source);
-        const cols: Column[] = [];
-        const seen = new Set<string>();
-        for (const id of upstreamIds) {
-            const node = allNodes.find(n => n.id === id);
-            const schema = node?.data.schema ?? [];
-            for (const c of schema) {
-                if (!seen.has(c.name)) {
-                    seen.add(c.name);
-                    cols.push(c);
-                }
-            }
-        }
-        return cols;
-    }, [selected, edges, allNodes]);
+    const upstreamSchema = useMemo<Column[]>(
+        () => resolveUpstreamSchema(selected?.id, allNodes, edges),
+        [selected, edges, allNodes],
+    );
+
+    const upstreamSampleRows = useMemo<Record<string, unknown>[]>(
+        () => resolveUpstreamSampleRows(selected?.id, allNodes, edges),
+        [selected, edges, allNodes],
+    );
 
     if (!selected) {
         return (
@@ -239,9 +232,19 @@ export default function PropertiesPanel({
                                 schema={
                                     manifest?.schemaSource === 'upstream'
                                         ? upstreamSchema
-                                        : declaredSchema
+                                        : declaredSchema.length > 0
+                                          ? declaredSchema
+                                          : upstreamSchema
                                 }
-                                rows={data.sampleRows ?? []}
+                                rows={
+                                    data.sampleRows && data.sampleRows.length > 0
+                                        ? data.sampleRows
+                                        : upstreamSampleRows
+                                }
+                                inheritedRows={
+                                    (!data.sampleRows || data.sampleRows.length === 0) &&
+                                    upstreamSampleRows.length > 0
+                                }
                             />
                         </div>
                     ) : null}
@@ -279,9 +282,10 @@ export default function PropertiesPanel({
 type PreviewProps = {
     schema: Column[];
     rows: Record<string, unknown>[];
+    inheritedRows?: boolean;
 };
 
-function PreviewTab({ schema, rows }: PreviewProps) {
+function PreviewTab({ schema, rows, inheritedRows }: PreviewProps) {
     if (schema.length === 0) {
         return (
             <div className="preview-empty">
@@ -312,6 +316,9 @@ function PreviewTab({ schema, rows }: PreviewProps) {
             <div className="preview-meta">
                 {rows.length} sample row{rows.length === 1 ? '' : 's'} · {cols.length} column
                 {cols.length === 1 ? '' : 's'}
+                {inheritedRows ? (
+                    <span className="preview-meta-tag"> · upstream sample</span>
+                ) : null}
             </div>
             <div className="preview-tablewrap">
                 <table className="preview-table">

@@ -35,6 +35,7 @@ import { CONNECTION_TYPES, type ConnectionType } from './connection-types';
 import type { DuckleNodeData } from '../pipeline-types';
 import type { ComponentDef } from '../workflow-ui/palette-data';
 import { useContextMenu, type MenuItem } from '../workflow-ui/ContextMenu';
+import { getManifest } from '../workflow-ui/fields/component-manifests';
 
 const ICON_SIZE = 14;
 
@@ -111,10 +112,29 @@ function CanvasInner({
         // mouse ref keeps tracking.
     }, []);
 
-    const handleConnect = useCallback((connection: Connection) => {
-        setPendingConnection(connection);
-        setPickerPos({ x: mouseRef.current.x, y: mouseRef.current.y });
-    }, []);
+    const handleConnect = useCallback(
+        (connection: Connection) => {
+            // If the source port is a specifically-typed output (reject,
+            // lookup, filter, iterate), auto-create the connection with
+            // that type — no picker. Only ambiguous 'main' outputs get
+            // the picker so the user can pick a row vs trigger type.
+            const sourceNode = nodes.find(n => n.id === connection.source);
+            const manifest = sourceNode
+                ? getManifest(sourceNode.data.componentId)
+                : undefined;
+            const sourcePort = manifest?.ports?.outputs.find(
+                p => p.id === connection.sourceHandle,
+            );
+            const portType = sourcePort?.type;
+            if (portType && portType !== 'main') {
+                onConnectWithType(connection, portType);
+                return;
+            }
+            setPendingConnection(connection);
+            setPickerPos({ x: mouseRef.current.x, y: mouseRef.current.y });
+        },
+        [nodes, onConnectWithType],
+    );
 
     const handlePickType = useCallback(
         (type: ConnectionType) => {

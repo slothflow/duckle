@@ -348,6 +348,28 @@ export default function App() {
             setNodes(ns => [...ns, newNode]);
             setSelectedId(id);
             markDirty();
+
+            // Auto-detect schema for sources / autodetect-capable components
+            // so downstream nodes inherit immediately. The mock returns sample
+            // columns; real autodetect lands when the runtime can read files.
+            if (manifest?.autodetect) {
+                void manifest.autodetect().then(result => {
+                    setNodes(ns =>
+                        ns.map(n =>
+                            n.id === id
+                                ? {
+                                      ...n,
+                                      data: {
+                                          ...n.data,
+                                          schema: result.columns,
+                                          sampleRows: result.sampleRows,
+                                      },
+                                  }
+                                : n,
+                        ),
+                    );
+                });
+            }
         },
         [setNodes, markDirty],
     );

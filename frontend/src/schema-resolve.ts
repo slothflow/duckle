@@ -1,0 +1,250 @@
+import type { Edge, Node } from '@xyflow/react';
+import type { Column, DataType, DuckleNodeData } from './pipeline-types';
+import { getManifest } from './workflow-ui/fields/component-manifests';
+import type { Aggregation } from './workflow-ui/fields/types';
+
+type KvPair = { key: string; value: string };
+
+const NUMERIC: DataType[] = ['int32', 'int64', 'float32', 'float64', 'decimal'];
+
+function aggOutputType(func: string, sourceCol: Column | undefined): DataType {
+    if (func === 'count' || func === 'count_distinct') return 'int64';
+    if (func === 'avg') return 'float64';
+    if (func === 'array_agg') return 'json';
+    if (func === 'sum') {
+        const t = sourceCol?.type;
+        if (t && NUMERIC.includes(t)) return t;
+        return 'float64';
+    }
+    return sourceCol?.type ?? 'string';
+}
+
+/**
+ * Resolve the effective output schema of a node by walking the DAG.
+ *
+ * - `declared` / `autodetect`: use node.data.schema as-is
+ * - computed transforms (project, dropcol, rename, cast, addcol, reorder,
+ *   groupby, joins): derive from upstream + properties
+ * - everything else with `upstream`: pass the merged upstream schema through
+ */
+export function resolveOutputSchema(
+    nodeId: string,
+    nodes: Node<DuckleNodeData>[],
+    edges: Edge[],
+    visiting: Set<string> = new Set(),
+): Column[] {
+    if (visiting.has(nodeId)) return [];
+    visiting.add(nodeId);
+    try {
+        const node = nodes.find(n => n.id === nodeId);
+        if (!node) return [];
+        return computeNodeSchema(node, nodes, edges, visiting);
+    } finally {
+        visiting.delete(nodeId);
+    }
+}
+
+function computeNodeSchema(
+    node: Node<DuckleNodeData>,
+    nodes: Node<DuckleNodeData>[],
+    edges: Edge[],
+    visiting: Set<string>,
+): Column[] {
+    const manifest = getManifest(node.data.componentId);
+    const props = node.data.properties ?? {};
+    const id = node.data.componentId;
+
+    const upstream = () => mergedUpstream(node.id, nodes, edges, visiting);
+
+    // Declared / autodetect — node owns its schema explicitly.
+    if (manifest?.schemaSource === 'declared') {
+        return node.data.schema ?? upstream();
+    }
+    if (manifest?.schemaSource === 'autodetect') {
+        return node.data.schema ?? [];
+    }
+
+    // ---- Computed transforms ---------------------------------------------
+
+    if (id === 'xf.project') {
+        const selected = (props.columns as string[] | undefined) ?? [];
+        const up = upstream();
+        if (selected.length === 0) return up;
+        const order = new Map(selected.map((n, i) => [n, i]));
+        const filtered = up.filter(c => order.has(c.name));
+        return filtered.sort((a, b) => (order.get(a.name) ?? 0) - (order.get(b.name) ?? 0));
+    }
+
+    if (id === 'xf.dropcol') {
+        const dropped = (props.columns as string[] | undefined) ?? [];
+        const up = upstream();
+        if (dropped.length === 0) return up;
+        const set = new Set(dropped);
+        return up.filter(c => !set.has(c.name));
+    }
+
+    if (id === 'xf.rename') {
+        const mapping = (props.mapping as KvPair[] | undefined) ?? [];
+        const up = upstream();
+        if (mapping.length === 0) return up;
+        const m = new Map(mapping.filter(p => p.key && p.value).map(p => [p.key, p.value]));
+        return up.map(c => ({ ...c, name: m.get(c.name) ?? c.name }));
+    }
+
+    if (id === 'xf.cast') {
+        const col = props.column as string | undefined;
+        const newType = props.targetType as DataType | undefined;
+        const up = upstream();
+        if (!col || !newType) return up;
+        return up.map(c => (c.name === col ? { ...c, type: newType } : c));
+    }
+
+    if (id === 'xf.addcol' || id === 'xf.coalesce') {
+        const name = props.name as string | undefined;
+        const type = (props.type as DataType | undefined) ?? 'string';
+        const up = upstream();
+        if (!name) return up;
+        if (up.some(c => c.name === name)) return up;
+        return [...up, { name, type, nullable: true }];
+    }
+
+    if (id === 'xf.reorder') {
+        const ordered = (props.columns as string[] | undefined) ?? [];
+        const up = upstream();
+        if (ordered.length === 0) return up;
+        const colMap = new Map(up.map(c => [c.name, c] as const));
+        const reordered: Column[] = ordered
+            .map(n => colMap.get(n))
+            .filter((c): c is Column => Boolean(c));
+        const others = up.filter(c => !ordered.includes(c.name));
+        return [...reordered, ...others];
+    }
+
+    if (id === 'xf.groupby') {
+        const keys = (props.groupKeys as string[] | undefined) ?? [];
+        const aggs = (props.aggregations as Aggregation[] | undefined) ?? [];
+        const up = upstream();
+        const keyCols = up.filter(c => keys.includes(c.name));
+        const aggCols: Column[] = aggs.map(a => ({
+            name: a.output || a.func + '_' + a.column,
+            type: aggOutputType(a.func, up.find(c => c.name === a.column)),
+            nullable: true,
+        }));
+        if (keyCols.length === 0 && aggCols.length === 0) return up;
+        return [...keyCols, ...aggCols];
+    }
+
+    if (id?.startsWith('xf.window.') || (manifest?.id === 'xf.aggwin')) {
+        const up = upstream();
+        const output = (props.outputName as string | undefined) ?? 'window_result';
+        if (up.some(c => c.name === output)) return up;
+        return [...up, { name: output, type: 'int64', nullable: true }];
+    }
+
+    if (
+        id?.startsWith('xf.join.') ||
+        id === 'xf.lookup' ||
+        id === 'xf.semi' ||
+        id === 'xf.anti'
+    ) {
+        // Joins: union of all incoming schemas (driving + lookup).
+        return mergedUpstream(node.id, nodes, edges, visiting);
+    }
+
+    if (id === 'xf.distinct' || id === 'xf.sort' || id === 'xf.filter' || id === 'xf.sample' || id === 'xf.topn' || id === 'xf.skip') {
+        return upstream();
+    }
+
+    // Set ops — schema = column-name-union of inputs (approximate)
+    if (id === 'xf.union' || id === 'xf.unionall' || id === 'xf.intersect' || id === 'xf.except') {
+        return mergedUpstream(node.id, nodes, edges, visiting);
+    }
+
+    // String / datetime / numeric / json / array — keep input, plus optional output
+    if (
+        id?.startsWith('xf.dt.') ||
+        id?.startsWith('xf.num.') ||
+        id?.startsWith('xf.json.') ||
+        id?.startsWith('xf.arr.') ||
+        (id?.startsWith('xf.') && id.split('.').length === 2)
+    ) {
+        const up = upstream();
+        const outputName = props.outputColumn as string | undefined;
+        if (outputName && !up.some(c => c.name === outputName)) {
+            return [...up, { name: outputName, type: 'string', nullable: true }];
+        }
+        return up;
+    }
+
+    // Custom code — fall back to declared schema if any, otherwise pass through
+    if (id?.startsWith('code.')) {
+        return node.data.schema ?? upstream();
+    }
+
+    // CDC variants
+    if (id?.startsWith('xf.cdc.')) {
+        // changed output has full schema; reject/unchanged outputs same
+        return upstream();
+    }
+
+    // Default — pass upstream through
+    return upstream();
+}
+
+function mergedUpstream(
+    nodeId: string,
+    nodes: Node<DuckleNodeData>[],
+    edges: Edge[],
+    visiting: Set<string>,
+): Column[] {
+    const incoming = edges.filter(e => e.target === nodeId);
+    if (incoming.length === 0) return [];
+    const cols: Column[] = [];
+    const seen = new Set<string>();
+    for (const e of incoming) {
+        const upSchema = resolveOutputSchema(e.source, nodes, edges, visiting);
+        for (const c of upSchema) {
+            if (!seen.has(c.name)) {
+                seen.add(c.name);
+                cols.push(c);
+            }
+        }
+    }
+    return cols;
+}
+
+/**
+ * Convenience for PropertiesPanel — schema flowing into this node.
+ */
+export function resolveUpstreamSchema(
+    nodeId: string | undefined,
+    nodes: Node<DuckleNodeData>[],
+    edges: Edge[],
+): Column[] {
+    if (!nodeId) return [];
+    return mergedUpstream(nodeId, nodes, edges, new Set());
+}
+
+/**
+ * Find the closest upstream node (BFS) that carries a non-empty sample.
+ */
+export function resolveUpstreamSampleRows(
+    nodeId: string | undefined,
+    nodes: Node<DuckleNodeData>[],
+    edges: Edge[],
+): Record<string, unknown>[] {
+    if (!nodeId) return [];
+    const queue: string[] = edges.filter(e => e.target === nodeId).map(e => e.source);
+    const visited = new Set<string>();
+    while (queue.length > 0) {
+        const id = queue.shift()!;
+        if (visited.has(id)) continue;
+        visited.add(id);
+        const node = nodes.find(n => n.id === id);
+        if (node?.data.sampleRows && node.data.sampleRows.length > 0) {
+            return node.data.sampleRows;
+        }
+        for (const e of edges.filter(e => e.target === id)) queue.push(e.source);
+    }
+    return [];
+}

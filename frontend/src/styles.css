@@ -2937,6 +2937,11 @@ select.schema-input {
     margin-bottom: 8px;
 }
 
+.preview-meta-tag {
+    color: var(--accent);
+    font-weight: 500;
+}
+
 .preview-tablewrap {
     overflow-x: auto;
     border: 1px solid var(--border);
