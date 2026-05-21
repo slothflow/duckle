@@ -1,0 +1,39 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Duckle",
+  "version": "0.0.1",
+  "identifier": "io.duckle.app",
+  "build": {
+    "beforeDevCommand": "npm --prefix ../../frontend run dev",
+    "devUrl": "http://localhost:5173",
+    "beforeBuildCommand": "npm --prefix ../../frontend run build",
+    "frontendDist": "../../frontend/dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Duckle",
+        "width": 1400,
+        "height": 900,
+        "minWidth": 1000,
+        "minHeight": 600,
+        "resizable": true,
+        "decorations": true,
+        "fullscreen": false
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": false,
+    "targets": "all",
+    "category": "DeveloperTool",
+    "shortDescription": "Embedded, ultra-fast data engineering platform.",
+    "longDescription": "Duckle is an open-source, local-first ETL/ELT/streaming platform with a drag-and-drop UI and native execution speed.",
+    "copyright": "Copyright 2026 Sourav Roy",
+    "icon": []
+  }
+}
