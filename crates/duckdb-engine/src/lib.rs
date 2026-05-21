@@ -494,6 +494,7 @@ impl DuckdbEngine {
         let mut nodes: std::collections::BTreeMap<String, NodeRunStatus> = Default::default();
         let mut overall_error: Option<String> = None;
         let mut was_cancelled = false;
+        let mut preview_collected: Vec<NodePreview> = Vec::new();
 
         // Drop any leftover views from a prior run so we don't read
         // stale data.
@@ -527,6 +528,7 @@ impl DuckdbEngine {
             });
 
             let started = Instant::now();
+            let mut previews_for_stage: Vec<NodePreview> = Vec::new();
             let result = self.with_connection(|conn| {
                 if stage.kind == StageKind::Sink {
                     let rows = conn.execute(&stage.sql, [])?;
@@ -538,12 +540,36 @@ impl DuckdbEngine {
             });
             let elapsed_ms = started.elapsed().as_millis() as u64;
 
+            // For view stages, after a successful creation, also count
+            // rows + grab a preview so the frontend can light up the
+            // node's "n rows" badge and populate its Preview tab.
+            let view_row_count = if let Ok(_) = &result {
+                if stage.kind == StageKind::View {
+                    let stage_id = stage.node_id.clone();
+                    let from_clause = plan::quote_ident(&stage_id);
+                    let count_result = self.with_connection(|conn| {
+                        let mut stmt = conn
+                            .prepare(&format!("SELECT COUNT(*) FROM {}", from_clause))?;
+                        let n: i64 = stmt.query_row([], |r| r.get::<usize, i64>(0))?;
+                        Ok::<i64, duckdb::Error>(n)
+                    });
+                    if let Ok(p) = self.preview_view(&stage_id) {
+                        previews_for_stage.push(p);
+                    }
+                    count_result.ok().map(|n| n.max(0) as u64)
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+
             match result {
                 Ok(rows) => {
                     let rows_opt = if stage.kind == StageKind::Sink {
                         Some(rows)
                     } else {
-                        None
+                        view_row_count
                     };
                     nodes.insert(
                         stage.node_id.clone(),
@@ -563,6 +589,8 @@ impl DuckdbEngine {
                         duration_ms: elapsed_ms,
                         error: None,
                     });
+                    // Collect previews for every view, not just leaves.
+                    preview_collected.extend(previews_for_stage);
                 }
                 Err(err) => {
                     let msg = err.to_string();
@@ -590,21 +618,10 @@ impl DuckdbEngine {
             }
         }
 
-        // Collect previews for leaves that successfully ran a view.
-        let mut preview = Vec::new();
-        if overall_error.is_none() && !was_cancelled {
-            for leaf_id in &compiled.leaves {
-                let Some(stage) = compiled.stages.iter().find(|s| s.node_id == *leaf_id) else {
-                    continue;
-                };
-                if stage.kind != StageKind::View {
-                    continue;
-                }
-                if let Ok(p) = self.preview_view(leaf_id) {
-                    preview.push(p);
-                }
-            }
-        }
+        // Previews collected per-stage during the run; nothing extra
+        // to do here unless we want to fall back to leaves on partial
+        // failure.
+        let preview = preview_collected;
 
         let final_status = if was_cancelled {
             "cancelled"

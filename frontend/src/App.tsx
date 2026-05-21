@@ -571,6 +571,26 @@ export default function App() {
         (start: number, result: RunResult | null) => {
             if (result) {
                 setRunResult(result);
+                // Merge the previews back into each node's data so the
+                // Preview tab and the inline schema badge stay in sync
+                // with what just ran.
+                if (result.preview.length > 0) {
+                    const byId = new Map(result.preview.map(p => [p.node_id, p]));
+                    setNodes(ns =>
+                        ns.map(n => {
+                            const p = byId.get(n.id);
+                            if (!p) return n;
+                            return {
+                                ...n,
+                                data: {
+                                    ...n.data,
+                                    schema: p.columns,
+                                    sampleRows: p.rows,
+                                },
+                            };
+                        }),
+                    );
+                }
             } else {
                 setRunResult({
                     status: 'error',
@@ -582,7 +602,7 @@ export default function App() {
                 });
             }
         },
-        [],
+        [setNodes],
     );
 
     const handleRun = useCallback(() => {

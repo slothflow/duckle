@@ -4927,3 +4927,19 @@ select.schema-input {
         0 0 0 4px rgba(255, 77, 109, 0.16),
         var(--shadow-1);
 }
+
+/* Edge animation while a run is flowing through it ------------------- */
+.duckle-edge.is-flowing {
+    animation: edge-dash 0.6s linear infinite;
+    stroke-dasharray: 8 4;
+}
+
+@keyframes edge-dash {
+    to {
+        stroke-dashoffset: -24;
+    }
+}
+
+.duckle-edge.is-completed {
+    transition: opacity 200ms ease;
+}

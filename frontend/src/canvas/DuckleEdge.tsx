@@ -6,6 +6,7 @@ import {
     type EdgeProps,
 } from '@xyflow/react';
 import { metaFor, type ConnectionType } from './connection-types';
+import { useRunStatus } from './run-status-context';
 
 export type DuckleEdgeData = {
     connectionType: ConnectionType;
@@ -18,6 +19,8 @@ export type DuckleEdgeType = Edge<DuckleEdgeData, 'duckle'>;
 export default function DuckleEdge(props: EdgeProps<DuckleEdgeType>) {
     const {
         id,
+        source,
+        target,
         sourceX,
         sourceY,
         targetX,
@@ -42,17 +45,35 @@ export default function DuckleEdge(props: EdgeProps<DuckleEdgeType>) {
     const meta = metaFor(type);
     const showLabel = Boolean(meta.badge || data?.label || data?.condition);
 
+    const sourceStatus = useRunStatus(source);
+    const targetStatus = useRunStatus(target);
+    const isFlowing =
+        sourceStatus?.status === 'running' || targetStatus?.status === 'running';
+    const sourceDone =
+        sourceStatus?.status === 'ok' || sourceStatus?.status === 'error';
+    const targetDone =
+        targetStatus?.status === 'ok' || targetStatus?.status === 'error';
+    const isCompleted = sourceDone && targetDone;
+
     return (
         <>
             <BaseEdge
                 id={id}
                 path={path}
                 markerEnd={markerEnd}
+                className={
+                    'duckle-edge' +
+                    (isFlowing ? ' is-flowing' : '') +
+                    (isCompleted ? ' is-completed' : '')
+                }
                 style={{
                     stroke: selected ? 'var(--accent-strong)' : meta.color,
-                    strokeDasharray: meta.dash ?? undefined,
+                    strokeDasharray: isFlowing
+                        ? '8 4'
+                        : meta.dash ?? undefined,
                     strokeWidth: selected ? meta.width + 0.6 : meta.width,
                     filter: selected ? 'drop-shadow(0 0 6px var(--accent-glow))' : undefined,
+                    opacity: isCompleted && !selected ? 0.55 : undefined,
                 }}
             />
             {showLabel ? (
