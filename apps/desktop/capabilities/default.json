@@ -4,6 +4,7 @@
   "description": "Default capabilities for the Duckle main window.",
   "windows": ["main"],
   "permissions": [
-    "core:default"
+    "core:default",
+    "dialog:default"
   ]
 }

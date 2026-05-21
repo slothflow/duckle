@@ -40,7 +40,8 @@ export type DuckleNodeData = {
     label: string;
     subtitle?: string;
     componentId?: string;
-    properties?: Record<string, string | number | boolean | null>;
+    properties?: Record<string, unknown>;
     schema?: Column[];
+    sampleRows?: Record<string, unknown>[];
     [key: string]: unknown;
 };

@@ -1,0 +1,739 @@
+import type { ComponentManifest, AutodetectResult } from './types';
+import type { Column } from '../../pipeline-types';
+
+const CSV_SAMPLE_SCHEMA: Column[] = [
+    { name: 'order_id', type: 'int64', nullable: false, primaryKey: true },
+    { name: 'customer_id', type: 'int64', nullable: false },
+    { name: 'status', type: 'string', nullable: false },
+    { name: 'amount', type: 'decimal', nullable: true },
+    { name: 'currency', type: 'string', nullable: false },
+    { name: 'created_at', type: 'timestamp', nullable: false },
+];
+
+const CSV_SAMPLE_ROWS = [
+    { order_id: 1001, customer_id: 42, status: 'paid', amount: 129.95, currency: 'USD', created_at: '2026-05-18T14:23:11Z' },
+    { order_id: 1002, customer_id: 17, status: 'pending', amount: 49.0, currency: 'USD', created_at: '2026-05-18T14:24:02Z' },
+    { order_id: 1003, customer_id: 42, status: 'paid', amount: 12.5, currency: 'USD', created_at: '2026-05-18T14:25:47Z' },
+    { order_id: 1004, customer_id: 99, status: 'refunded', amount: 200.0, currency: 'EUR', created_at: '2026-05-18T14:30:18Z' },
+];
+
+const PARQUET_SAMPLE_SCHEMA: Column[] = [
+    { name: 'event_id', type: 'string', nullable: false, primaryKey: true },
+    { name: 'user_id', type: 'int64', nullable: false },
+    { name: 'event_type', type: 'string', nullable: false },
+    { name: 'event_time', type: 'timestamp', nullable: false },
+    { name: 'properties', type: 'json', nullable: true },
+];
+
+const PARQUET_SAMPLE_ROWS = [
+    { event_id: 'e_a8f3', user_id: 42, event_type: 'page_view', event_time: '2026-05-18T14:23:11Z', properties: '{"path":"/home"}' },
+    { event_id: 'e_b2d7', user_id: 17, event_type: 'click', event_time: '2026-05-18T14:23:18Z', properties: '{"target":"cta"}' },
+];
+
+const SQLITE_SAMPLE_SCHEMA: Column[] = [
+    { name: 'id', type: 'int64', nullable: false, primaryKey: true },
+    { name: 'name', type: 'string', nullable: false },
+    { name: 'email', type: 'string', nullable: true },
+    { name: 'created_at', type: 'timestamp', nullable: false },
+];
+
+const JSON_SAMPLE_SCHEMA: Column[] = [
+    { name: 'id', type: 'string', nullable: false },
+    { name: 'payload', type: 'json', nullable: true },
+    { name: 'received_at', type: 'timestamp', nullable: false },
+];
+
+function mockAutodetect(schema: Column[], rows?: Record<string, unknown>[]): () => Promise<AutodetectResult> {
+    return async () => {
+        await new Promise(r => setTimeout(r, 300));
+        return { columns: schema, sampleRows: rows };
+    };
+}
+
+export const MANIFESTS: Record<string, ComponentManifest> = {
+    'src.csv': {
+        id: 'src.csv',
+        kind: 'source',
+        label: 'CSV',
+        description: 'Read delimited text files.',
+        schemaSource: 'autodetect',
+        autodetect: mockAutodetect(CSV_SAMPLE_SCHEMA, CSV_SAMPLE_ROWS),
+        sections: [
+            {
+                label: 'Source file',
+                fields: [
+                    {
+                        key: 'path',
+                        label: 'Path',
+                        kind: 'file-path',
+                        required: true,
+                        placeholder: 'e.g. C:\\data\\orders.csv',
+                        filters: [
+                            { name: 'CSV / TSV', extensions: ['csv', 'tsv', 'txt'] },
+                            { name: 'All files', extensions: ['*'] },
+                        ],
+                    },
+                    {
+                        key: 'hasHeader',
+                        label: 'First row is header',
+                        kind: 'bool',
+                        defaultValue: true,
+                        placeholder: 'Use the first row as column names',
+                    },
+                    {
+                        key: 'delimiter',
+                        label: 'Delimiter',
+                        kind: 'select',
+                        defaultValue: ',',
+                        options: [
+                            { label: 'Comma  ,', value: ',' },
+                            { label: 'Tab  \\t', value: '\t' },
+                            { label: 'Semicolon  ;', value: ';' },
+                            { label: 'Pipe  |', value: '|' },
+                            { label: 'Space', value: ' ' },
+                        ],
+                    },
+                    {
+                        key: 'quoteChar',
+                        label: 'Quote character',
+                        kind: 'select',
+                        defaultValue: '"',
+                        options: [
+                            { label: 'Double quote  "', value: '"' },
+                            { label: "Single quote  '", value: "'" },
+                            { label: 'None', value: '' },
+                        ],
+                    },
+                    {
+                        key: 'encoding',
+                        label: 'Encoding',
+                        kind: 'select',
+                        defaultValue: 'utf-8',
+                        options: [
+                            { label: 'UTF-8', value: 'utf-8' },
+                            { label: 'UTF-16', value: 'utf-16' },
+                            { label: 'Latin-1 (ISO-8859-1)', value: 'latin-1' },
+                            { label: 'Windows-1252', value: 'windows-1252' },
+                        ],
+                    },
+                    {
+                        key: 'skipLines',
+                        label: 'Skip lines (top)',
+                        kind: 'integer',
+                        defaultValue: 0,
+                    },
+                    {
+                        key: 'nullValue',
+                        label: 'Null sentinel',
+                        kind: 'text',
+                        placeholder: 'e.g. NULL, NA, \\N',
+                        description: 'Strings that should be interpreted as NULL.',
+                    },
+                ],
+            },
+        ],
+    },
+
+    'src.parquet': {
+        id: 'src.parquet',
+        kind: 'source',
+        label: 'Parquet',
+        description: 'Read columnar Parquet files.',
+        schemaSource: 'autodetect',
+        autodetect: mockAutodetect(PARQUET_SAMPLE_SCHEMA, PARQUET_SAMPLE_ROWS),
+        sections: [
+            {
+                label: 'Source file',
+                fields: [
+                    {
+                        key: 'path',
+                        label: 'Path',
+                        kind: 'file-path',
+                        required: true,
+                        filters: [
+                            { name: 'Parquet', extensions: ['parquet', 'pq'] },
+                            { name: 'All files', extensions: ['*'] },
+                        ],
+                    },
+                    {
+                        key: 'columns',
+                        label: 'Projection (columns to read)',
+                        kind: 'text',
+                        placeholder: 'leave blank for all columns',
+                        description: 'Comma-separated; pushed down to the Parquet reader.',
+                    },
+                    {
+                        key: 'rowGroupRange',
+                        label: 'Row group range',
+                        kind: 'text',
+                        placeholder: 'e.g. 0..10',
+                    },
+                ],
+            },
+        ],
+    },
+
+    'src.sqlite': {
+        id: 'src.sqlite',
+        kind: 'source',
+        label: 'SQLite',
+        description: 'Read from a SQLite database file.',
+        schemaSource: 'autodetect',
+        autodetect: mockAutodetect(SQLITE_SAMPLE_SCHEMA),
+        sections: [
+            {
+                label: 'Connection',
+                fields: [
+                    {
+                        key: 'database',
+                        label: 'Database file',
+                        kind: 'file-path',
+                        required: true,
+                        filters: [
+                            { name: 'SQLite', extensions: ['db', 'sqlite', 'sqlite3'] },
+                            { name: 'All files', extensions: ['*'] },
+                        ],
+                    },
+                ],
+            },
+            {
+                label: 'Query',
+                fields: [
+                    {
+                        key: 'mode',
+                        label: 'Read mode',
+                        kind: 'select',
+                        defaultValue: 'table',
+                        options: [
+                            { label: 'Whole table', value: 'table' },
+                            { label: 'Custom SQL', value: 'sql' },
+                        ],
+                    },
+                    {
+                        key: 'tableName',
+                        label: 'Table name',
+                        kind: 'text',
+                        placeholder: 'users',
+                    },
+                    {
+                        key: 'sql',
+                        label: 'SQL query',
+                        kind: 'expression',
+                        rows: 5,
+                        placeholder: 'SELECT * FROM users WHERE created_at > ?',
+                    },
+                ],
+            },
+        ],
+    },
+
+    'src.duckdb': {
+        id: 'src.duckdb',
+        kind: 'source',
+        label: 'DuckDB',
+        description: 'Read from a DuckDB database file.',
+        schemaSource: 'autodetect',
+        autodetect: mockAutodetect(CSV_SAMPLE_SCHEMA),
+        sections: [
+            {
+                label: 'Connection',
+                fields: [
+                    {
+                        key: 'database',
+                        label: 'Database file',
+                        kind: 'file-path',
+                        required: true,
+                        filters: [
+                            { name: 'DuckDB', extensions: ['duckdb', 'db'] },
+                            { name: 'All files', extensions: ['*'] },
+                        ],
+                    },
+                ],
+            },
+            {
+                label: 'Query',
+                fields: [
+                    {
+                        key: 'sql',
+                        label: 'SQL query',
+                        kind: 'expression',
+                        rows: 5,
+                        required: true,
+                        placeholder: 'SELECT * FROM orders WHERE status = $1',
+                    },
+                ],
+            },
+        ],
+    },
+
+    'src.json': {
+        id: 'src.json',
+        kind: 'source',
+        label: 'JSON',
+        description: 'Read JSON or NDJSON files.',
+        schemaSource: 'autodetect',
+        autodetect: mockAutodetect(JSON_SAMPLE_SCHEMA),
+        sections: [
+            {
+                label: 'Source file',
+                fields: [
+                    {
+                        key: 'path',
+                        label: 'Path',
+                        kind: 'file-path',
+                        required: true,
+                        filters: [
+                            { name: 'JSON', extensions: ['json', 'jsonl', 'ndjson'] },
+                            { name: 'All files', extensions: ['*'] },
+                        ],
+                    },
+                    {
+                        key: 'format',
+                        label: 'Format',
+                        kind: 'select',
+                        defaultValue: 'auto',
+                        options: [
+                            { label: 'Auto-detect', value: 'auto' },
+                            { label: 'JSON array', value: 'array' },
+                            { label: 'JSON Lines', value: 'jsonl' },
+                            { label: 'Single object', value: 'object' },
+                        ],
+                    },
+                    {
+                        key: 'flatten',
+                        label: 'Flatten nested objects',
+                        kind: 'bool',
+                        defaultValue: false,
+                    },
+                ],
+            },
+        ],
+    },
+
+    'xf.filter': {
+        id: 'xf.filter',
+        kind: 'transform',
+        label: 'Filter Rows',
+        description: 'Keep rows that match a predicate.',
+        schemaSource: 'upstream',
+        sections: [
+            {
+                label: 'Filter',
+                fields: [
+                    {
+                        key: 'predicate',
+                        label: 'Predicate',
+                        kind: 'expression',
+                        required: true,
+                        rows: 4,
+                        placeholder: "status = 'paid' AND amount > 100",
+                        description:
+                            'SQL boolean expression evaluated per row. Rows where the predicate is true are kept.',
+                    },
+                    {
+                        key: 'rejectOnError',
+                        label: 'Send errors to reject port',
+                        kind: 'bool',
+                        defaultValue: false,
+                    },
+                ],
+            },
+        ],
+    },
+
+    'xf.project': {
+        id: 'xf.project',
+        kind: 'transform',
+        label: 'Project / Select',
+        description: 'Pick which columns to keep, in which order.',
+        schemaSource: 'upstream',
+        sections: [
+            {
+                label: 'Columns',
+                fields: [
+                    {
+                        key: 'columns',
+                        label: 'Columns to keep',
+                        kind: 'columns',
+                        required: true,
+                        description:
+                            'Selected columns flow through in the listed order; everything else is dropped.',
+                    },
+                ],
+            },
+        ],
+    },
+
+    'xf.map': {
+        id: 'xf.map',
+        kind: 'transform',
+        label: 'Map',
+        description:
+            'Talend tMap-style row mapper. Define each output column as an expression over the input row.',
+        schemaSource: 'declared',
+        sections: [
+            {
+                label: 'Mapping',
+                fields: [
+                    {
+                        key: 'mode',
+                        label: 'Mode',
+                        kind: 'select',
+                        defaultValue: 'expressions',
+                        options: [
+                            { label: 'Expressions', value: 'expressions' },
+                            { label: 'Visual mapper (coming soon)', value: 'visual' },
+                        ],
+                    },
+                    {
+                        key: 'expressions',
+                        label: 'Output expressions',
+                        kind: 'key-value',
+                        description:
+                            'key = output column name, value = SQL expression. Example: total_with_tax → amount * 1.08',
+                    },
+                ],
+            },
+        ],
+    },
+
+    'xf.groupby': {
+        id: 'xf.groupby',
+        kind: 'transform',
+        label: 'Group By',
+        description: 'Group rows by key columns and apply aggregations.',
+        schemaSource: 'declared',
+        sections: [
+            {
+                label: 'Grouping',
+                fields: [
+                    {
+                        key: 'groupKeys',
+                        label: 'Group by columns',
+                        kind: 'columns',
+                        required: true,
+                        description: 'Rows with the same values in these columns are grouped.',
+                    },
+                ],
+            },
+            {
+                label: 'Aggregations',
+                fields: [
+                    {
+                        key: 'aggregations',
+                        label: 'Aggregations',
+                        kind: 'aggregations',
+                        required: true,
+                    },
+                ],
+            },
+            {
+                label: 'Output',
+                fields: [
+                    {
+                        key: 'havingClause',
+                        label: 'HAVING clause',
+                        kind: 'expression',
+                        rows: 2,
+                        placeholder: 'sum_amount > 1000',
+                        description: 'Optional filter applied to groups after aggregation.',
+                    },
+                ],
+            },
+        ],
+    },
+
+    'xf.sort': {
+        id: 'xf.sort',
+        kind: 'transform',
+        label: 'Sort',
+        schemaSource: 'upstream',
+        sections: [
+            {
+                label: 'Sort',
+                fields: [
+                    {
+                        key: 'sortColumn',
+                        label: 'Column',
+                        kind: 'column',
+                        required: true,
+                    },
+                    {
+                        key: 'direction',
+                        label: 'Direction',
+                        kind: 'select',
+                        defaultValue: 'asc',
+                        options: [
+                            { label: 'Ascending', value: 'asc' },
+                            { label: 'Descending', value: 'desc' },
+                        ],
+                    },
+                    {
+                        key: 'nullsLast',
+                        label: 'NULLs last',
+                        kind: 'bool',
+                        defaultValue: true,
+                    },
+                ],
+            },
+        ],
+    },
+
+    'xf.distinct': {
+        id: 'xf.distinct',
+        kind: 'transform',
+        label: 'Distinct',
+        schemaSource: 'upstream',
+        sections: [
+            {
+                label: 'Distinct',
+                fields: [
+                    {
+                        key: 'columns',
+                        label: 'Distinct columns',
+                        kind: 'columns',
+                        description:
+                            'Leave empty to deduplicate on the whole row.',
+                    },
+                ],
+            },
+        ],
+    },
+
+    'snk.csv': {
+        id: 'snk.csv',
+        kind: 'sink',
+        label: 'CSV',
+        description: 'Write delimited text files.',
+        schemaSource: 'upstream',
+        sections: [
+            {
+                label: 'Destination file',
+                fields: [
+                    {
+                        key: 'path',
+                        label: 'Output path',
+                        kind: 'save-path',
+                        required: true,
+                        filters: [
+                            { name: 'CSV', extensions: ['csv'] },
+                            { name: 'TSV', extensions: ['tsv'] },
+                            { name: 'All files', extensions: ['*'] },
+                        ],
+                    },
+                    {
+                        key: 'mode',
+                        label: 'Write mode',
+                        kind: 'select',
+                        defaultValue: 'overwrite',
+                        options: [
+                            { label: 'Overwrite (replace)', value: 'overwrite' },
+                            { label: 'Append', value: 'append' },
+                            { label: 'Error if exists', value: 'error' },
+                        ],
+                    },
+                    {
+                        key: 'delimiter',
+                        label: 'Delimiter',
+                        kind: 'select',
+                        defaultValue: ',',
+                        options: [
+                            { label: 'Comma  ,', value: ',' },
+                            { label: 'Tab  \\t', value: '\t' },
+                            { label: 'Semicolon  ;', value: ';' },
+                            { label: 'Pipe  |', value: '|' },
+                        ],
+                    },
+                    {
+                        key: 'writeHeader',
+                        label: 'Write header row',
+                        kind: 'bool',
+                        defaultValue: true,
+                    },
+                    {
+                        key: 'encoding',
+                        label: 'Encoding',
+                        kind: 'select',
+                        defaultValue: 'utf-8',
+                        options: [
+                            { label: 'UTF-8', value: 'utf-8' },
+                            { label: 'UTF-16', value: 'utf-16' },
+                            { label: 'Latin-1', value: 'latin-1' },
+                        ],
+                    },
+                ],
+            },
+        ],
+    },
+
+    'snk.parquet': {
+        id: 'snk.parquet',
+        kind: 'sink',
+        label: 'Parquet',
+        description: 'Write columnar Parquet files.',
+        schemaSource: 'upstream',
+        sections: [
+            {
+                label: 'Destination file',
+                fields: [
+                    {
+                        key: 'path',
+                        label: 'Output path',
+                        kind: 'save-path',
+                        required: true,
+                        filters: [
+                            { name: 'Parquet', extensions: ['parquet'] },
+                            { name: 'All files', extensions: ['*'] },
+                        ],
+                    },
+                    {
+                        key: 'mode',
+                        label: 'Write mode',
+                        kind: 'select',
+                        defaultValue: 'overwrite',
+                        options: [
+                            { label: 'Overwrite', value: 'overwrite' },
+                            { label: 'Append', value: 'append' },
+                            { label: 'Error if exists', value: 'error' },
+                        ],
+                    },
+                    {
+                        key: 'compression',
+                        label: 'Compression',
+                        kind: 'select',
+                        defaultValue: 'snappy',
+                        options: [
+                            { label: 'Snappy (fast)', value: 'snappy' },
+                            { label: 'Zstd (smaller)', value: 'zstd' },
+                            { label: 'Gzip', value: 'gzip' },
+                            { label: 'LZ4', value: 'lz4' },
+                            { label: 'None', value: 'none' },
+                        ],
+                    },
+                    {
+                        key: 'rowGroupSize',
+                        label: 'Row group size',
+                        kind: 'integer',
+                        defaultValue: 100000,
+                        description: 'Number of rows per row group.',
+                    },
+                    {
+                        key: 'partitionBy',
+                        label: 'Partition by columns',
+                        kind: 'columns',
+                        description: 'Write Hive-style partitioned directories per value.',
+                    },
+                ],
+            },
+        ],
+    },
+
+    'snk.sqlite': {
+        id: 'snk.sqlite',
+        kind: 'sink',
+        label: 'SQLite',
+        description: 'Write to a SQLite database file.',
+        schemaSource: 'upstream',
+        sections: [
+            {
+                label: 'Destination',
+                fields: [
+                    {
+                        key: 'database',
+                        label: 'Database file',
+                        kind: 'save-path',
+                        required: true,
+                        filters: [
+                            { name: 'SQLite', extensions: ['db', 'sqlite', 'sqlite3'] },
+                            { name: 'All files', extensions: ['*'] },
+                        ],
+                    },
+                    {
+                        key: 'tableName',
+                        label: 'Table name',
+                        kind: 'text',
+                        required: true,
+                        placeholder: 'orders',
+                    },
+                    {
+                        key: 'mode',
+                        label: 'Write mode',
+                        kind: 'select',
+                        defaultValue: 'overwrite',
+                        options: [
+                            { label: 'Create or replace', value: 'overwrite' },
+                            { label: 'Append (insert)', value: 'append' },
+                            { label: 'Upsert on PK', value: 'upsert' },
+                            { label: 'Error if exists', value: 'error' },
+                        ],
+                    },
+                    {
+                        key: 'batchSize',
+                        label: 'Batch size',
+                        kind: 'integer',
+                        defaultValue: 1000,
+                    },
+                ],
+            },
+        ],
+    },
+
+    'snk.duckdb': {
+        id: 'snk.duckdb',
+        kind: 'sink',
+        label: 'DuckDB',
+        description: 'Write to a DuckDB database file.',
+        schemaSource: 'upstream',
+        sections: [
+            {
+                label: 'Destination',
+                fields: [
+                    {
+                        key: 'database',
+                        label: 'Database file',
+                        kind: 'save-path',
+                        required: true,
+                        filters: [
+                            { name: 'DuckDB', extensions: ['duckdb', 'db'] },
+                            { name: 'All files', extensions: ['*'] },
+                        ],
+                    },
+                    {
+                        key: 'tableName',
+                        label: 'Table name',
+                        kind: 'text',
+                        required: true,
+                    },
+                    {
+                        key: 'mode',
+                        label: 'Write mode',
+                        kind: 'select',
+                        defaultValue: 'overwrite',
+                        options: [
+                            { label: 'Create or replace', value: 'overwrite' },
+                            { label: 'Append', value: 'append' },
+                            { label: 'Error if exists', value: 'error' },
+                        ],
+                    },
+                ],
+            },
+        ],
+    },
+};
+
+export function getManifest(componentId: string | undefined): ComponentManifest | undefined {
+    if (!componentId) return undefined;
+    return MANIFESTS[componentId];
+}
+
+export function getDefaults(manifest: ComponentManifest): Record<string, unknown> {
+    const defaults: Record<string, unknown> = {};
+    for (const section of manifest.sections) {
+        for (const field of section.fields) {
+            if (field.defaultValue !== undefined) {
+                defaults[field.key] = field.defaultValue;
+            }
+        }
+    }
+    return defaults;
+}

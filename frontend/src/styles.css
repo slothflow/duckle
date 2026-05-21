@@ -1491,3 +1491,451 @@ select.schema-input {
     border-color: var(--border);
     color: var(--text-1);
 }
+
+/* Properties manifest header ---------------------------------------------- */
+.properties-manifest-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+    font-size: 11px;
+    flex-wrap: wrap;
+}
+
+.properties-manifest-id {
+    color: var(--accent);
+    background: var(--bg-2);
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: ui-monospace, 'SF Mono', 'Cascadia Code', Consolas, monospace;
+    font-size: 10px;
+}
+
+.properties-manifest-desc {
+    color: var(--text-3);
+    line-height: 1.4;
+}
+
+.properties-manifest-warn {
+    color: var(--danger);
+}
+
+.properties-manifest-warn code {
+    background: rgba(248, 81, 73, 0.12);
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 10px;
+}
+
+/* Form sections ----------------------------------------------------------- */
+.form-section {
+    margin-bottom: 18px;
+}
+
+.form-section:last-child {
+    margin-bottom: 0;
+}
+
+.form-section-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-3);
+    font-weight: 600;
+    margin-bottom: 8px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid var(--border);
+}
+
+.form-field {
+    margin-bottom: 10px;
+}
+
+.form-field-label {
+    display: block;
+    font-size: 12px;
+    color: var(--text-2);
+    font-weight: 500;
+    margin-bottom: 4px;
+}
+
+.form-field-required {
+    color: var(--danger);
+    margin-left: 4px;
+}
+
+.form-field-desc {
+    font-size: 11px;
+    color: var(--text-3);
+    margin-top: 4px;
+    line-height: 1.4;
+}
+
+.field-textarea {
+    width: 100%;
+    resize: vertical;
+    min-height: 60px;
+    font-family: inherit;
+}
+
+.field-mono {
+    font-family: ui-monospace, 'SF Mono', 'Cascadia Code', Consolas, monospace;
+    font-size: 11px;
+}
+
+.field-select {
+    appearance: none;
+    background-image: linear-gradient(45deg, transparent 50%, var(--text-3) 50%),
+        linear-gradient(135deg, var(--text-3) 50%, transparent 50%);
+    background-position:
+        calc(100% - 12px) 50%,
+        calc(100% - 7px) 50%;
+    background-size:
+        5px 5px,
+        5px 5px;
+    background-repeat: no-repeat;
+    padding-right: 24px;
+}
+
+.field-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    padding: 4px 0;
+}
+
+.field-toggle input {
+    cursor: pointer;
+}
+
+.field-toggle-label {
+    font-size: 12px;
+    color: var(--text-2);
+}
+
+.field-path {
+    display: flex;
+    gap: 6px;
+    align-items: stretch;
+}
+
+.field-path .field-input {
+    flex: 1;
+    min-width: 0;
+    font-family: ui-monospace, 'SF Mono', 'Cascadia Code', Consolas, monospace;
+    font-size: 11px;
+}
+
+.field-path-browse {
+    flex-shrink: 0;
+    background: var(--bg-3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text-1);
+    padding: 0 12px;
+    font-size: 11px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background 80ms ease, border-color 80ms ease;
+}
+
+.field-path-browse:hover {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--bg-0);
+}
+
+.field-path-browse:disabled {
+    opacity: 0.6;
+    cursor: wait;
+}
+
+.field-expression {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    background: var(--bg-2);
+}
+
+.field-expression-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 8px;
+    background: var(--bg-1);
+    border-bottom: 1px solid var(--border);
+    font-size: 10px;
+}
+
+.field-expression-lang {
+    color: var(--accent);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.field-expression-hint {
+    color: var(--text-3);
+    font-size: 10px;
+}
+
+.field-expression-hint code {
+    color: var(--text-2);
+    background: var(--bg-2);
+    padding: 0 4px;
+    border-radius: 2px;
+    font-size: 10px;
+}
+
+.field-expression-area {
+    border: none;
+    border-radius: 0;
+    background: var(--bg-2);
+    width: 100%;
+    margin: 0;
+}
+
+.field-expression-area:focus {
+    border: none;
+    outline: none;
+}
+
+.field-warning {
+    background: rgba(254, 208, 96, 0.08);
+    border: 1px solid rgba(254, 208, 96, 0.3);
+    color: var(--accent);
+    font-size: 11px;
+}
+
+.field-columns {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg-2);
+    padding: 4px;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.field-columns-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+}
+
+.field-columns-row:hover {
+    background: var(--bg-3);
+}
+
+.field-columns-name {
+    flex: 1;
+    color: var(--text-1);
+}
+
+.field-columns-type {
+    color: var(--text-3);
+    font-family: ui-monospace, 'SF Mono', 'Cascadia Code', Consolas, monospace;
+    font-size: 10px;
+}
+
+/* Aggregations + KV ------------------------------------------------------- */
+.field-aggregations {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.field-agg-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.field-agg-count {
+    font-size: 11px;
+    color: var(--text-3);
+}
+
+.field-agg-empty {
+    padding: 12px;
+    background: var(--bg-2);
+    border: 1px dashed var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text-3);
+    font-size: 11px;
+    line-height: 1.5;
+}
+
+.field-agg-table {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg-2);
+}
+
+.field-agg-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 28px;
+    gap: 4px;
+    padding: 4px;
+    align-items: center;
+    border-bottom: 1px solid var(--border);
+}
+
+.field-agg-row:last-child {
+    border-bottom: none;
+}
+
+.field-agg-header {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-3);
+    background: var(--bg-1);
+    font-weight: 600;
+    padding: 6px 8px;
+}
+
+.field-kv-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 28px;
+    gap: 4px;
+    padding: 4px 0;
+}
+
+/* Schema tab additions ---------------------------------------------------- */
+.schema-source-banner {
+    background: rgba(88, 166, 255, 0.08);
+    border: 1px solid rgba(88, 166, 255, 0.3);
+    color: var(--accent);
+    padding: 8px 12px;
+    border-radius: var(--radius-sm);
+    font-size: 11px;
+    margin-bottom: 10px;
+}
+
+.schema-source-banner-declared {
+    background: rgba(126, 231, 135, 0.08);
+    border-color: rgba(126, 231, 135, 0.3);
+    color: var(--accent-source);
+}
+
+.schema-autodetect-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+}
+
+.schema-autodetect-button {
+    background: var(--accent);
+    border: none;
+    border-radius: var(--radius-sm);
+    color: var(--bg-0);
+    padding: 6px 12px;
+    font-size: 11px;
+    font-weight: 700;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background 80ms ease;
+}
+
+.schema-autodetect-button:hover {
+    background: #79b3ff;
+}
+
+.schema-autodetect-button:disabled {
+    opacity: 0.6;
+    cursor: wait;
+}
+
+.schema-autodetect-hint {
+    color: var(--text-3);
+    font-size: 11px;
+}
+
+/* Preview tab ------------------------------------------------------------- */
+.preview-empty {
+    padding: 20px;
+    color: var(--text-3);
+    text-align: center;
+}
+
+.preview-empty-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-2);
+    margin-bottom: 4px;
+}
+
+.preview-empty-desc {
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.preview-meta {
+    font-size: 11px;
+    color: var(--text-3);
+    margin-bottom: 8px;
+}
+
+.preview-tablewrap {
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg-2);
+}
+
+.preview-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11px;
+}
+
+.preview-table th {
+    text-align: left;
+    background: var(--bg-1);
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+    position: sticky;
+    top: 0;
+}
+
+.preview-th-name {
+    font-weight: 600;
+    color: var(--text-1);
+}
+
+.preview-th-type {
+    font-family: ui-monospace, 'SF Mono', 'Cascadia Code', Consolas, monospace;
+    color: var(--text-3);
+    font-size: 9px;
+    text-transform: lowercase;
+    margin-top: 2px;
+}
+
+.preview-table td {
+    padding: 5px 10px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-2);
+    font-family: ui-monospace, 'SF Mono', 'Cascadia Code', Consolas, monospace;
+    font-size: 11px;
+    white-space: nowrap;
+    max-width: 240px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.preview-table tr:last-child td {
+    border-bottom: none;
+}
+
+.preview-table tr:hover td {
+    background: var(--bg-3);
+}

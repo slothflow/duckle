@@ -202,7 +202,12 @@ export default function App() {
                         onSelectionChange={handleSelectionChange}
                     />
                 </section>
-                <PropertiesPanel selected={selectedNode} onUpdate={handleUpdateNode} />
+                <PropertiesPanel
+                    selected={selectedNode}
+                    allNodes={nodes}
+                    edges={edges}
+                    onUpdate={handleUpdateNode}
+                />
             </main>
 
             <BottomPanel />
