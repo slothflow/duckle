@@ -421,6 +421,7 @@ fn build_view_sql(
         | "xf.last" | "xf.ntile" => build_window(inputs, props, component_id),
         "xf.pivot" => build_pivot(inputs, props),
         "xf.unpivot" => build_unpivot(inputs, props),
+        "xf.cdc.diff" => build_cdc_diff(inputs, props),
         // Data-quality validators - the PASS rows. Failures go to the
         // node's __reject table (see build_reject_sql).
         "qa.notnull" | "qa.range" | "qa.regex" | "qa.unique" => {
@@ -1229,6 +1230,80 @@ fn build_window_aggregate(inputs: &NodeInputs, props: &JsonValue) -> Result<Stri
         quote_ident(&out),
         quote_ident(upstream)
     ))
+}
+
+/// CDC Diff Detect: compare a 'new' input (main) against a 'previous'
+/// input (lookup) on a natural key and tag each row inserted / deleted /
+/// updated / unchanged. Updates are detected from the compare columns;
+/// unchanged rows are dropped unless the user keeps them.
+fn build_cdc_diff(inputs: &NodeInputs, props: &JsonValue) -> Result<String, String> {
+    let cur = inputs
+        .main()
+        .ok_or_else(|| "Diff Detect needs a 'new' input on the main port".to_string())?;
+    let prev = inputs.first_lookup().ok_or_else(|| {
+        "Diff Detect needs a 'previous' input (connect it to the previous port)".to_string()
+    })?;
+    let keys = columns_list(props, "naturalKey");
+    if keys.is_empty() {
+        return Err("Diff Detect needs natural key columns".to_string());
+    }
+    let compares = columns_list(props, "compareColumns");
+    let reject_unchanged = props
+        .get("rejectUnchanged")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(true);
+
+    let coalesced = keys
+        .iter()
+        .map(|k| {
+            let q = quote_ident(k);
+            format!("COALESCE(cur.{q}, prev.{q}) AS {q}")
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+    let excl = keys
+        .iter()
+        .map(|k| quote_ident(k))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let join_on = keys
+        .iter()
+        .map(|k| {
+            let q = quote_ident(k);
+            format!("cur.{q} = prev.{q}")
+        })
+        .collect::<Vec<_>>()
+        .join(" AND ");
+    let first_key = quote_ident(&keys[0]);
+    let updated = if compares.is_empty() {
+        String::new()
+    } else {
+        let diff = compares
+            .iter()
+            .map(|c| {
+                let q = quote_ident(c);
+                format!("cur.{q} IS DISTINCT FROM prev.{q}")
+            })
+            .collect::<Vec<_>>()
+            .join(" OR ");
+        format!("WHEN ({diff}) THEN 'updated' ")
+    };
+    let inner = format!(
+        "SELECT {coalesced}, cur.* EXCLUDE ({excl}), \
+         CASE WHEN prev.{first_key} IS NULL THEN 'inserted' \
+         WHEN cur.{first_key} IS NULL THEN 'deleted' \
+         {updated}ELSE 'unchanged' END AS change_type \
+         FROM {cur} cur FULL OUTER JOIN {prev} prev ON {join_on}",
+        cur = quote_ident(cur),
+        prev = quote_ident(prev),
+    );
+    if reject_unchanged {
+        Ok(format!(
+            "SELECT * FROM ({inner}) WHERE change_type != 'unchanged'"
+        ))
+    } else {
+        Ok(inner)
+    }
 }
 
 /// Unpivot: turn a set of columns into name/value rows (wide to long).

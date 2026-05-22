@@ -361,7 +361,7 @@ export const PALETTE: Category[] = [
                 id: 'xf.cdc',
                 label: 'CDC / SCD',
                 components: [
-                    xf('cdc.diff', 'Diff Detect', 'planned'),
+                    xf('cdc.diff', 'Diff Detect', 'available', 'Tag inserted/updated/deleted rows vs a previous snapshot'),
                     xf('cdc.scd1', 'SCD Type 1', 'planned'),
                     xf('cdc.scd2', 'SCD Type 2', 'planned'),
                     xf('cdc.upsert', 'Merge / Upsert', 'planned'),

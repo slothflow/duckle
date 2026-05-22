@@ -75,6 +75,18 @@ fn port_edge(id: &str, source: &str, source_handle: &str, target: &str) -> Value
     })
 }
 
+/// Edge into a node's `lookup` input port (used for join/CDC second
+/// inputs, e.g. the "previous" snapshot of a Diff Detect).
+fn lookup_edge(id: &str, source: &str, target: &str) -> Value {
+    json!({
+        "id": id,
+        "source": source,
+        "target": target,
+        "targetHandle": "lookup",
+        "data": { "connectionType": "lookup" }
+    })
+}
+
 /// Read back output files independently of the engine, by shelling out
 /// to the same DuckDB CLI (only called after engine_or_skip!, so the
 /// binary is present).
@@ -889,6 +901,44 @@ fn unpivot_wide_to_long() {
         out
     ));
     assert_eq!(q1, "10", "got {}", q1);
+}
+
+#[test]
+fn cdc_diff_detect_tags_changes() {
+    let engine = engine_or_skip!();
+    let tmp = tempfile::tempdir().unwrap();
+    let cur = write_file(tmp.path(), "cur.csv", "id,v\n1,a\n2,b2\n3,c\n");
+    let prev = write_file(tmp.path(), "prev.csv", "id,v\n1,a\n2,b\n4,d\n");
+    let out = out_path(tmp.path(), "out.csv");
+    let d = doc(
+        json!([
+            node("c1", "src.csv", json!({ "path": cur, "hasHeader": true })),
+            node("p1", "src.csv", json!({ "path": prev, "hasHeader": true })),
+            node("d1", "xf.cdc.diff", json!({
+                "naturalKey": ["id"], "compareColumns": ["v"], "rejectUnchanged": true
+            })),
+            node("k1", "snk.csv", json!({ "path": out, "hasHeader": true })),
+        ]),
+        json!([
+            main_edge("e1", "c1", "d1"),
+            lookup_edge("e2", "p1", "d1"),
+            main_edge("e3", "d1", "k1"),
+        ]),
+    );
+    let result = engine.execute_pipeline(&d);
+    assert_eq!(result.status, "ok", "run failed: {:?}", result.error);
+    // id=1 unchanged is dropped -> 3 rows: updated(2), inserted(3), deleted(4).
+    assert_eq!(count(&format!("read_csv_auto('{}')", out)), 3);
+    let t2 = scalar_string(&format!(
+        "SELECT change_type FROM read_csv_auto('{}') WHERE id = 2",
+        out
+    ));
+    assert_eq!(t2, "updated", "got {}", t2);
+    let t4 = scalar_string(&format!(
+        "SELECT change_type FROM read_csv_auto('{}') WHERE id = 4",
+        out
+    ));
+    assert_eq!(t4, "deleted", "got {}", t4);
 }
 
 #[test]
