@@ -49,7 +49,7 @@ fn default_sample_rows() -> usize {
     DEFAULT_SAMPLE_ROWS
 }
 
-/// CSV source connector. Stateless — one instance handles all CSV
+/// CSV source connector. Stateless - one instance handles all CSV
 /// schema inspections.
 pub struct CsvConnector;
 
@@ -102,7 +102,7 @@ fn inspect_csv(opts: CsvOptions) -> Result<Inspection, InspectError> {
         .ok_or_else(|| InspectError::Config(format!("Unknown encoding {}", opts.encoding)))?;
     let (decoded, _, had_errors) = encoding.decode(&raw);
     if had_errors {
-        // Don't fail — most files have stray bytes. Surface as a parse warning later.
+        // Don't fail - most files have stray bytes. Surface as a parse warning later.
     }
     let text = decoded.into_owned();
 

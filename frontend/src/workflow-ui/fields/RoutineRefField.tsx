@@ -49,7 +49,7 @@ export function RoutineRefField({ field, value, onChange }: Props) {
             value={value ?? ''}
             onChange={e => handleChange(e.target.value)}
         >
-            <option value="">— pick a saved routine —</option>
+            <option value="">- pick a saved routine -</option>
             {routines.map(r => {
                 const payload = r.payload as RoutinePayload | undefined;
                 return (

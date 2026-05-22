@@ -49,7 +49,7 @@ export function ConnectionRefField({ field, value, onChange }: Props) {
             value={value ?? ''}
             onChange={e => handleChange(e.target.value)}
         >
-            <option value="">— pick a saved connection —</option>
+            <option value="">- pick a saved connection -</option>
             {connections.map(c => {
                 const payload = c.payload as ConnectionPayload | undefined;
                 return (

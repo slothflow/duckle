@@ -60,7 +60,7 @@ export type FilterPredicate = {
     match: 'all' | 'any';
     conditions: Condition[];
     rawSql?: string;
-    /** Compiled SQL — kept in sync on every edit so the canvas card
+    /** Compiled SQL - kept in sync on every edit so the canvas card
      *  and the Rust executor read one authoritative string. */
     sql?: string;
 };
@@ -279,7 +279,7 @@ export function FilterBuilderField({ value, onChange }: Props) {
                                         updateCondition(c.id, { column: e.target.value })
                                     }
                                 >
-                                    <option value="">— column —</option>
+                                    <option value="">- column -</option>
                                     {upstreamSchema.map(col => (
                                         <option key={col.name} value={col.name}>
                                             {col.name}
@@ -349,7 +349,7 @@ export function FilterBuilderField({ value, onChange }: Props) {
                                     />
                                 ) : null}
                                 {opMeta.args === 0 ? (
-                                    <div className="filter-condition-noop">—</div>
+                                    <div className="filter-condition-noop">-</div>
                                 ) : null}
                                 <button
                                     type="button"
@@ -395,7 +395,7 @@ export function FilterBuilderField({ value, onChange }: Props) {
                         spellCheck={false}
                     />
                     <div className="filter-raw-hint">
-                        Raw SQL boolean expression. Switch back to <b>Visual</b> anytime — your
+                        Raw SQL boolean expression. Switch back to <b>Visual</b> anytime - your
                         conditions are preserved.
                     </div>
                 </div>

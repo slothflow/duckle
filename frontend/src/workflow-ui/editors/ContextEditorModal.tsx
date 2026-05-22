@@ -163,7 +163,7 @@ export default function ContextEditorModal({ item, onSave, onCancel }: Props) {
                     <div className="modal-tip" style={{ marginTop: 8 }}>
                         <span>
                             Reference variables in component properties with{' '}
-                            <code>${'{ctx.KEY_NAME}'}</code> — they're resolved at pipeline run
+                            <code>${'{ctx.KEY_NAME}'}</code> - they're resolved at pipeline run
                             time.
                         </span>
                     </div>

@@ -60,7 +60,7 @@ jobs:
       - name: Test
         run: cargo test --workspace
 
-      # Style checks are informational — they report problems without
+      # Style checks are informational - they report problems without
       # failing the build.
       - name: Format check
         continue-on-error: true

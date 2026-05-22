@@ -9,7 +9,7 @@ export function friendlyError(raw: string | undefined): string {
     const s = raw.trim();
     let m: RegExpMatchArray | null;
 
-    // "<stage label>: <DuckDB error>" — strip our stage prefix so the
+    // "<stage label>: <DuckDB error>" - strip our stage prefix so the
     // patterns below match cleanly. We'll re-add it at the end if it
     // helped.
     let stagePrefix = '';
@@ -36,7 +36,7 @@ export function friendlyError(raw: string | undefined): string {
         return wrap(`No file matches '${m[1].trim()}'. Check the path.`);
     }
     if (/Cannot open file ""/i.test(body)) {
-        return wrap('No output path set — open this sink and choose a destination file.');
+        return wrap('No output path set - open this sink and choose a destination file.');
     }
     if ((m = body.match(/IO Error: Cannot open file "([^"]+)"/i))) {
         return wrap(`Can't open '${m[1]}'. Verify the file exists and the app has permission.`);
@@ -50,7 +50,7 @@ export function friendlyError(raw: string | undefined): string {
         return wrap(`Column '${m[2]}' doesn't exist in '${m[1]}'.`);
     }
     if ((m = body.match(/Conversion Error: (.+)/i))) {
-        return wrap(`Type conversion failed — ${m[1]}`);
+        return wrap(`Type conversion failed - ${m[1]}`);
     }
     if (/^Parser Error:/i.test(body)) {
         return wrap(body.replace(/^Parser Error:\s*/i, 'SQL syntax: '));
@@ -61,13 +61,13 @@ export function friendlyError(raw: string | undefined): string {
     if ((m = body.match(/IO Error: (.+)/i))) {
         const detail = m[1];
         if (/access is denied|permission denied/i.test(detail)) {
-            return wrap(`File access denied — ${detail}`);
+            return wrap(`File access denied - ${detail}`);
         }
-        return wrap(`I/O — ${detail}`);
+        return wrap(`I/O - ${detail}`);
     }
     if (/Out of Memory/i.test(body)) {
         return wrap(
-            'Out of memory — try LIMITing the upstream or running on a smaller sample.',
+            'Out of memory - try LIMITing the upstream or running on a smaller sample.',
         );
     }
     if (/Constraint Error/i.test(body)) {

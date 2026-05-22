@@ -56,7 +56,7 @@ function computeNodeSchema(
 
     const upstream = () => mergedUpstream(node.id, nodes, edges, visiting);
 
-    // Declared / autodetect — node owns its schema explicitly.
+    // Declared / autodetect - node owns its schema explicitly.
     if (manifest?.schemaSource === 'declared') {
         return node.data.schema ?? upstream();
     }
@@ -169,12 +169,12 @@ function computeNodeSchema(
         return upstream();
     }
 
-    // Set ops — schema = column-name-union of inputs (approximate)
+    // Set ops - schema = column-name-union of inputs (approximate)
     if (id === 'xf.union' || id === 'xf.unionall' || id === 'xf.intersect' || id === 'xf.except') {
         return mergedUpstream(node.id, nodes, edges, visiting);
     }
 
-    // String / datetime / numeric / json / array — keep input, plus optional output
+    // String / datetime / numeric / json / array - keep input, plus optional output
     if (
         id?.startsWith('xf.dt.') ||
         id?.startsWith('xf.num.') ||
@@ -190,7 +190,7 @@ function computeNodeSchema(
         return up;
     }
 
-    // Custom code — fall back to declared schema if any, otherwise pass through
+    // Custom code - fall back to declared schema if any, otherwise pass through
     if (id?.startsWith('code.')) {
         return node.data.schema ?? upstream();
     }
@@ -201,7 +201,7 @@ function computeNodeSchema(
         return upstream();
     }
 
-    // Default — pass upstream through
+    // Default - pass upstream through
     return upstream();
 }
 
@@ -228,7 +228,7 @@ function mergedUpstream(
 }
 
 /**
- * Convenience for PropertiesPanel — schema flowing into this node.
+ * Convenience for PropertiesPanel - schema flowing into this node.
  */
 export function resolveUpstreamSchema(
     nodeId: string | undefined,
@@ -240,7 +240,7 @@ export function resolveUpstreamSchema(
 }
 
 /**
- * Per-input-port schemas — for components with multiple typed inputs
+ * Per-input-port schemas - for components with multiple typed inputs
  * (mapper with main + lookups, joins with driving + lookup, etc.).
  */
 export function resolveInputPortSchemas(

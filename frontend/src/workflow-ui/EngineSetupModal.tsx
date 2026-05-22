@@ -60,7 +60,7 @@ export default function EngineSetupModal({ onReady }: Props) {
                     <div className="modal-workspace-titles">
                         <div className="modal-title">Set up Duckle</div>
                         <div className="modal-subtitle">
-                            One-time engine install — Duckle stays a tiny download and fetches
+                            One-time engine install - Duckle stays a tiny download and fetches
                             its engine on first run.
                         </div>
                     </div>

@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="340" viewBox="0 0 1280 340" fill="none" role="img" aria-label="Duckle — visual local-first ETL">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 340" preserveAspectRatio="xMidYMid meet" fill="none" role="img" aria-label="Duckle - visual local-first ETL">
   <defs>
     <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0" stop-color="#18D4E0"/>
@@ -30,7 +30,7 @@
   <text x="172" y="92" font-family="'Segoe UI', system-ui, Arial, sans-serif" font-size="62" font-weight="800" fill="url(#wm)">Duckle</text>
   <text x="60" y="200" font-family="'Segoe UI', system-ui, Arial, sans-serif" font-size="26" font-weight="600" fill="#cfe0ff">Clean data in. Smart data out.</text>
   <text x="60" y="240" font-family="'Segoe UI', system-ui, Arial, sans-serif" font-size="18" font-weight="400" fill="#7e8aa3">Visual, local-first ETL that scrubs the garbage out of</text>
-  <text x="60" y="266" font-family="'Segoe UI', system-ui, Arial, sans-serif" font-size="18" font-weight="400" fill="#7e8aa3">your data — and your AI.</text>
+  <text x="60" y="266" font-family="'Segoe UI', system-ui, Arial, sans-serif" font-size="18" font-weight="400" fill="#7e8aa3">your data - and your AI.</text>
 
   <!-- pipeline graph -->
   <g font-family="'Segoe UI', system-ui, Arial, sans-serif">

@@ -65,7 +65,7 @@ export default function DuckleNode({ id, data, selected, type }: NodeProps<Duckl
                     {needsConfig ? (
                         <span
                             className="node-needs-config"
-                            title="Required fields missing — open the Basic tab to configure"
+                            title="Required fields missing - open the Basic tab to configure"
                         >
                             <AlertCircle size={12} />
                         </span>

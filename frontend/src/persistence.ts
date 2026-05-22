@@ -14,7 +14,7 @@ export function savePersisted<T>(key: string, value: T): void {
     try {
         localStorage.setItem(KEY_PREFIX + key, JSON.stringify(value));
     } catch {
-        /* quota exceeded / localStorage disabled — silently drop */
+        /* quota exceeded / localStorage disabled - silently drop */
     }
 }
 

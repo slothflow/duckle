@@ -339,7 +339,7 @@ export const MANIFESTS: Record<string, ComponentManifest> = {
                         rows: 4,
                         placeholder: 'SELECT * FROM duckle_src.orders WHERE status = ...',
                         description:
-                            'Optional — used only when no table is set above. Reference tables as duckle_src.<table>.',
+                            'Optional - used only when no table is set above. Reference tables as duckle_src.<table>.',
                     },
                 ],
             },

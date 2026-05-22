@@ -139,7 +139,7 @@ function CanvasInner({
             );
 
             // If the user dropped on a specifically-typed input port
-            // (lookup, iterate, reject), honor that — the connection
+            // (lookup, iterate, reject), honor that - the connection
             // type matches the port.
             if (targetPort && targetPort.type !== 'main') {
                 onConnectWithType(connection, targetPort.type);
@@ -166,7 +166,7 @@ function CanvasInner({
             if (acceptedInputTypes.has('iterate')) allowed.add('iterate');
             if (acceptedInputTypes.has('filter')) allowed.add('filter');
             if (acceptedInputTypes.has('reject')) allowed.add('reject');
-            // Triggers are always available — they target a component as
+            // Triggers are always available - they target a component as
             // a whole, not a specific input port.
             allowed.add('on-subjob-ok');
             allowed.add('on-subjob-error');

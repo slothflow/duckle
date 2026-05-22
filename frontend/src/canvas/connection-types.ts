@@ -120,7 +120,7 @@ export const CONNECTION_TYPES: ConnectionTypeMeta[] = [
         id: 'if',
         label: 'If',
         group: 'trigger',
-        description: 'Conditional branch — provide a boolean expression.',
+        description: 'Conditional branch - provide a boolean expression.',
         color: 'var(--accent)',
         dash: '5 3',
         width: 1,

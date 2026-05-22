@@ -278,7 +278,7 @@ impl Scheduler {
             }
         });
 
-        // File-watch fire listener — drains the channel watchers post to.
+        // File-watch fire listener - drains the channel watchers post to.
         let rx = {
             let mut g = self.inner.lock().expect("scheduler poisoned");
             g.fire_rx.take()
@@ -335,7 +335,7 @@ fn compute_next_run(s: &mut Schedule) {
             let base = s.last_run_at.unwrap_or_else(Utc::now);
             Some(base + chrono::Duration::seconds(*seconds as i64))
         }
-        // Event-driven — no scheduled next-run time.
+        // Event-driven - no scheduled next-run time.
         ScheduleKind::FileWatch { .. } => None,
     };
 }

@@ -51,7 +51,7 @@ fn history_file(workspace: &Path, pipeline_id: &str) -> std::path::PathBuf {
 }
 
 /// Append a record, trimming to the most recent MAX_RECORDS. Best
-/// effort — IO failures are logged by the caller, not propagated.
+/// effort - IO failures are logged by the caller, not propagated.
 pub fn append_run_record(
     workspace: &Path,
     pipeline_id: &str,

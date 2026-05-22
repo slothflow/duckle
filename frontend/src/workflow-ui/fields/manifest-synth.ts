@@ -260,7 +260,7 @@ const REJECT_IN: NodePorts['inputs'][number] = {
 export function portsForComponent(comp: ComponentDef): NodePorts {
     const id = comp.id;
 
-    // Mapper — 1 main input, up to 3 lookup inputs, main + reject outputs
+    // Mapper - 1 main input, up to 3 lookup inputs, main + reject outputs
     if (id === 'xf.map') {
         return {
             inputs: [
@@ -299,7 +299,7 @@ export function portsForComponent(comp: ComponentDef): NodePorts {
         };
     }
 
-    // Replicate — one in, multiple outs
+    // Replicate - one in, multiple outs
     if (id === 'ctl.replicate') {
         return {
             inputs: [MAIN_IN],
@@ -311,7 +311,7 @@ export function portsForComponent(comp: ComponentDef): NodePorts {
         };
     }
 
-    // Switch — one in, conditional outs + else
+    // Switch - one in, conditional outs + else
     if (id === 'ctl.switch') {
         return {
             inputs: [MAIN_IN],
@@ -324,7 +324,7 @@ export function portsForComponent(comp: ComponentDef): NodePorts {
         };
     }
 
-    // Set operations — multiple inputs, one output
+    // Set operations - multiple inputs, one output
     if (id === 'xf.union' || id === 'xf.unionall' || id === 'xf.intersect' || id === 'xf.except') {
         return {
             inputs: [
@@ -336,7 +336,7 @@ export function portsForComponent(comp: ComponentDef): NodePorts {
         };
     }
 
-    // Iterate / foreach — emits per-row iteration
+    // Iterate / foreach - emits per-row iteration
     if (id === 'ctl.iterate' || id === 'ctl.foreach') {
         return {
             inputs: [MAIN_IN],
@@ -344,7 +344,7 @@ export function portsForComponent(comp: ComponentDef): NodePorts {
         };
     }
 
-    // Quality validators — pass + reject
+    // Quality validators - pass + reject
     if (comp.kind === 'quality') {
         return {
             inputs: [MAIN_IN],
@@ -355,7 +355,7 @@ export function portsForComponent(comp: ComponentDef): NodePorts {
         };
     }
 
-    // CDC components — changed rows out + reject + optional unchanged
+    // CDC components - changed rows out + reject + optional unchanged
     if (id.startsWith('xf.cdc.')) {
         return {
             inputs: [
@@ -2112,7 +2112,7 @@ function synthAiTransform(comp: ComponentDef): ComponentManifest {
                 fields: [
                     { key: 'embeddingColumn', label: 'Embedding column', kind: 'column', description: 'Vector column to compare.' },
                     { key: 'textColumn', label: 'Or text column', kind: 'column', description: 'Embedded on the fly if no vector column.' },
-                    { key: 'threshold', label: 'Similarity threshold', kind: 'number', defaultValue: 0.92, description: '0.0–1.0; higher keeps only very-close rows as duplicates.' },
+                    { key: 'threshold', label: 'Similarity threshold', kind: 'number', defaultValue: 0.92, description: '0.0-1.0; higher keeps only very-close rows as duplicates.' },
                     distanceMetricField(),
                     {
                         key: 'keep',
@@ -2167,7 +2167,7 @@ function synthGeneric(comp: ComponentDef, schemaSource: SchemaSource = 'upstream
         {
             label: 'Settings',
             fields: [
-                { key: 'notes', label: 'Notes', kind: 'textarea', rows: 3, description: 'Component-specific configuration not yet modeled — describe the intent here.' },
+                { key: 'notes', label: 'Notes', kind: 'textarea', rows: 3, description: 'Component-specific configuration not yet modeled - describe the intent here.' },
             ],
         },
     ], schemaSource);
@@ -2233,7 +2233,7 @@ export function synthesizeManifest(componentId: string): ComponentManifest | und
     if (groupId === 'code.sql') return synthCustomCode(comp);
     if (groupId === 'code.scripts') return synthCustomCode(comp);
 
-    // SaaS — treat as API sources for now
+    // SaaS - treat as API sources for now
     if (groupId.startsWith('saas.')) return synthApiSource(comp);
 
     return synthGeneric(comp);

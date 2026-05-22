@@ -14,7 +14,7 @@ use serde_json::Value as JsonValue;
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 /// Pipeline payload sent from the frontend. Just the nodes + edges
-/// directly — no wrapping metadata required for a run.
+/// directly - no wrapping metadata required for a run.
 #[derive(Debug, Deserialize)]
 pub struct PipelineDoc {
     pub nodes: Vec<PipelineNode>,
@@ -40,22 +40,22 @@ pub struct Stage {
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum StageKind {
-    /// Non-sink node — emitted as a `CREATE OR REPLACE TEMP VIEW`.
+    /// Non-sink node - emitted as a `CREATE OR REPLACE TEMP VIEW`.
     View,
-    /// Sink — emitted as a `COPY (...) TO '...' (FORMAT ...)`.
+    /// Sink - emitted as a `COPY (...) TO '...' (FORMAT ...)`.
     Sink,
 }
 
 #[derive(Debug)]
 pub struct CompiledPipeline {
     pub stages: Vec<Stage>,
-    /// Node IDs that have no downstream consumer — used to fetch
+    /// Node IDs that have no downstream consumer - used to fetch
     /// preview rows when there's no sink.
     pub leaves: Vec<String>,
 }
 
 /// Compile only the subgraph upstream of (and including) `target_id`.
-/// Sinks downstream of the target are dropped — the target becomes the
+/// Sinks downstream of the target are dropped - the target becomes the
 /// new "leaf" whose preview the caller can fetch. Used by the
 /// "Run from here" right-click action.
 pub fn compile_partial(
@@ -358,7 +358,7 @@ fn build_stage(
     })
 }
 
-/// The `SELECT * FROM <reader>` SQL for a source format — used by the
+/// The `SELECT * FROM <reader>` SQL for a source format - used by the
 /// engine's inspect path to DESCRIBE / sample without materializing.
 pub fn source_select_for_format(format: &str, props: &JsonValue) -> Option<String> {
     Some(match format {
@@ -368,7 +368,7 @@ pub fn source_select_for_format(format: &str, props: &JsonValue) -> Option<Strin
         "json" | "jsonl" | "ndjson" => build_json_source(props),
         "sqlite" => build_sqlite_source(props),
         "duckdb" => build_duckdb_source(props),
-        "s3" | "gcs" | "azureblob" | "http" | "https" => build_cloud_source(props),
+        "s3" | "gcs" | "azureblob" | "http" | "https" => build_cloud_source(format, props),
         _ => return None,
     })
 }
@@ -395,12 +395,13 @@ fn build_view_sql(
         "src.json" | "src.jsonl" => Ok(build_json_source(props)),
         "src.sqlite" => Ok(build_sqlite_source(props)),
         "src.duckdb" => Ok(build_duckdb_source(props)),
-        "src.s3" | "src.gcs" | "src.azureblob" | "src.http" => {
-            Ok(build_cloud_source(props))
-        }
+        "src.s3" | "src.gcs" | "src.azureblob" | "src.http" => Ok(build_cloud_source(
+            component_id.strip_prefix("src.").unwrap_or(component_id),
+            props,
+        )),
         // Pass-through transforms
         "xf.filter" => build_filter(inputs, props),
-        // Log Rows — pass data through unchanged; its rows surface in the
+        // Log Rows - pass data through unchanged; its rows surface in the
         // Output / Preview so you can inspect mid-pipeline (like tLogRow).
         "xf.log" => build_passthrough_op(inputs, "SELECT *"),
         "xf.project" => build_project(inputs, props),
@@ -418,7 +419,7 @@ fn build_view_sql(
         "xf.rownum" | "xf.rank" | "xf.denserank" | "xf.lead" | "xf.lag" | "xf.first"
         | "xf.last" | "xf.ntile" => build_window(inputs, props, component_id),
         "xf.pivot" => build_pivot(inputs, props),
-        // Data-quality validators — the PASS rows. Failures go to the
+        // Data-quality validators - the PASS rows. Failures go to the
         // node's __reject table (see build_reject_sql).
         "qa.notnull" | "qa.range" | "qa.regex" | "qa.unique" => {
             build_quality(inputs, props, component_id, false)
@@ -459,10 +460,10 @@ fn build_view_sql(
         "xf.topn" => build_take(inputs, props, TakeKind::Limit),
         "xf.skip" => build_take(inputs, props, TakeKind::Offset),
         "xf.sample" => build_take(inputs, props, TakeKind::Sample),
-        // Custom SQL — runs the user's SELECT as a real stage, with the
+        // Custom SQL - runs the user's SELECT as a real stage, with the
         // upstream exposed as `input`. Makes SQL routines executable too.
         "code.sql" | "code.sqltemplate" => build_custom_sql(inputs, props),
-        // Control-flow nodes don't transform data — pass it through.
+        // Control-flow nodes don't transform data - pass it through.
         other if other.starts_with("ctl.") => {
             let upstream = inputs.main().ok_or_else(|| missing_input_msg(other))?;
             Ok(format!("SELECT * FROM {}", quote_ident(upstream)))
@@ -471,7 +472,7 @@ fn build_view_sql(
         // silently passing data through unchanged (which would look like
         // success while doing nothing).
         other => Err(format!(
-            "'{}' isn't executable on the DuckDB engine yet — it's a preview component.",
+            "'{}' isn't executable on the DuckDB engine yet - it's a preview component.",
             other
         )),
     }
@@ -604,7 +605,7 @@ fn build_custom_sql(inputs: &NodeInputs, props: &JsonValue) -> Result<String, St
     let sql = string_prop(props, "sql")
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty())
-        .ok_or_else(|| "Custom SQL is empty — write a SELECT or pick a SQL routine".to_string())?;
+        .ok_or_else(|| "Custom SQL is empty - write a SELECT or pick a SQL routine".to_string())?;
     Ok(match inputs.main() {
         Some(upstream) => {
             format!("WITH input AS (SELECT * FROM {}) {}", quote_ident(upstream), sql)
@@ -1159,7 +1160,7 @@ fn build_reorder(inputs: &NodeInputs, props: &JsonValue) -> Result<String, Strin
         return Ok(format!("SELECT * FROM {}", quote_ident(upstream)));
     }
     let listed = cols.iter().map(|c| quote_ident(c)).collect::<Vec<_>>().join(", ");
-    // Listed columns first, everything else after — never drops a column.
+    // Listed columns first, everything else after - never drops a column.
     Ok(format!(
         "SELECT {}, * EXCLUDE ({}) FROM {}",
         listed,
@@ -1294,7 +1295,7 @@ fn columns_list(props: &JsonValue, key: &str) -> Vec<String> {
         .unwrap_or_default()
 }
 
-/// A numeric property as a SQL literal — only if it's actually numeric,
+/// A numeric property as a SQL literal - only if it's actually numeric,
 /// so it can't smuggle arbitrary SQL into a comparison.
 fn num_prop(props: &JsonValue, key: &str) -> Option<String> {
     match props.get(key) {
@@ -1406,7 +1407,7 @@ fn build_rename(inputs: &NodeInputs, props: &JsonValue) -> Result<String, String
         .and_then(JsonValue::as_array)
         .cloned()
         .unwrap_or_default();
-    // RENAME via SELECT * REPLACE — keeps unrelated columns intact.
+    // RENAME via SELECT * REPLACE - keeps unrelated columns intact.
     // DuckDB doesn't support * REPLACE for renames directly; we use
     // SELECT *, col AS new_col then DROP not possible without listing.
     // Cleanest: enumerate explicit aliases. Need to know all columns.
@@ -1716,7 +1717,7 @@ fn build_duckdb_source(props: &JsonValue) -> String {
 }
 
 /// ATTACH statements for external-database nodes. The aliases are fixed
-/// (`duckle_src` / `duckle_dst`) — safe because each stage is its own
+/// (`duckle_src` / `duckle_dst`) - safe because each stage is its own
 /// CLI process.
 fn attach_prelude(component_id: &str, props: &JsonValue) -> String {
     let db = match string_prop(props, "database").filter(|s| !s.is_empty()) {
@@ -1731,7 +1732,7 @@ fn attach_prelude(component_id: &str, props: &JsonValue) -> String {
     }
 }
 
-/// SQLite / DuckDB sink — write the upstream into a table inside the
+/// SQLite / DuckDB sink - write the upstream into a table inside the
 /// ATTACHed `duckle_dst` database. DROP+CREATE works for both writers
 /// (the SQLite writer doesn't support CREATE OR REPLACE).
 fn build_db_sink(props: &JsonValue, from_view: &str) -> String {
@@ -1751,9 +1752,23 @@ fn build_db_sink(props: &JsonValue, from_view: &str) -> String {
 /// azure extensions let us read these directly via the same
 /// read_csv_auto / read_parquet / read_json_auto family of functions.
 /// Format is inferred from the URL extension unless the user picks one.
-fn build_cloud_source(props: &JsonValue) -> String {
+fn build_cloud_source(scheme: &str, props: &JsonValue) -> String {
     let path = string_prop(props, "path")
         .or_else(|| string_prop(props, "url"))
+        .filter(|s| !s.is_empty())
+        .or_else(|| {
+            // The storage form supplies bucket + key rather than a full
+            // URL; assemble one using the connector's scheme.
+            let bucket = string_prop(props, "bucket").filter(|s| !s.is_empty())?;
+            let key = string_prop(props, "key").unwrap_or_default();
+            let prefix = match scheme {
+                "s3" => "s3://",
+                "gcs" => "gs://",
+                "azureblob" => "az://",
+                _ => "https://",
+            };
+            Some(format!("{}{}/{}", prefix, bucket, key.trim_start_matches('/')))
+        })
         .unwrap_or_default();
     let override_fmt = string_prop(props, "format");
     let lower = path.to_ascii_lowercase();
@@ -1812,7 +1827,7 @@ fn build_sink_sql(
     }
 }
 
-/// Cloud sink — COPY a view out to an s3:// / gs:// / az:// URL.
+/// Cloud sink - COPY a view out to an s3:// / gs:// / az:// URL.
 /// DuckDB's httpfs handles the upload; credentials come from the
 /// SECRET wired up in execute_pipeline_with_events. Format is inferred
 /// from the URL extension unless overridden.

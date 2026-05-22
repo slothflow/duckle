@@ -25,7 +25,7 @@ export function ColumnField({ field: _field, value, onChange }: Props) {
             value={value ?? ''}
             onChange={e => onChange(e.target.value)}
         >
-            <option value="">— select column —</option>
+            <option value="">- select column -</option>
             {upstreamSchema.map(c => (
                 <option key={c.name} value={c.name}>
                     {c.name}  ({c.type})

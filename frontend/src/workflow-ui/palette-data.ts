@@ -84,9 +84,9 @@ export const PALETTE: Category[] = [
                 label: 'Files',
                 components: [
                     src('csv', 'CSV', 'available', 'Read delimited text files'),
-                    src('tsv', 'TSV', 'planned'),
-                    src('json', 'JSON', 'planned'),
-                    src('jsonl', 'JSONL / NDJSON', 'planned'),
+                    src('tsv', 'TSV', 'available', 'Read tab-separated files'),
+                    src('json', 'JSON', 'available', 'Read JSON files'),
+                    src('jsonl', 'JSONL / NDJSON', 'available', 'Read newline-delimited JSON'),
                     src('xml', 'XML', 'planned'),
                     src('excel', 'Excel (XLSX)', 'planned'),
                     src('avro', 'Avro', 'planned'),
@@ -130,9 +130,9 @@ export const PALETTE: Category[] = [
                 id: 'src.storage',
                 label: 'Object Storage',
                 components: [
-                    src('s3', 'Amazon S3', 'planned'),
-                    src('gcs', 'Google Cloud Storage', 'planned'),
-                    src('azureblob', 'Azure Blob Storage', 'planned'),
+                    src('s3', 'Amazon S3', 'available', 'Read via DuckDB httpfs'),
+                    src('gcs', 'Google Cloud Storage', 'available', 'Read via DuckDB httpfs'),
+                    src('azureblob', 'Azure Blob Storage', 'available', 'Read via the azure extension'),
                     src('minio', 'MinIO', 'planned'),
                     src('r2', 'Cloudflare R2', 'planned'),
                     src('b2', 'Backblaze B2', 'planned'),
@@ -437,9 +437,9 @@ export const PALETTE: Category[] = [
                 id: 'snk.storage',
                 label: 'Object Storage',
                 components: [
-                    snk('s3', 'Amazon S3', 'planned'),
-                    snk('gcs', 'Google Cloud Storage', 'planned'),
-                    snk('azureblob', 'Azure Blob Storage', 'planned'),
+                    snk('s3', 'Amazon S3', 'available', 'Write via DuckDB httpfs'),
+                    snk('gcs', 'Google Cloud Storage', 'available', 'Write via DuckDB httpfs'),
+                    snk('azureblob', 'Azure Blob Storage', 'available', 'Write via the azure extension'),
                 ],
             },
             {

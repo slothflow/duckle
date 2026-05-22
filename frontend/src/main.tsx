@@ -29,7 +29,7 @@ if (isTauri()) {
             await win.show();
             await win.setFocus();
         } catch {
-            /* not in Tauri / API unavailable — window is already visible */
+            /* not in Tauri / API unavailable - window is already visible */
         }
     };
     // Two RAFs ≈ after first paint commit.

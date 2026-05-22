@@ -1,6 +1,6 @@
 /**
  * Derive a node's canvas subtitle from its live configuration, so the
- * card reflects what the component is actually set to do — not a static
+ * card reflects what the component is actually set to do - not a static
  * label baked in when it was dropped. Returns `undefined` when there's
  * nothing meaningful to show yet (the card then renders just its name).
  */

@@ -60,7 +60,7 @@ export default function ConnectionTypePicker({ position, allowedTypes, onPick, o
                 {triggerItems.length > 0 ? (
                     <PickerSection
                         title="Trigger connections"
-                        subtitle="Control flow, no data — fires once when condition is met"
+                        subtitle="Control flow, no data - fires once when condition is met"
                         items={triggerItems}
                         onPick={onPick}
                     />

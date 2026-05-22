@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="720" viewBox="0 0 1200 720" fill="none" role="img" aria-label="Duckle designer — illustration">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 720" preserveAspectRatio="xMidYMid meet" fill="none" role="img" aria-label="Duckle designer - illustration">
   <defs>
     <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0" stop-color="#18D4E0"/><stop offset="1" stop-color="#5B6EFB"/>
@@ -70,7 +70,7 @@
 
   <!-- right properties -->
   <rect x="978" y="62" width="208" height="582" rx="12" fill="#0b1018" stroke="#172033"/>
-  <text x="996" y="92" font-size="13" font-weight="700" fill="#9fb0cc" letter-spacing="0.04em">PROPERTIES — FILTER</text>
+  <text x="996" y="92" font-size="13" font-weight="700" fill="#9fb0cc" letter-spacing="0.04em">PROPERTIES - FILTER</text>
   <text x="996" y="124" font-size="12" fill="#7e8ca6">Condition</text>
   <rect x="996" y="132" width="172" height="34" rx="8" fill="#121a2b" stroke="#26334b"/><text x="1008" y="153" font-size="12" fill="#cfe0ff">status  =  paid</text>
   <text x="996" y="190" font-size="12" fill="#7e8ca6">Match</text>

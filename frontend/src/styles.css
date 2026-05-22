@@ -1,5 +1,5 @@
 :root {
-    /* Enterprise dark — Airbyte/Lakehouse-inspired cool navy with
+    /* Enterprise dark - Airbyte/Lakehouse-inspired cool navy with
        a deliberate cyan→indigo accent gradient. */
     --bg-0: #07090f;
     --bg-1: #0d111a;
@@ -16,23 +16,23 @@
     --text-3: #6d7585;
     --text-4: #4a5163;
 
-    /* Primary accent — Airbyte-style vibrant cyan, used for primary
+    /* Primary accent - Airbyte-style vibrant cyan, used for primary
        actions, brand mark, headlines. */
     --accent-cyan: #18d4e0;
     --accent-cyan-strong: #2ce4ef;
 
-    /* Secondary accent — indigo for selection / focus, picks up the
+    /* Secondary accent - indigo for selection / focus, picks up the
        Databricks/Lakeflow purple-blue feel. */
     --accent: #5b6efb;
     --accent-strong: #7587ff;
     --accent-soft: rgba(91, 110, 251, 0.16);
     --accent-glow: rgba(91, 110, 251, 0.35);
 
-    /* The brand gradient — used on the wordmark, primary CTAs, and
+    /* The brand gradient - used on the wordmark, primary CTAs, and
        the visual mapper button. */
     --gradient-brand: linear-gradient(135deg, var(--accent-cyan), var(--accent));
 
-    /* Component-kind hues — quiet, in a tight luminance band. */
+    /* Component-kind hues - quiet, in a tight luminance band. */
     --kind-source: #4fd1c5;
     --kind-transform: #94a4be;
     --kind-sink: #f1936e;
@@ -62,7 +62,7 @@
 
     --ease: cubic-bezier(0.16, 1, 0.3, 1);
 
-    /* Legacy aliases — keep mapping until everything is migrated. */
+    /* Legacy aliases - keep mapping until everything is migrated. */
     --accent-source: var(--kind-source);
     --accent-transform: var(--kind-transform);
     --accent-sink: var(--kind-sink);
@@ -111,7 +111,7 @@ body,
     color: var(--text-1);
 }
 
-/* Headings — set up base hierarchy */
+/* Headings - set up base hierarchy */
 h1, h2, h3, h4, h5, h6 {
     margin: 0;
     letter-spacing: -0.015em;
@@ -4223,7 +4223,7 @@ select.schema-input {
     background: var(--accent-soft) !important;
 }
 
-/* Prism token theme — keyed to our palette so it works in both modes */
+/* Prism token theme - keyed to our palette so it works in both modes */
 .token.comment,
 .token.prolog,
 .token.doctype,
@@ -5148,7 +5148,7 @@ select.schema-input {
     transition: opacity 200ms ease;
 }
 
-/* Editor header — More menu dropdown ----------------------------------- */
+/* Editor header - More menu dropdown ----------------------------------- */
 .toolbar-more {
     position: relative;
 }

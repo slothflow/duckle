@@ -57,7 +57,7 @@ export default function WorkspacePickerModal({ onPicked }: Props) {
                         <Feature
                             icon={<FolderOpen size={14} />}
                             title="Or choose a new empty folder"
-                            description="Duckle will create workspace.json on first save. Use any folder — a fresh one, your Documents folder, anywhere."
+                            description="Duckle will create workspace.json on first save. Use any folder - a fresh one, your Documents folder, anywhere."
                         />
                     </div>
 

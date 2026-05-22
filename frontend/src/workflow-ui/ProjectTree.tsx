@@ -348,7 +348,7 @@ export default function ProjectTree(props: Props) {
                     onContextMenu={e => onItemContextMenu(e, item)}
                     title={
                         item.type === 'context'
-                            ? `${item.name} — drag onto the canvas to make it the active context`
+                            ? `${item.name} - drag onto the canvas to make it the active context`
                             : item.name
                     }
                 >

@@ -9,7 +9,7 @@ type EngineMeta = {
     label: string;
     description: string;
     dot: string;
-    /** Not selectable yet — shown greyed with a "coming soon" note. */
+    /** Not selectable yet - shown greyed with a "coming soon" note. */
     comingSoon?: boolean;
 };
 

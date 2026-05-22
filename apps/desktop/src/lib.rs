@@ -54,7 +54,7 @@ pub fn run() {
                 });
             }
             // The window launches hidden (visible:false) so there's no
-            // white flash — the frontend calls show() once it has
+            // white flash - the frontend calls show() once it has
             // painted. Safety net: reveal it after a few seconds no
             // matter what, so a frontend hiccup can't leave the window
             // stuck invisible.
@@ -120,7 +120,7 @@ fn engine() -> Result<DuckdbEngine, String> {
 /// connector-specific options, and we return inferred columns plus a
 /// small sample for the Preview tab.
 ///
-/// Most formats go through DuckDB's native readers — `read_csv_auto`,
+/// Most formats go through DuckDB's native readers - `read_csv_auto`,
 /// `read_parquet`, `read_json_auto`, `sqlite_scan`. The hand-rolled
 /// `CsvConnector` stays as a backup for environments where the DuckDB
 /// engine fails to come up.
@@ -175,7 +175,7 @@ fn format_inspect_error(err: InspectError) -> String {
 /// per-node status + preview rows for any leaf node that didn't feed a
 /// sink.
 ///
-/// `on_event` is a Tauri Channel — every stage start / stage finish /
+/// `on_event` is a Tauri Channel - every stage start / stage finish /
 /// cancellation is pushed through it so the frontend can light up
 /// status badges in real time.
 #[tauri::command]

@@ -76,7 +76,7 @@ export function AggregationsField({ value, onChange }: Props) {
                                     });
                                 }}
                             >
-                                <option value="">— column —</option>
+                                <option value="">- column -</option>
                                 {upstreamSchema.map(c => (
                                     <option key={c.name} value={c.name}>
                                         {c.name}

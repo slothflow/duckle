@@ -5,7 +5,7 @@ import { isTauri } from '../tauri-dialog';
 
 /**
  * Minimize / maximize / close controls for the frameless window,
- * rendered into Duckle's own topbar. Only shows under Tauri — in the
+ * rendered into Duckle's own topbar. Only shows under Tauri - in the
  * browser the OS chrome (or none) applies.
  */
 export default function WindowControls() {

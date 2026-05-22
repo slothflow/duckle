@@ -25,14 +25,14 @@ pub enum InspectError {
     Other(String),
 }
 
-/// Result of inspecting a source — schema plus an optional preview.
+/// Result of inspecting a source - schema plus an optional preview.
 #[derive(Debug, Clone)]
 pub struct Inspection {
     pub schema: Schema,
     pub sample_rows: Vec<JsonValue>,
 }
 
-/// Anything that can describe the schema of an input it controls — files,
+/// Anything that can describe the schema of an input it controls - files,
 /// databases, APIs, streaming subscriptions. The connector receives its
 /// already-validated configuration as a JSON value (the same shape the
 /// frontend collects in its property form).

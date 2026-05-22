@@ -281,7 +281,7 @@ export default function PropertiesPanel({
                             ) : null}
                             {manifest?.schemaSource === 'declared' ? (
                                 <div className="schema-source-banner schema-source-banner-declared">
-                                    Declared schema — define the output columns explicitly.
+                                    Declared schema - define the output columns explicitly.
                                 </div>
                             ) : null}
                             <SchemaEditor

@@ -78,7 +78,7 @@ pub struct Position {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct PipelineNode {
     pub id: String,
-    /// React Flow node `type` — usually one of `source` / `transform` / `sink`.
+    /// React Flow node `type` - usually one of `source` / `transform` / `sink`.
     #[serde(rename = "type", default)]
     pub flow_type: Option<String>,
     pub position: Position,

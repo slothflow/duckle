@@ -266,7 +266,7 @@ fn preview_returned_for_leaf_without_sink() {
 #[test]
 fn structured_filter_predicate_actually_filters() {
     // The visual filter builder stores a structured object carrying its
-    // compiled SQL — the executor must honor it, not fall back to TRUE.
+    // compiled SQL - the executor must honor it, not fall back to TRUE.
     let tmp = tempfile::tempdir().unwrap();
     let csv = write_file(
         tmp.path(),
@@ -299,7 +299,7 @@ fn structured_filter_predicate_actually_filters() {
     );
     let result = engine.execute_pipeline(&d);
     assert_eq!(result.status, "ok", "run failed: {:?}", result.error);
-    // Header + 2 paid rows — NOT all 3 (which is what the WHERE TRUE bug did).
+    // Header + 2 paid rows - NOT all 3 (which is what the WHERE TRUE bug did).
     assert_eq!(count(&format!("read_csv_auto('{}')", out)), 2);
 }
 
@@ -600,7 +600,7 @@ fn array_collect_groups_into_lists() {
     assert_eq!(len_a, "2");
 }
 
-// These use the EXACT property keys the UI forms write — the bug was
+// These use the EXACT property keys the UI forms write - the bug was
 // the executor reading different keys, so config was silently dropped.
 
 #[test]

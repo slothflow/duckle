@@ -76,7 +76,7 @@ export function validatePipeline(
 
         // Required inputs connected. Inputs without `optional: true`
         // must have at least one upstream edge of any matching type
-        // (we accept the edge regardless of connectionType for now —
+        // (we accept the edge regardless of connectionType for now -
         // the picker already enforces compatibility on creation).
         const inputs = manifest.ports?.inputs ?? [];
         const required = inputs.filter(p => !p.optional);
@@ -92,7 +92,7 @@ export function validatePipeline(
             }
         }
 
-        // Filter sanity — predicate non-empty if it's a filter
+        // Filter sanity - predicate non-empty if it's a filter
         if (node.data.componentId === 'xf.filter') {
             const pred =
                 typeof props.predicate === 'string' ? props.predicate.trim() : '';
@@ -100,7 +100,7 @@ export function validatePipeline(
                 push({
                     severity: 'warning',
                     code: 'empty-filter-predicate',
-                    message: `${node.data.label}: predicate is empty — every row will pass.`,
+                    message: `${node.data.label}: predicate is empty - every row will pass.`,
                     nodeId: node.id,
                 });
             }

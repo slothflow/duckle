@@ -399,7 +399,7 @@ function ConsoleTab({
                     <span className="bottom-console-time">[ready]</span>
                     <span className="bottom-console-msg">
                         The execution log. Run a pipeline (▶ Run) and each stage's status,
-                        row count, and timing — plus any errors — appears here.
+                        row count, and timing - plus any errors - appears here.
                     </span>
                 </div>
             </div>
@@ -410,8 +410,8 @@ function ConsoleTab({
         const tag = st.status === 'ok' ? 'ok' : st.status;
         const detail =
             st.status === 'ok'
-                ? `${label} — ${st.kind ?? 'stage'} — ${st.rows ?? 0} rows — ${st.duration_ms ?? 0} ms`
-                : `${label} — ${friendlyError(st.error) || st.status}`;
+                ? `${label} - ${st.kind ?? 'stage'} - ${st.rows ?? 0} rows - ${st.duration_ms ?? 0} ms`
+                : `${label} - ${friendlyError(st.error) || st.status}`;
         return { id, tag, detail, ok: st.status === 'ok' };
     });
     return (

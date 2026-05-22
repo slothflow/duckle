@@ -1,10 +1,10 @@
 <div align="center">
 
-<img src="docs/assets/hero.svg" alt="Duckle" width="820"/>
+<img src="docs/assets/hero.svg" alt="Duckle" width="100%"/>
 
-<h3>Clean data in. Smart data out.</h3>
+<h3>The local-first data studio. Drag, wire, run at native speed.</h3>
 
-<p><b>Duckle</b> is an open-source, local-first <b>ETL / ELT / streaming studio</b> — a drag-and-drop pipeline designer that runs at native speed on your machine and ships as a tiny desktop app. Build pipelines visually, see the data at every step, and pump clean data into files, databases, the cloud, and your <b>AI / vector stores</b>.</p>
+<p><b>Duckle</b> is an open-source, local-first <b>ETL / ELT studio</b>: a drag-and-drop pipeline designer that compiles your canvas to SQL and runs it on your machine through DuckDB. Read from files, databases, and the cloud; reshape with 40+ transforms; land clean data in files, databases, object storage, and your AI / vector stores. Ships as a ~9 MB desktop app, no bundled database, no servers, no lock-in.</p>
 
 <p>
 <img alt="status" src="https://img.shields.io/badge/status-early%20development-orange"/>
@@ -22,131 +22,185 @@
 
 ---
 
-## Status
-
-Duckle is in **early development**. The visual designer, the DuckDB execution engine, scheduling, and cloud sources work today and are covered by integration tests — but the surface is moving fast, the data-connector catalog is still growing, and APIs may change. Treat it as a promising daily-driver-in-progress, not a 1.0.
-
-> **Honest scope:** Duckle is a *single-machine, embedded* studio. It's built to make local and small-team data work fast and pleasant — not to replace a distributed warehouse. If you outgrow one machine, point Duckle's output at the system that scales.
-
----
-
 ## What is Duckle?
 
-A lot of data tooling is either a heavyweight enterprise suite or a pile of scripts. Duckle aims for the sweet spot:
+Most data tooling forces a choice: a heavyweight enterprise suite you have to host, or a pile of scripts you have to maintain. Duckle is the middle path, a visual studio that runs entirely on your machine and stays out of your way.
 
-- **Visual, but real.** Drag nodes onto a canvas, wire them up, and Duckle compiles the graph to SQL and runs it on a genuine analytical engine. No black box — click any node to see the **generated SQL** and a **live preview** of its rows.
-- **Local-first and tiny.** The app is a **~9 MB** binary. It does not bundle a database — on first launch it downloads its engine (DuckDB) into your app directory with a guided step. Your pipelines, connections, and schedules live in a plain folder you choose, so they're **git-friendly**.
-- **Fast.** Execution runs natively through DuckDB, so a CSV → transform → Parquet job that would crawl in a spreadsheet finishes in milliseconds.
+You build a pipeline by dragging nodes onto a canvas and wiring them together. Duckle compiles that graph into SQL and executes it on a real analytical engine. Nothing is hidden: click any node to read the **generated SQL** and see a **live preview** of the rows flowing through it.
 
 ```
-        ┌────────────┐      ┌─────────────────┐      ┌──────────────┐
-        │  messy.csv │ ───▶ │  clean · dedup  │ ───▶ │  Parquet /   │
-        │  S3 · API  │      │  validate · map │      │  AI / vector │
-        └────────────┘      └─────────────────┘      └──────────────┘
-                drag            drop & wire              run locally
+   sources                 transforms                       sinks
+   -------                 ----------                       -----
+   CSV / TSV          +----------------------+         files (CSV / Parquet
+   Parquet            |  filter (reject port)|         JSON / TSV)
+   JSON / NDJSON  -->  |  join / aggregate    |  -->    SQLite / DuckDB
+   SQLite / DuckDB    |  window / pivot       |         S3 / GCS / Azure
+   S3 / GCS / Azure   |  validate / dedupe    |         AI / vector stores
+                      +----------------------+            (preview)
+        drag                drop and wire                   run locally
 ```
+
+### Why Duckle is different
+
+| | |
+|---|---|
+| **Visual, never opaque** | The canvas compiles to SQL you can read, and every node has a live preview tab. No black box. |
+| **Tiny binary, no bundled DB** | The app is ~9 MB. The DuckDB engine downloads on first launch with a guided step, so installs stay small and updates stay fast. |
+| **Native speed** | Execution runs through DuckDB: vectorized, columnar, local. A clean-and-export job that crawls in a spreadsheet finishes in milliseconds. |
+| **Git-friendly by design** | Pipelines, connections, contexts, and routines persist as plain files in a folder you pick. Diff them, branch them, review them. |
+| **Honest about scope** | Single-machine and embedded by design. Built to make local and small-team data work fast, not to replace a distributed warehouse. |
+| **Open source** | Dual-licensed MIT OR Apache-2.0. Yours to use, fork, and extend. |
 
 ---
 
-## Clean the garbage before it poisons your AI
+## Status
 
-Models are only as good as the data behind them. RAG indexes, embedding stores, and training sets quietly fill up with **duplicates, nulls, malformed rows, mixed encodings, and inconsistent schemas** — garbage in, garbage out.
+Duckle is in **early development**. The visual designer, the DuckDB execution engine, scheduling, and cloud sources work today and are covered by integration tests. The surface area is still moving fast, the connector catalog is growing, and APIs may change. Treat it as a promising daily-driver-in-progress, not a 1.0.
 
-Duckle is built to scrub that data clean *before* it reaches your AI:
+**Scope, stated plainly:** Duckle is a single-machine, embedded studio. If you outgrow one box, point Duckle's output at the system that scales. It will not pretend to be a cluster.
 
-- **Deduplicate** exact and near-duplicate rows — including a **Semantic Dedupe** that drops near-identical text by vector similarity.
-- **Validate & filter** out malformed, empty, or out-of-range records with a visual rule builder.
-- **Normalize** types, encodings, casing, and null handling across messy sources.
-- **Redact PII**, **chunk text** for RAG, **embed**, **classify**, and **LLM-transform** rows — a whole **AI** transform group.
-- **Land it in your AI store** — native **Vector / AI Database** connectors and sinks: pgvector, Pinecone, Qdrant, Weaviate, Chroma, Milvus, LanceDB.
+The component palette ships 240+ nodes so the roadmap is visible in the product itself. Each node is tagged by availability:
 
-> The AI transforms and Vector / AI Database source + sink connectors are in the palette today as **preview** components — drag, wire, and configure them now (provider, collection, embedding column, distance metric, …). Execution wiring is landing engine-by-engine; everything else (clean → export Parquet/JSON your store ingests) runs today.
+- **Available** runs on the DuckDB engine today.
+- **Preview** is configurable in the designer now (drag, wire, set properties); execution is being wired engine-by-engine. This currently covers the AI and Vector / AI Database groups.
+- **Planned** is on the roadmap and reserved in the palette, not yet executable.
+
+The capability matrix below marks each area accordingly.
 
 ---
 
 <div align="center">
-<img src="docs/assets/ui-preview.svg" alt="Duckle designer — illustration" width="900"/>
+<img src="docs/assets/ui-preview.svg" alt="Duckle designer (illustration)" width="100%"/>
 <br/>
-<sub><i>The Duckle designer (illustration). Real screenshots below.</i></sub>
+<sub><i>The Duckle designer (illustration). Add real captures under docs/assets/ to replace this.</i></sub>
 </div>
 
 ---
 
-## Why Duckle?
+## Capabilities
 
-| | |
+Duckle is not a CSV tool with extras. It reads a broad set of formats and sources, ships a deep transform library, and writes to files, databases, object storage, and AI stores. CSV is just one source among many.
+
+### Sources
+
+| Group | Connectors | Status |
+|---|---|---|
+| **Files** | CSV, TSV, Parquet, JSON, JSONL / NDJSON | Available |
+| **Embedded databases** | SQLite (read tables), DuckDB (read tables or run a query) | Available |
+| **Object storage** | Amazon S3, Google Cloud Storage, Azure Blob, HTTP(S) via DuckDB `httpfs` | Available |
+| **Relational databases** | PostgreSQL, MySQL, MariaDB, SQL Server, Oracle, ClickHouse, generic JDBC | Planned |
+| **Cloud warehouses** | Snowflake, BigQuery, Redshift, Databricks SQL, Synapse, MotherDuck | Planned |
+| **Streaming** | Kafka, Pulsar, Redpanda, NATS, Kinesis, Event Hubs, Pub/Sub | Planned |
+| **APIs and SaaS** | REST, GraphQL, gRPC, plus Salesforce, HubSpot, Stripe, Notion, GitHub, and more | Planned |
+| **NoSQL and search** | MongoDB, Cassandra, Redis, DynamoDB, Elasticsearch, OpenSearch | Planned |
+| **Vector / AI databases** | pgvector, Pinecone, Qdrant, Weaviate, Chroma, Milvus, LanceDB | Preview |
+
+### Transforms
+
+40+ transforms compile to SQL and run today, grouped by what they do. All of the following are **available**:
+
+| Group | Operations |
 |---|---|
-| **Visual, not opaque** | Compile the canvas to SQL you can read. Preview every node's output. |
-| **Tiny binary** | ~9 MB app; the engine downloads on first run instead of being bundled. |
-| **Native speed** | DuckDB does the heavy lifting — vectorized, columnar, local. |
-| **Git-friendly workspace** | Pipelines and config are plain files in a folder you pick. |
-| **Pluggable engines** | DuckDB today; SlothDB optional; a native Rust engine coming. |
-| **AI-data ready** | Dedup, validate, normalize — prep clean datasets for AI / vector DBs. |
-| **Feels native** | Frameless window, dark/light themes, no browser-wrapper feel. |
-| **Open source** | MIT OR Apache-2.0. Yours to use, fork, and extend. |
+| **Fields** | Map (visual row mapper), Project / Select, Cast / Convert Type, Rename, Add Column, Drop Columns, Reorder, Coalesce / Null Fill |
+| **Rows** | Filter (visual builder or raw SQL, with a **reject** port), Distinct, Sample, Top N / Limit, Sort, Skip / Offset |
+| **Aggregate** | Group By, Rollup, Cube, Count Rows |
+| **Join** | Inner, Left, Right, Full Outer, Cross, Lookup, Semi, Anti |
+| **Set operations** | Union, Union All, Intersect, Except / Minus |
+| **Window** | Row Number, Rank, Dense Rank, Lead, Lag, First Value, Last Value, NTile |
+| **Strings** | Regex Replace, Split, Concat, Trim, Case Change, Length, Substring, Format |
+| **Date / Time** | Parse, Format, Extract Part, Date Diff, Date Add, Truncate, Timezone Convert |
+| **Numeric** | Round, Modulo, Absolute, Logarithm, Power, Square Root |
+| **JSON / nested** | Parse JSON, Stringify, Flatten, JSONPath Extract, Merge Objects |
+| **Array** | Explode / Unnest, Collect List, Element At, Contains, Array Distinct |
+| **Pivot / shape** | Pivot (rows to columns) |
+| **Debug** | Log Rows (pass through and print to Output for mid-pipeline inspection) |
+
+Planned transform families include Unpivot / Normalize, Window Aggregate, and CDC / SCD (diff detect, SCD Type 1 and 2, merge / upsert).
+
+### Data quality
+
+Validators split their input: passing rows continue on the main port, failures route to a **reject** port you can sink, count, or inspect.
+
+| Validator | Behavior | Status |
+|---|---|---|
+| **Not-Null Check** | Pass rows with no nulls in the chosen columns | Available |
+| **Range Check** | Pass rows inside a numeric range (inclusive or exclusive) | Available |
+| **Regex Match** | Pass rows whose column fully matches a pattern | Available |
+| **Uniqueness Check** | Pass the first row per key; route duplicates to reject | Available |
+| **Profiling and cleansing** | Column Profile, Histogram, Standardize, Fuzzy Deduplicate, Record Match | Planned |
+
+### Custom code and reusable SQL
+
+| Capability | What it does | Status |
+|---|---|---|
+| **Inline SQL** | Write a `SELECT`; the upstream node is exposed as `input`, and the result runs as a real materialized stage | Available |
+| **SQL Template** | Parameterized SQL with `${context.var}` substitution | Available |
+| **SQL routines** | Reusable, named SQL saved in the workspace and executable inside any pipeline | Available |
+| **Python / Rust / JavaScript / Shell / Wasm UDFs** | Custom-language stages | Planned |
+
+### Sinks
+
+| Group | Connectors | Status |
+|---|---|---|
+| **Files** | CSV, TSV, Parquet (ZSTD), JSON, JSONL / NDJSON | Available |
+| **Embedded databases** | SQLite, DuckDB (write a table) | Available |
+| **Object storage** | Amazon S3, Google Cloud Storage, Azure Blob via DuckDB `httpfs` | Available |
+| **Databases and warehouses** | PostgreSQL, MySQL, SQL Server, ClickHouse, Snowflake, BigQuery, Redshift | Planned |
+| **Vector / AI databases** | pgvector, Pinecone, Qdrant, Weaviate, Chroma, Milvus, LanceDB | Preview |
+
+### Orchestration and workspace
+
+| Capability | What it does |
+|---|---|
+| **Run feedback** | Streaming run events light nodes up stage by stage, with per-node row counts, a real mid-query cancel, and run history. |
+| **Schedules** | Cron, fixed-interval, and file-watch triggers, driven by an in-process scheduler. |
+| **Context variables** | Per-environment variables; bind any field to one via a Manual / Context dropdown, or reference `${var}` inline. Resolved at run time. |
+| **Cloud credentials** | Saved S3 / GCS / Azure connections become DuckDB SECRETs; cloud reads and writes go through `httpfs`. |
+| **Workspace** | Pipelines, connections, contexts, documents, and routines persist per-pipeline as plain JSON and Markdown files in a folder you choose. |
 
 ---
 
-## Features
+## Clean data before it reaches your AI
 
-| Area | What you get |
-|---|---|
-| **Designer** | Drag-and-drop canvas, snap-to-grid, node search, live validation, generated-SQL inspector, per-node preview tab. |
-| **Sources** | CSV · TSV · Parquet · JSON / NDJSON · SQLite · DuckDB · S3 · GCS · Azure Blob · HTTP(S). |
-| **Transforms** | Filter (visual + raw SQL, with reject port) · Map / expressions · Aggregate · Join & Lookup · Project · Rename · Sort · Distinct · Sample / Top-N / Skip · Union / Intersect / Except · Window (row_number, rank, lead/lag, …) · Pivot · Coalesce. |
-| **Data Quality** | Not-Null · Range · Regex · Uniqueness checks — passing rows continue, failures route to the **reject** port. |
-| **Custom Code** | Inline SQL & SQL Template — your `SELECT` runs as a real stage with the upstream as `input`; **SQL routines** are reusable and executable. |
-| **Context variables** | Define per-environment variables; bind any field to one via a Manual/Context dropdown, or reference `${var}` inline. Resolved at run time. |
-| **AI / Vector** | Embeddings · LLM Transform · Text Chunker · PII Redact · Classify · Semantic Dedupe · Vector DB source + sink (pgvector, Pinecone, Qdrant, Weaviate, Chroma, Milvus, LanceDB) — *preview*. |
-| **Sinks** | CSV · Parquet · JSON · SQLite · DuckDB · S3 / GCS / Azure. |
-| **Run** | Streaming run events (nodes light up stage-by-stage), per-node row counts, **mid-query cancel**, run history. |
-| **Schedules** | Cron · fixed interval · file-watch triggers, with an in-process scheduler. |
-| **Cloud** | Saved connections become DuckDB secrets; cloud reads via `httpfs`. |
-| **Workspace** | Connections, contexts (env vars), documents (Markdown), routines — all persisted per-pipeline as plain files. |
+Models inherit the quality of their inputs. RAG indexes, embedding stores, and training sets quietly accumulate duplicates, nulls, malformed rows, mixed encodings, and inconsistent schemas. Duckle is built to scrub that data before it lands in a vector store:
+
+- **Deduplicate** with exact Distinct and Uniqueness checks today, with a vector-similarity **Semantic Dedupe** in preview.
+- **Validate and filter** malformed, empty, or out-of-range records and route failures to a reject port.
+- **Normalize** types, encodings, casing, and null handling across messy sources.
+- **Prepare for retrieval** with a dedicated AI transform group: Embeddings, LLM Transform, Text Chunker, PII Redact, Classify, and Semantic Dedupe.
+- **Land it in your store** with Vector / AI Database connectors: pgvector, Pinecone, Qdrant, Weaviate, Chroma, Milvus, and LanceDB.
+
+> The AI transforms and Vector / AI Database connectors are **preview** components: you can drag, wire, and configure them now (provider, collection, embedding column, distance metric). Their execution is landing engine-by-engine. Everything in the clean-and-export path (validate, normalize, dedupe, write Parquet or JSON your store ingests) runs today.
 
 ---
 
 ## Engines
 
-Duckle ships a thin shell and installs its engine on first launch, so the download stays tiny.
+Duckle ships a thin shell and installs its engine on first launch, which is why the download stays tiny.
 
-| Engine | Role | Status | Source |
-|---|---|---|---|
-| **DuckDB** | Default execution engine — analytics, file formats, SQL pushdown. | Working | Downloaded from [duckdb/duckdb](https://github.com/duckdb/duckdb) releases |
-| **SlothDB** | Optional embedded analytical engine. | Installable | Downloaded from [SouravRoy-ETL/slothdb](https://github.com/SouravRoy-ETL/slothdb) releases |
-| **Native** | In-process Rust streaming / incremental engine. | Planned | Built in |
+| Engine | Role | Status |
+|---|---|---|
+| **DuckDB** | Default execution engine: analytics, file formats, cloud reads, SQL pushdown. | Working |
+| **SlothDB** | Optional embedded analytical engine, installed the same way. | Installable |
+| **Native** | In-process Rust streaming / incremental engine. | Planned |
 
-Both engines install through the same guided first-run step, with a progress bar — no manual setup.
+Both downloadable engines install through the same guided first-run step with a progress bar. No manual setup.
 
 ---
 
-## Try it in 60 seconds
+## Quickstart (60 seconds)
 
-1. **Download** the latest release for your OS (or build from source below).
+1. **Download** the latest release for your OS, or build from source below.
    - Windows: `Duckle_x64-setup.exe` (installer) or the standalone `duckle.exe`.
-2. **Launch it.** On first run, Duckle asks to install its engine — click **Install DuckDB** (a ~10–20 MB download with a progress bar).
-3. **Pick a workspace folder** — this is where your pipelines live.
+2. **Launch it.** On first run, Duckle offers to install its engine. Click **Install DuckDB** (a small download with a progress bar).
+3. **Pick a workspace folder.** This is where your pipelines and config live as plain files.
 4. **Build a pipeline:**
-   - Drag a **CSV source** in, point it at [`samples/orders.csv`](samples/orders.csv), hit **Autodetect schema**.
-   - Drag a **Filter**, wire it up, add a condition like `status = paid`.
-   - Drag a **Parquet sink**, choose an output path.
-   - Press **Run** — watch the nodes light up, then check the **Output** tab.
+   - Drag a **CSV source** in, point it at [`samples/orders.csv`](samples/orders.csv), and hit **Autodetect schema**.
+   - Drag a **Filter**, wire it up, and add a condition like `status = 'paid'`.
+   - Drag a **Parquet sink** and choose an output path.
+   - Press **Run**, watch the nodes light up, then open the **Output** tab.
 
-That's a real, native ETL pipeline — built, run, and verified in under a minute.
-
----
-
-## Screenshots
-
-> Add your captures to `docs/assets/` as `screenshot-designer.png`, `screenshot-run.png`, and `screenshot-setup.png` and they'll render here.
-
-<!--
-<p align="center">
-  <img src="docs/assets/screenshot-designer.png" alt="Designer" width="800"/><br/>
-  <img src="docs/assets/screenshot-run.png" alt="Run output" width="800"/><br/>
-  <img src="docs/assets/screenshot-setup.png" alt="First-run engine setup" width="800"/>
-</p>
--->
+That is a real, native ETL pipeline, built and run in under a minute. CSV is just the easiest first node; swap in Parquet, JSON, SQLite, DuckDB, or an S3 URL the same way.
 
 ---
 
@@ -157,9 +211,9 @@ That's a real, native ETL pipeline — built, run, and verified in under a minut
 - [Rust](https://rustup.rs/) (stable)
 - [Node.js](https://nodejs.org/) 18+ and npm
 - [`cargo-tauri`](https://tauri.app/) CLI: `cargo install tauri-cli --version "^2"`
-- Platform webview deps per the [Tauri prerequisites](https://tauri.app/start/prerequisites/) (WebView2 on Windows is preinstalled on Win10/11).
+- Platform webview dependencies per the [Tauri prerequisites](https://tauri.app/start/prerequisites/). WebView2 is preinstalled on Windows 10 and 11.
 
-**Clone & install**
+**Clone and install**
 
 ```bash
 git clone https://github.com/SouravRoy-ETL/duckle
@@ -167,26 +221,24 @@ cd duckle
 npm --prefix frontend install
 ```
 
-**Run in development** (hot-reloading frontend + native shell):
+**Run in development** (hot-reloading frontend plus the native shell):
 
 ```bash
 cargo tauri dev
 ```
 
-**Build a release binary + installers:**
+**Build a release binary and installers:**
 
 ```bash
 cargo tauri build
 ```
 
-Outputs land in `target/release/` (the standalone `duckle.exe`) and `target/release/bundle/` (the `.msi` / NSIS `-setup.exe` installers).
-
-> The engine is **not** compiled in — DuckDB downloads at first launch. That's why the build is fast and the binary is tiny.
+Outputs land in `target/release/` (the standalone `duckle.exe`) and `target/release/bundle/` (the `.msi` and NSIS `-setup.exe` installers). The engine is not compiled in: DuckDB downloads at first launch, which is why the build is fast and the binary is tiny.
 
 **Run the tests:**
 
 ```bash
-cargo test                      # unit + plan/compile tests (no engine needed)
+cargo test                      # unit and plan/compile tests, no engine needed
 # end-to-end tests drive a real DuckDB CLI:
 DUCKLE_DUCKDB_BIN=/path/to/duckdb cargo test
 ```
@@ -197,38 +249,38 @@ DUCKLE_DUCKDB_BIN=/path/to/duckdb cargo test
 
 ```
 duckle/
-├─ apps/desktop/         Tauri 2 shell — commands, engine installer, window
-├─ frontend/             React 19 + Vite + TypeScript — the designer UI
-└─ crates/
-   ├─ duckdb-engine/     Compiles the node graph to SQL + drives the DuckDB CLI
-   ├─ slothdb-engine/    SlothDB adapter
-   ├─ scheduler/         Cron / interval / file-watch triggers
-   ├─ metadata/          Schema & type model
-   ├─ plugin-sdk/        Connector / inspector traits
-   ├─ connectors/        Source/sink connectors
-   └─ runtime · workflow-engine · transform-engine · stream-engine · execution-core
+  apps/desktop/         Tauri 2 shell: commands, engine installer, window
+  frontend/             React 19 + Vite + TypeScript: the designer UI
+  crates/
+    duckdb-engine/      Compiles the node graph to SQL and drives the DuckDB CLI
+    slothdb-engine/     SlothDB adapter
+    scheduler/          Cron / interval / file-watch triggers
+    metadata/           Schema and type model
+    plugin-sdk/         Connector / inspector traits
+    connectors/         Source and sink connectors
+    runtime, workflow-engine, transform-engine, stream-engine, execution-core
 ```
 
-- **Frontend** (React + [@xyflow/react](https://reactflow.dev/)) is the visual designer; it talks to the Rust core over Tauri commands.
-- **`duckdb-engine`** compiles the pipeline graph to SQL and executes it by **shelling out to the downloaded DuckDB CLI** (streaming results, cancel = kill the process) — no statically linked database, so the binary stays small.
-- **Everything persists** to a workspace folder you choose, as plain JSON/Markdown files.
+- The **frontend** (React with [@xyflow/react](https://reactflow.dev/)) is the visual designer; it talks to the Rust core over Tauri commands.
+- **duckdb-engine** topologically sorts the graph, lowers each node into SQL, and executes by shelling out to the downloaded DuckDB CLI. Non-sink nodes materialize as tables so later stages can reference them; sinks become `COPY ... TO` statements; cancel kills the process. No statically linked database, so the binary stays small.
+- **Everything persists** to the workspace folder you choose, as plain JSON and Markdown files.
 
 ---
 
 ## Roadmap
 
-- [ ] Execution wiring for the AI transforms + Vector / AI-database connectors (in the palette now as preview)
+- [ ] Execution wiring for the AI transforms and Vector / AI Database connectors (in the palette now as preview)
 - [ ] In-process **Native** Rust streaming engine
-- [ ] More connectors (databases, REST/APIs, message queues)
-- [ ] Incremental / change-data pipelines
-- [ ] Richer data-quality + profiling components
+- [ ] More source and sink connectors: relational databases, warehouses, REST / APIs, message queues
+- [ ] Incremental and change-data-capture pipelines (diff detect, SCD, merge / upsert)
+- [ ] Richer data-quality and profiling components
 - [ ] Plugin marketplace via the connector SDK
 
 ---
 
 ## Contributing
 
-Contributions, issues, and ideas are welcome — Duckle is young and there's a lot of green field. Open an issue to discuss a change before a large PR, match the existing code style, and keep changes focused. Run `cargo test` and `npm --prefix frontend run build` before submitting.
+Contributions, issues, and ideas are welcome. Duckle is young and there is a lot of green field. Open an issue to discuss a change before a large PR, match the existing code style, and keep changes focused. Run `cargo test` and `npm --prefix frontend run build` before submitting.
 
 ---
 
@@ -239,7 +291,7 @@ Licensed under either of **MIT** or **Apache-2.0** at your option.
 ---
 
 <div align="center">
-<sub>Built with Rust · Tauri · React · DuckDB — by <a href="https://github.com/SouravRoy-ETL">Sourav Roy</a></sub>
+<sub>Built with Rust, Tauri, React, and DuckDB by <a href="https://github.com/SouravRoy-ETL">Sourav Roy</a></sub>
 </div>
 
-<!-- Suggested GitHub topics: etl, elt, data-engineering, data-pipeline, duckdb, rust, tauri, react, typescript, local-first, embedded, drag-and-drop, data-cleaning, vector-database, ai, streaming, desktop-app -->
+<!-- Suggested GitHub topics: etl, elt, data-engineering, data-pipeline, duckdb, rust, tauri, react, typescript, local-first, embedded, drag-and-drop, data-cleaning, vector-database, ai, desktop-app -->

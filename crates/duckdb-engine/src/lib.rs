@@ -1,4 +1,4 @@
-//! Duckle DuckDB engine adapter — CLI-driven.
+//! Duckle DuckDB engine adapter - CLI-driven.
 //!
 //! Rather than statically linking libduckdb (which bloats the binary to
 //! tens of MB and makes builds glacial), this drives the official DuckDB
@@ -75,7 +75,7 @@ impl std::fmt::Debug for DuckdbEngine {
 
 impl DuckdbEngine {
     /// Construct an engine pointing at a DuckDB CLI binary. The binary
-    /// need not exist yet — calls fail with a clear error if it's
+    /// need not exist yet - calls fail with a clear error if it's
     /// missing, and the first-run setup installs it.
     pub fn new(bin: PathBuf) -> Self {
         Self {
@@ -675,7 +675,7 @@ pub struct NodePreview {
     pub rows: Vec<JsonValue>,
 }
 
-/// SQL for a single stage — returned by the `compile_pipeline` command
+/// SQL for a single stage - returned by the `compile_pipeline` command
 /// so the frontend can show / copy the generated SQL without running.
 #[derive(Debug, Serialize)]
 pub struct StageSql {

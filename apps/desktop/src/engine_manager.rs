@@ -28,7 +28,7 @@ struct EngineSpec {
 const DUCKDB: EngineSpec = EngineSpec {
     id: "duckdb",
     name: "DuckDB",
-    description: "Default engine — local analytics, file formats, SQL.",
+    description: "Default engine - local analytics, file formats, SQL.",
     required: true,
     repo: "duckdb/duckdb",
     version: DUCKDB_VERSION,
@@ -88,7 +88,7 @@ fn asset_for(s: &EngineSpec) -> Option<String> {
             }
             .to_string(),
         ),
-        // SlothDB ships raw, single-file binaries per its releases —
+        // SlothDB ships raw, single-file binaries per its releases -
         // not zips. Names per https://github.com/SouravRoy-ETL/slothdb.
         "slothdb" => Some(
             match (os, arch) {
@@ -206,7 +206,7 @@ fn install_spec<F: FnMut(InstallProgress)>(
     let target = binary_path(app_data, s);
 
     if asset.to_ascii_lowercase().ends_with(".zip") {
-        // Zipped distribution (DuckDB) — pull the binary out.
+        // Zipped distribution (DuckDB) - pull the binary out.
         on_progress(InstallProgress::Extracting);
         let want = binary_file_name(s);
         let reader = std::io::Cursor::new(buf);
@@ -230,7 +230,7 @@ fn install_spec<F: FnMut(InstallProgress)>(
             ));
         }
     } else {
-        // Raw single-file binary (SlothDB) — the download IS the binary.
+        // Raw single-file binary (SlothDB) - the download IS the binary.
         if buf.is_empty() {
             return Err(format!("{} download was empty", s.name));
         }

@@ -6,7 +6,7 @@ Thanks for your interest in Duckle. This project is in early development; contri
 
 - **Rust** stable, installed via [rustup](https://rustup.rs). The repository pins the toolchain in `rust-toolchain.toml`.
 - **Node.js 20+** and **npm 10+**.
-- **Tauri 2 system prerequisites** — see https://tauri.app/start/prerequisites for your OS. On Windows this means MSVC build tools and WebView2.
+- **Tauri 2 system prerequisites** - see https://tauri.app/start/prerequisites for your OS. On Windows this means MSVC build tools and WebView2.
 
 ## First-time setup
 
@@ -27,9 +27,9 @@ The desktop app launches Vite's dev server automatically and opens a Tauri windo
 
 See [ARCHITECTURE.md](./ARCHITECTURE.md). In short:
 
-- `apps/desktop/` — Tauri 2 shell.
-- `crates/` — Rust crates for runtime, connectors, engines, workflow, scheduling, plugins.
-- `frontend/` — React + TypeScript UI.
+- `apps/desktop/` - Tauri 2 shell.
+- `crates/` - Rust crates for runtime, connectors, engines, workflow, scheduling, plugins.
+- `frontend/` - React + TypeScript UI.
 
 ## Style and conventions
 
@@ -63,4 +63,4 @@ See [ARCHITECTURE.md](./ARCHITECTURE.md). In short:
 
 By contributing, you agree your contribution is dual-licensed under MIT and Apache-2.0, as the rest of the project is.
 
-Do not paste or port code from incompatibly licensed sources. If you draw inspiration from another project, that is fine — but write the implementation from scratch.
+Do not paste or port code from incompatibly licensed sources. If you draw inspiration from another project, that is fine - but write the implementation from scratch.

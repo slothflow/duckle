@@ -211,7 +211,7 @@ async function loadAndMigrateV1(path: string): Promise<WorkspaceState | null> {
 // ---- Save (granular) ---------------------------------------------------
 
 /**
- * Write the metadata file only — cheap; safe to call on every change.
+ * Write the metadata file only - cheap; safe to call on every change.
  */
 export async function saveMetadata(
     path: string,
@@ -345,7 +345,7 @@ export async function saveAll(path: string, state: WorkspaceState): Promise<void
     }
 }
 
-// Kept for backwards compatibility — callers that just want to write
+// Kept for backwards compatibility - callers that just want to write
 // everything in one shot can still call saveWorkspace().
 export const saveWorkspace = saveAll;
 

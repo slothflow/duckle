@@ -90,7 +90,7 @@ const SAMPLE_NODES: Node<DuckleNodeData>[] = [
         data: {
             label: 'CSV',
             componentId: 'src.csv',
-            // No path yet — set one and Autodetect. The subtitle and
+            // No path yet - set one and Autodetect. The subtitle and
             // schema fill in from the real file, they aren't faked.
             properties: { hasHeader: true },
         },
@@ -102,7 +102,7 @@ const SAMPLE_NODES: Node<DuckleNodeData>[] = [
         data: {
             label: 'Filter',
             componentId: 'xf.filter',
-            // Valid DuckDB SQL — single quotes for the string literal.
+            // Valid DuckDB SQL - single quotes for the string literal.
             properties: { predicate: "status = 'paid'" },
         },
     },
@@ -265,7 +265,7 @@ export default function App() {
         };
     }, [workspacePathState]);
 
-    // Granular Tauri saves — each slice goes to its own file so the
+    // Granular Tauri saves - each slice goes to its own file so the
     // workspace folder is git-friendly. Browser still uses localStorage.
     const prevPipelineDataRef = useRef<Record<string, PipelineState> | null>(null);
     const prevRepoRef = useRef<RepoItem[] | null>(null);
@@ -486,7 +486,7 @@ export default function App() {
             );
 
             // Auto-populate the right-side key on join/lookup components
-            // when a lookup connection lands on them — picks up the
+            // when a lookup connection lands on them - picks up the
             // first column of the lookup source's effective schema.
             if (type === 'lookup' && connection.target && connection.source) {
                 const targetNode = nodes.find(n => n.id === connection.target);
@@ -755,7 +755,7 @@ export default function App() {
 
     const handleRun = useCallback(() => {
         // Don't launch a run that's guaranteed to fail (e.g. a sink with
-        // no output path) — that only yields a cryptic engine error.
+        // no output path) - that only yields a cryptic engine error.
         // Surface the Problems tab so the user can fix it first.
         if (validation.errorCount > 0) {
             setValidateRequest(n => n + 1);
@@ -965,7 +965,7 @@ export default function App() {
             }
             return;
         }
-        // Browser fallback — file input.
+        // Browser fallback - file input.
         const input = document.createElement('input');
         input.type = 'file';
         input.accept = '.json,.duckle.json,application/json';
@@ -997,7 +997,7 @@ export default function App() {
                 type: flowType,
                 position,
                 data: {
-                    // No static subtitle — the canvas derives it live from
+                    // No static subtitle - the canvas derives it live from
                     // the component's config (file name, predicate, keys…).
                     label: component.label,
                     componentId: component.id,
@@ -1393,7 +1393,7 @@ export default function App() {
                 {contexts.length > 0 ? (
                     <div
                         className="topbar-context"
-                        title="Active context — fields can bind to its variables"
+                        title="Active context - fields can bind to its variables"
                     >
                         <Braces size={12} aria-hidden="true" />
                         <select

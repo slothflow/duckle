@@ -48,7 +48,7 @@ const CRON_PRESETS: { label: string; expr: string }[] = [
     { label: 'Every 5 minutes', expr: '0 */5 * * * *' },
     { label: 'Every hour', expr: '0 0 * * * *' },
     { label: 'Every day at 03:00', expr: '0 0 3 * * *' },
-    { label: 'Mon–Fri at 08:00', expr: '0 0 8 * * Mon-Fri' },
+    { label: 'Mon-Fri at 08:00', expr: '0 0 8 * * Mon-Fri' },
 ];
 
 export default function ScheduleEditorModal({
