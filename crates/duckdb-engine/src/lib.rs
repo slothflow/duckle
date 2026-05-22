@@ -18,7 +18,7 @@ use serde::Serialize;
 use serde_json::Value as JsonValue;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Instant;
 use thiserror::Error;
@@ -263,11 +263,15 @@ impl DuckdbEngine {
             total_stages: compiled.stages.len() as u32,
         });
 
-        // Temp on-disk DB for this run.
+        // Temp on-disk DB for this run. The atomic counter guarantees a
+        // unique path even when several runs start in the same process at
+        // the same clock tick (parallel tests, or concurrent scheduled
+        // runs), which would otherwise collide and fight over the file.
         let db_path = std::env::temp_dir().join(format!(
-            "duckle_run_{}_{}.duckdb",
+            "duckle_run_{}_{}_{}.duckdb",
             std::process::id(),
-            now_nanos()
+            now_nanos(),
+            RUN_SEQ.fetch_add(1, Ordering::Relaxed)
         ));
         let _guard = TempDbGuard(db_path.clone());
 
@@ -442,6 +446,10 @@ impl Drop for TempDbGuard {
         let _ = std::fs::remove_file(PathBuf::from(wal));
     }
 }
+
+/// Per-process counter making each run's temp DB path unique even when
+/// the wall clock does not advance between runs.
+static RUN_SEQ: AtomicU64 = AtomicU64::new(0);
 
 fn now_nanos() -> u128 {
     std::time::SystemTime::now()
