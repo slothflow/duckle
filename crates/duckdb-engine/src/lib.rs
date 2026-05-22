@@ -70,14 +70,25 @@ impl DuckdbEngine {
     /// runs don't trample each other.
     pub fn new() -> Result<Self, EngineError> {
         let conn = Connection::open_in_memory()?;
-        // Best-effort: load extensions we use lazily. These are all
-        // optional — sqlite for sqlite_scan, json for read_json_auto,
-        // httpfs for http/https/s3 URIs in any of the file readers.
-        // Cloud-specific ones (azure, etc.) install on demand from the
-        // `inspect_cloud` path the first time they're needed.
-        let _ = conn.execute_batch("INSTALL sqlite; LOAD sqlite;");
-        let _ = conn.execute_batch("INSTALL json; LOAD json;");
-        let _ = conn.execute_batch("INSTALL httpfs; LOAD httpfs;");
+        // Install the extensions we use, then LOAD them into this
+        // connection. INSTALL writes to a process/user-global extension
+        // directory, so we serialize it with a `Once` — otherwise two
+        // engines starting at the same time race on the install file
+        // move ("Could not move file: Access is denied"). Subsequent
+        // engines skip INSTALL (the files are already on disk) and only
+        // LOAD into their own connection.
+        //
+        // parquet is preloaded so the first `COPY ... (FORMAT PARQUET)`
+        // doesn't trigger a lazy auto-install (which needs network +
+        // a writable dir and is the racy path the integration tests
+        // caught).
+        static EXT_INSTALL: std::sync::Once = std::sync::Once::new();
+        EXT_INSTALL.call_once(|| {
+            let _ = conn.execute_batch(
+                "INSTALL sqlite; INSTALL json; INSTALL httpfs; INSTALL parquet;",
+            );
+        });
+        let _ = conn.execute_batch("LOAD sqlite; LOAD json; LOAD httpfs; LOAD parquet;");
         let interrupt = conn.interrupt_handle();
         Ok(Self {
             conn: Arc::new(Mutex::new(conn)),
