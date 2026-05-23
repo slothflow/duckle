@@ -1713,10 +1713,10 @@ function synthStringTransform(comp: ComponentDef): ComponentManifest {
                     { key: 'column', label: 'Column', kind: 'column', required: true },
                     {
                         key: 'pattern',
-                        label: 'Split pattern (regex)',
+                        label: 'Token pattern (regex)',
                         kind: 'text',
-                        placeholder: '[^a-z0-9]+',
-                        description: 'Default splits on any run of non-alphanumerics, dropping punctuation/whitespace.',
+                        placeholder: '[a-z0-9]+',
+                        description: 'Default matches any run of alphanumerics. Anything not matching the pattern is treated as a separator.',
                     },
                     { key: 'outputColumn', label: 'Output column', kind: 'text', placeholder: '<column>_tokens' },
                 ],

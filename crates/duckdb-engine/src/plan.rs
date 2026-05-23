@@ -2966,25 +2966,27 @@ fn build_base64(inputs: &NodeInputs, props: &JsonValue) -> Result<String, String
     ))
 }
 
-/// Tokenize: lowercase the input column and split it into an array of
-/// words. Default splitter is any run of whitespace + punctuation, so
-/// 'Hello, world!' -> ['hello', 'world']. Useful prep before
-/// FTS, vector embeddings, or downstream array operations.
+/// Tokenize: lowercase the input column and extract every run of
+/// the chosen character class as a token. Default class is
+/// alphanumerics, so 'Hello, World!' -> ['hello', 'world'].
+/// regexp_extract_all returns only matches (no empty strings,
+/// no lambda needed - and lambdas were inconsistent across
+/// DuckDB v1.5.3 builds, so inverting the logic to "match words"
+/// instead of "split on non-words" is more portable.)
 fn build_tokenize(inputs: &NodeInputs, props: &JsonValue) -> Result<String, String> {
     let upstream = inputs.main().ok_or_else(|| missing_input_msg("xf.text.tokenize"))?;
     let column = string_prop(props, "column")
         .filter(|s| !s.is_empty())
         .ok_or_else(|| "Tokenize needs a column".to_string())?;
-    // Default = split on any run of non-alphanumerics, which kills
-    // punctuation and whitespace in one pass.
+    // Default = match any run of alphanumerics as a token.
     let pattern = string_prop(props, "pattern")
         .filter(|s| !s.is_empty())
-        .unwrap_or_else(|| "[^a-z0-9]+".into());
+        .unwrap_or_else(|| "[a-z0-9]+".into());
     let output = string_prop(props, "outputColumn")
         .filter(|s| !s.is_empty())
         .unwrap_or_else(|| format!("{}_tokens", column));
     Ok(format!(
-        "SELECT *, list_filter(string_split_regex(lower(CAST({col} AS VARCHAR)), '{pat}'), x -> length(x) > 0) AS {out} FROM {up}",
+        "SELECT *, regexp_extract_all(lower(CAST({col} AS VARCHAR)), '{pat}') AS {out} FROM {up}",
         col = quote_ident(&column),
         pat = sql_escape(&pattern),
         out = quote_ident(&output),
