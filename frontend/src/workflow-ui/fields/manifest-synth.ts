@@ -1483,6 +1483,38 @@ function synthPivotTransform(comp: ComponentDef): ComponentManifest {
             },
         ], 'declared');
     }
+    if (comp.id === 'xf.denorm') {
+        // Denormalize: collapse child rows into one row per group, joining
+        // the chosen columns into delimited cells.
+        return base(comp, [
+            {
+                label: 'Denormalize',
+                fields: [
+                    { key: 'groupBy', label: 'Group by', kind: 'columns', required: true },
+                    { key: 'aggregateColumns', label: 'Aggregate columns (joined into one cell)', kind: 'columns', required: true },
+                    { key: 'separator', label: 'Separator', kind: 'text', defaultValue: ', ' },
+                ],
+            },
+        ], 'declared');
+    }
+    if (comp.id === 'xf.norm') {
+        // Normalize: explode a delimited / array column into one row per
+        // element, keeping the rest of the row intact.
+        return base(comp, [
+            {
+                label: 'Normalize',
+                fields: [
+                    { key: 'column', label: 'Column to split', kind: 'column', required: true },
+                    { key: 'separator', label: 'Separator', kind: 'text', defaultValue: ',', description: 'Leave empty if the column is already an array.' },
+                ],
+            },
+        ], 'upstream');
+    }
+    if (comp.id === 'xf.transpose') {
+        // Transpose: swap rows and columns. Requires the input's columns
+        // to share a compatible type.
+        return base(comp, [{ label: 'Transpose', fields: [] }], 'declared');
+    }
     return base(comp, [
         {
             label: 'Pivot',

@@ -330,9 +330,9 @@ export const PALETTE: Category[] = [
                 components: [
                     xf('pivot', 'Pivot', 'available', 'Rows to columns'),
                     xf('unpivot', 'Unpivot', 'available', 'Columns to name/value rows (wide to long)'),
-                    xf('denorm', 'Denormalize', 'planned'),
-                    xf('norm', 'Normalize', 'planned'),
-                    xf('transpose', 'Transpose', 'planned'),
+                    xf('denorm', 'Denormalize', 'available', 'Collapse rows per group, joining columns into delimited cells'),
+                    xf('norm', 'Normalize', 'available', 'Explode a delimited or array column into rows'),
+                    xf('transpose', 'Transpose', 'available', 'Swap rows and columns'),
                 ],
             },
             {

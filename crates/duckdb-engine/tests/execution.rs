@@ -518,7 +518,7 @@ fn unimplemented_component_fails_loudly_not_silently() {
     let d = doc(
         json!([
             node("s1", "src.csv", json!({ "path": csv, "hasHeader": true })),
-            node("x1", "xf.transpose", json!({})),
+            node("x1", "xf.cdc.scd1", json!({})),
         ]),
         json!([main_edge("e1", "s1", "x1")]),
     );
@@ -1086,6 +1086,79 @@ fn record_match_finds_similar_pairs() {
         out
     ));
     assert_eq!(id, "1", "got {}", id);
+}
+
+#[test]
+fn denormalize_groups_into_delimited_cells() {
+    let engine = engine_or_skip!();
+    let tmp = tempfile::tempdir().unwrap();
+    let csv = write_file(tmp.path(), "in.csv", "g,v\na,x\na,y\nb,z\n");
+    let out = out_path(tmp.path(), "out.csv");
+    let d = doc(
+        json!([
+            node("s1", "src.csv", json!({ "path": csv, "hasHeader": true })),
+            node("n1", "xf.denorm", json!({
+                "groupBy": ["g"], "aggregateColumns": ["v"], "separator": ", "
+            })),
+            node("k1", "snk.csv", json!({ "path": out, "hasHeader": true })),
+        ]),
+        json!([main_edge("e1", "s1", "n1"), main_edge("e2", "n1", "k1")]),
+    );
+    let result = engine.execute_pipeline(&d);
+    assert_eq!(result.status, "ok", "run failed: {:?}", result.error);
+    assert_eq!(count(&format!("read_csv_auto('{}')", out)), 2);
+    let v = scalar_string(&format!(
+        "SELECT v FROM read_csv_auto('{}') WHERE g = 'a'",
+        out
+    ));
+    // Order within a group depends on input order; both members must be present.
+    assert!(v.contains('x') && v.contains('y'), "got {}", v);
+}
+
+#[test]
+fn normalize_explodes_delimited_column() {
+    let engine = engine_or_skip!();
+    let tmp = tempfile::tempdir().unwrap();
+    let csv = write_file(tmp.path(), "in.csv", "id,tags\n1,\"a,b\"\n2,c\n");
+    let out = out_path(tmp.path(), "out.csv");
+    let d = doc(
+        json!([
+            node("s1", "src.csv", json!({ "path": csv, "hasHeader": true })),
+            node("n1", "xf.norm", json!({ "column": "tags", "separator": "," })),
+            node("k1", "snk.csv", json!({ "path": out, "hasHeader": true })),
+        ]),
+        json!([main_edge("e1", "s1", "n1"), main_edge("e2", "n1", "k1")]),
+    );
+    let result = engine.execute_pipeline(&d);
+    assert_eq!(result.status, "ok", "run failed: {:?}", result.error);
+    // 2 + 1 = 3 rows after the explode.
+    assert_eq!(count(&format!("read_csv_auto('{}')", out)), 3);
+}
+
+#[test]
+fn transpose_swaps_rows_and_columns() {
+    let engine = engine_or_skip!();
+    let tmp = tempfile::tempdir().unwrap();
+    let csv = write_file(tmp.path(), "in.csv", "a,b,c\n1,10,100\n2,20,200\n");
+    let out = out_path(tmp.path(), "out.csv");
+    let d = doc(
+        json!([
+            node("s1", "src.csv", json!({ "path": csv, "hasHeader": true })),
+            node("t1", "xf.transpose", json!({})),
+            node("k1", "snk.csv", json!({ "path": out, "hasHeader": true })),
+        ]),
+        json!([main_edge("e1", "s1", "t1"), main_edge("e2", "t1", "k1")]),
+    );
+    let result = engine.execute_pipeline(&d);
+    assert_eq!(result.status, "ok", "run failed: {:?}", result.error);
+    // 3 original columns -> 3 output rows; check the row for 'b' has the
+    // original 'b' column values (10, 20).
+    assert_eq!(count(&format!("read_csv_auto('{}')", out)), 3);
+    let v1 = scalar_string(&format!(
+        "SELECT CAST(r1 AS VARCHAR) FROM read_csv_auto('{}') WHERE colname = 'b'",
+        out
+    ));
+    assert_eq!(v1, "10", "got {}", v1);
 }
 
 #[test]

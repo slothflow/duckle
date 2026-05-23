@@ -421,6 +421,9 @@ fn build_view_sql(
         | "xf.last" | "xf.ntile" => build_window(inputs, props, component_id),
         "xf.pivot" => build_pivot(inputs, props),
         "xf.unpivot" => build_unpivot(inputs, props),
+        "xf.denorm" => build_denormalize(inputs, props),
+        "xf.norm" => build_normalize(inputs, props),
+        "xf.transpose" => build_transpose(inputs),
         "xf.cdc.diff" => build_cdc_diff(inputs, props),
         // Data-quality validators - the PASS rows. Failures go to the
         // node's __reject table (see build_reject_sql).
@@ -1310,6 +1313,78 @@ fn build_cdc_diff(inputs: &NodeInputs, props: &JsonValue) -> Result<String, Stri
     } else {
         Ok(inner)
     }
+}
+
+/// Denormalize: collapse many rows per group into one, joining the
+/// chosen columns into a single delimited cell with string_agg.
+fn build_denormalize(inputs: &NodeInputs, props: &JsonValue) -> Result<String, String> {
+    let upstream = inputs.main().ok_or_else(|| missing_input_msg("xf.denorm"))?;
+    let group_by = columns_list(props, "groupBy");
+    if group_by.is_empty() {
+        return Err("Denormalize needs group-by columns".to_string());
+    }
+    let agg_cols = columns_list(props, "aggregateColumns");
+    if agg_cols.is_empty() {
+        return Err("Denormalize needs columns to aggregate".to_string());
+    }
+    let sep = string_prop(props, "separator").unwrap_or_else(|| ", ".into());
+    let sep_sql = sep.replace('\'', "''");
+    let group_list = group_by
+        .iter()
+        .map(|c| quote_ident(c))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let aggs = agg_cols
+        .iter()
+        .map(|c| {
+            let q = quote_ident(c);
+            format!("string_agg(CAST({q} AS VARCHAR), '{sep_sql}') AS {q}")
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+    Ok(format!(
+        "SELECT {group_list}, {aggs} FROM {} GROUP BY {group_list}",
+        quote_ident(upstream)
+    ))
+}
+
+/// Normalize: explode a delimited string (or array) column into one row
+/// per element, keeping the other columns.
+fn build_normalize(inputs: &NodeInputs, props: &JsonValue) -> Result<String, String> {
+    let upstream = inputs.main().ok_or_else(|| missing_input_msg("xf.norm"))?;
+    let col = string_prop(props, "column")
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| "Normalize needs a column to split".to_string())?;
+    let q = quote_ident(&col);
+    let sep = string_prop(props, "separator").unwrap_or_else(|| ",".into());
+    let value_expr = if sep.is_empty() {
+        // Empty separator means the column is already an array; just unnest.
+        format!("unnest({q})")
+    } else {
+        let sep_sql = sep.replace('\'', "''");
+        format!("unnest(string_split(CAST({q} AS VARCHAR), '{sep_sql}'))")
+    };
+    Ok(format!(
+        "SELECT * EXCLUDE ({q}), {value_expr} AS {q} FROM {}",
+        quote_ident(upstream)
+    ))
+}
+
+/// Transpose: swap the input's rows and columns. The output has one row
+/// per original column (named `colname`) and one value column per
+/// original row, named `r1`, `r2`, ... The "r" prefix keeps the column
+/// names valid identifiers and parsable as a CSV header (a pure-numeric
+/// header would not auto-detect). Requires the input's columns to share
+/// a compatible type (UNPIVOT cannot mix unrelated types).
+fn build_transpose(inputs: &NodeInputs) -> Result<String, String> {
+    let upstream = inputs.main().ok_or_else(|| missing_input_msg("xf.transpose"))?;
+    Ok(format!(
+        "SELECT * FROM (PIVOT (FROM (SELECT *, \
+         'r' || CAST(ROW_NUMBER() OVER () AS VARCHAR) AS _row FROM {up}) \
+         UNPIVOT (val FOR colname IN (COLUMNS(* EXCLUDE _row)))) \
+         ON _row USING first(val) GROUP BY colname)",
+        up = quote_ident(upstream)
+    ))
 }
 
 /// Unpivot: turn a set of columns into name/value rows (wide to long).
