@@ -2127,6 +2127,36 @@ fn md_sink_writes_table() {
 }
 
 #[test]
+fn iceberg_sink_writes_then_source_reads() {
+    let engine = engine_or_skip!();
+    let tmp = tempfile::tempdir().unwrap();
+    let csv = write_file(tmp.path(), "in.csv", "id,name\n1,alice\n2,bob\n3,carol\n");
+    let table_dir = out_path(tmp.path(), "ice_table");
+
+    // csv -> snk.iceberg writes a full Iceberg table (data/ + metadata/).
+    let r1 = engine.execute_pipeline(&doc(
+        json!([
+            node("s", "src.csv", json!({ "path": csv, "hasHeader": true })),
+            node("w", "snk.iceberg", json!({ "path": table_dir })),
+        ]),
+        json!([main_edge("e", "s", "w")]),
+    ));
+    assert_eq!(r1.status, "ok", "iceberg write failed: {:?}", r1.error);
+
+    // Read back via src.iceberg into a csv to verify the roundtrip.
+    let out = out_path(tmp.path(), "out.csv");
+    let r2 = engine.execute_pipeline(&doc(
+        json!([
+            node("r", "src.iceberg", json!({ "path": table_dir })),
+            node("k", "snk.csv", json!({ "path": out, "hasHeader": true })),
+        ]),
+        json!([main_edge("e", "r", "k")]),
+    ));
+    assert_eq!(r2.status, "ok", "iceberg read failed: {:?}", r2.error);
+    assert_eq!(count(&format!("read_csv_auto('{}')", out)), 3);
+}
+
+#[test]
 fn missing_source_file_errors_cleanly() {
     let tmp = tempfile::tempdir().unwrap();
     let out = out_path(tmp.path(), "never.parquet");

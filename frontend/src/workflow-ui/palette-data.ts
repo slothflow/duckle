@@ -422,6 +422,13 @@ export const PALETTE: Category[] = [
                 ],
             },
             {
+                id: 'snk.lakehouse',
+                label: 'Lakehouse table formats',
+                components: [
+                    snk('iceberg', 'Apache Iceberg', 'available', 'Write a full Iceberg table (data/ + metadata/) via DuckDB v1.5'),
+                ],
+            },
+            {
                 id: 'snk.databases',
                 label: 'Databases',
                 components: [

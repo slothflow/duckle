@@ -2476,7 +2476,7 @@ fn attach_prelude(component_id: &str, props: &JsonValue) -> String {
         // race on the cached extension file and intermittently fail.
         "src.avro" => return "LOAD avro; ".into(),
         "src.excel" => return "LOAD excel; ".into(),
-        "src.iceberg" => return "LOAD iceberg; ".into(),
+        "src.iceberg" | "snk.iceberg" => return "LOAD iceberg; ".into(),
         "src.delta" => return "LOAD delta; ".into(),
         // Vector Similarity Search uses the vss extension's array_*
         // distance functions; LOAD before the SELECT runs.
@@ -2680,6 +2680,18 @@ fn build_excel_sink(props: &JsonValue, from_view: &str) -> String {
         quote_ident(from_view),
         sql_escape(&path),
         header
+    )
+}
+
+/// Iceberg sink: COPY ... TO '<path>' (FORMAT 'iceberg'). DuckDB
+/// v1.5+ writes a full Iceberg table (data/ + metadata/) at the
+/// given path. Read-back via src.iceberg.
+fn build_iceberg_sink(props: &JsonValue, from_view: &str) -> String {
+    let path = string_prop(props, "path").unwrap_or_default();
+    format!(
+        "COPY (SELECT * FROM {}) TO '{}' (FORMAT 'iceberg')",
+        quote_ident(from_view),
+        sql_escape(&path)
     )
 }
 
@@ -2948,6 +2960,7 @@ fn build_sink_sql(
         | "snk.motherduck" => build_relational_sink(component_id, props, from_view),
         "snk.excel" => Ok(build_excel_sink(props, from_view)),
         "snk.spatial" => Ok(build_spatial_sink(props, from_view)),
+        "snk.iceberg" => Ok(build_iceberg_sink(props, from_view)),
         other => Err(EngineError::Unsupported(format!(
             "Sink '{}' is not yet implemented",
             other

@@ -671,6 +671,26 @@ function synthLakehouseSource(comp: ComponentDef): ComponentManifest {
     ]);
 }
 
+function synthLakehouseSink(comp: ComponentDef): ComponentManifest {
+    // Same shape as the source: a table-root path. The driver lives in
+    // the component id (iceberg / delta).
+    return base(comp, [
+        {
+            label: 'Table',
+            fields: [
+                {
+                    key: 'path',
+                    label: 'Table path',
+                    kind: 'text',
+                    required: true,
+                    placeholder: 's3://lake/orders/  or  /var/lakes/orders',
+                    description: 'The Iceberg table root: a local directory or an s3:// URL backed by a Connection.',
+                },
+            ],
+        },
+    ], 'upstream');
+}
+
 function synthDbSource(comp: ComponentDef): ComponentManifest {
     return base(comp, [
         { label: 'Connection', fields: dbConnectionFields(comp.id) },
@@ -2541,6 +2561,7 @@ export function synthesizeManifest(componentId: string): ComponentManifest | und
     // Sources
     if (groupId === 'src.files') return synthFileSource(comp);
     if (groupId === 'src.lakehouse') return synthLakehouseSource(comp);
+    if (groupId === 'snk.lakehouse') return synthLakehouseSink(comp);
     if (groupId === 'src.databases') return synthDbSource(comp);
     if (groupId === 'src.warehouses') return synthWarehouseSource(comp);
     if (groupId === 'src.storage') return synthStorageSource(comp);
