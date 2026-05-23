@@ -2966,27 +2966,27 @@ fn build_base64(inputs: &NodeInputs, props: &JsonValue) -> Result<String, String
     ))
 }
 
-/// Tokenize: lowercase the input column and extract every run of
-/// the chosen character class as a token. Default class is
-/// alphanumerics, so 'Hello, World!' -> ['hello', 'world'].
-/// regexp_extract_all returns only matches (no empty strings,
-/// no lambda needed - and lambdas were inconsistent across
-/// DuckDB v1.5.3 builds, so inverting the logic to "match words"
-/// instead of "split on non-words" is more portable.)
+/// Tokenize: lowercase the input column, normalize any run of
+/// non-alphanumerics to a single space, then split on space.
+/// Done with regexp_replace + string_split which are both in every
+/// DuckDB build (regexp_extract_all / list_filter lambdas have had
+/// platform-specific quirks in v1.5.3 releases). Result is an array
+/// of words: 'Hello, World!' -> ['hello', 'world', ''] - empty
+/// strings at boundaries are accepted as the cost of portability;
+/// downstream can chain xf.arr.distinct or similar to scrub them.
 fn build_tokenize(inputs: &NodeInputs, props: &JsonValue) -> Result<String, String> {
     let upstream = inputs.main().ok_or_else(|| missing_input_msg("xf.text.tokenize"))?;
     let column = string_prop(props, "column")
         .filter(|s| !s.is_empty())
         .ok_or_else(|| "Tokenize needs a column".to_string())?;
-    // Default = match any run of alphanumerics as a token.
     let pattern = string_prop(props, "pattern")
         .filter(|s| !s.is_empty())
-        .unwrap_or_else(|| "[a-z0-9]+".into());
+        .unwrap_or_else(|| "[^a-z0-9]+".into());
     let output = string_prop(props, "outputColumn")
         .filter(|s| !s.is_empty())
         .unwrap_or_else(|| format!("{}_tokens", column));
     Ok(format!(
-        "SELECT *, regexp_extract_all(lower(CAST({col} AS VARCHAR)), '{pat}') AS {out} FROM {up}",
+        "SELECT *, string_split(trim(regexp_replace(lower(CAST({col} AS VARCHAR)), '{pat}', ' ', 'g')), ' ') AS {out} FROM {up}",
         col = quote_ident(&column),
         pat = sql_escape(&pattern),
         out = quote_ident(&output),

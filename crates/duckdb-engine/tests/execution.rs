@@ -2326,7 +2326,7 @@ fn text_tokenize_splits_and_lowercases() {
     // Read back the array column via DuckDB and pull element 2 (1-based)
     // of row id=2 - 'foo-bar  baz.' tokenizes to ['foo','bar','baz'].
     let token = scalar_string(&format!(
-        "SELECT (regexp_extract_all(lower(body), '[a-z0-9]+'))[2] FROM read_csv_auto('{}') WHERE id = 2",
+        "SELECT (string_split(trim(regexp_replace(lower(body), '[^a-z0-9]+', ' ', 'g')), ' '))[2] FROM read_csv_auto('{}') WHERE id = 2",
         csv
     ));
     assert_eq!(token, "bar");
