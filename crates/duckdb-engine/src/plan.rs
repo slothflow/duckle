@@ -407,6 +407,7 @@ fn build_view_sql(
         "src.postgres" | "src.cockroach" | "src.mysql" | "src.mariadb"
         | "src.motherduck" => build_relational_source(component_id, props),
         "src.avro" => Ok(build_avro_source(props)),
+        "src.excel" => Ok(build_excel_source(props)),
         // Pass-through transforms
         "xf.filter" => build_filter(inputs, props),
         // Log Rows - pass data through unchanged; its rows surface in the
@@ -2286,6 +2287,11 @@ fn attach_prelude(component_id: &str, props: &JsonValue) -> String {
         "src.avro" => {
             return "INSTALL avro FROM community; LOAD avro; ".into();
         }
+        // Excel uses the native excel extension (v1.2+). Same idempotent
+        // INSTALL + LOAD pattern as avro.
+        "src.excel" => {
+            return "INSTALL excel; LOAD excel; ".into();
+        }
         _ => {}
     }
     let db = match string_prop(props, "database").filter(|s| !s.is_empty()) {
@@ -2481,6 +2487,21 @@ fn build_db_sink(props: &JsonValue, from_view: &str) -> String {
 fn build_avro_source(props: &JsonValue) -> String {
     let path = string_prop(props, "path").unwrap_or_default();
     format!("SELECT * FROM read_avro('{}')", sql_escape(&path))
+}
+
+/// Excel (.xlsx) source via DuckDB v1.2+ `read_xlsx`. Supports an
+/// optional `sheet` form field (omitted defaults to the first sheet)
+/// and a `hasHeader` toggle.
+fn build_excel_source(props: &JsonValue) -> String {
+    let path = string_prop(props, "path").unwrap_or_default();
+    let mut args = vec![format!("'{}'", sql_escape(&path))];
+    if let Some(sheet) = string_prop(props, "sheet").filter(|s| !s.is_empty()) {
+        args.push(format!("sheet = '{}'", sql_escape(&sheet)));
+    }
+    if let Some(has_header) = props.get("hasHeader").and_then(JsonValue::as_bool) {
+        args.push(format!("header = {}", has_header));
+    }
+    format!("SELECT * FROM read_xlsx({})", args.join(", "))
 }
 
 /// Cloud sources (S3 / GCS / Azure Blob / HTTP). DuckDB's httpfs +

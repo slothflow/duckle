@@ -1695,6 +1695,41 @@ fn upsert_emits_only_changes_and_inserts() {
 }
 
 #[test]
+fn excel_source_reads_xlsx() {
+    // Self-generating: the DuckDB excel extension can both write and
+    // read xlsx (v1.2+), so we COPY a small table out as .xlsx via the
+    // CLI and read it back through the engine.
+    let engine = engine_or_skip!();
+    let tmp = tempfile::tempdir().unwrap();
+    let xlsx = out_path(tmp.path(), "in.xlsx");
+    duckdb_exec(
+        ":memory:",
+        &format!(
+            "INSTALL excel; LOAD excel; \
+             COPY (SELECT * FROM (VALUES (1,'alice'),(2,'bob'),(3,'carol')) t(id,name)) \
+             TO '{}' (FORMAT 'xlsx', HEADER true)",
+            xlsx
+        ),
+    );
+    let out = out_path(tmp.path(), "out.csv");
+    let d = doc(
+        json!([
+            node("r", "src.excel", json!({ "path": xlsx, "hasHeader": true })),
+            node("k", "snk.csv", json!({ "path": out, "hasHeader": true })),
+        ]),
+        json!([main_edge("e", "r", "k")]),
+    );
+    let result = engine.execute_pipeline(&d);
+    assert_eq!(result.status, "ok", "excel read failed: {:?}", result.error);
+    assert_eq!(count(&format!("read_csv_auto('{}')", out)), 3);
+    let name = scalar_string(&format!(
+        "SELECT name FROM read_csv_auto('{}') WHERE CAST(id AS INTEGER) = 2",
+        out
+    ));
+    assert_eq!(name, "bob", "got {}", name);
+}
+
+#[test]
 fn missing_source_file_errors_cleanly() {
     let tmp = tempfile::tempdir().unwrap();
     let out = out_path(tmp.path(), "never.parquet");
