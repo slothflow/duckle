@@ -80,7 +80,7 @@ jobs:
         run: |
           set -e
           mkdir -p _release
-          cp "apps/desktop/target/release/${{ matrix.binary }}" "_release/${{ matrix.asset }}"
+          cp "target/release/${{ matrix.binary }}" "_release/${{ matrix.asset }}"
           ls -lh _release
 
       - name: Upload to release
