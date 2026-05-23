@@ -149,25 +149,31 @@ jobs:
         run: cargo test -p duckle-duckdb-engine --test execution -- mysql_
 
   # Live MinIO integration tests (covers all S3-compatible: MinIO, R2, B2).
+  # MinIO needs `server /data` as the container command; GitHub Actions
+  # service containers can't override CMD, so we run it as a step.
   minio-integration:
     runs-on: ubuntu-latest
-    services:
-      minio:
-        image: bitnami/minio:latest
-        env:
-          MINIO_ROOT_USER: minioadmin
-          MINIO_ROOT_PASSWORD: minioadmin
-          MINIO_DEFAULT_BUCKETS: duckle-test
-        ports: ['9000:9000']
-        options: >-
-          --health-cmd "curl -f http://localhost:9000/minio/health/live"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 30
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      - name: Start MinIO + create bucket
+        run: |
+          set -e
+          docker run -d --name minio -p 9000:9000 -p 9001:9001 \
+            -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD=minioadmin \
+            minio/minio:latest server /data --console-address ":9001"
+          for i in $(seq 1 30); do
+            if curl -fs http://localhost:9000/minio/health/live >/dev/null 2>&1; then
+              echo "MinIO is up"; break
+            fi
+            sleep 2
+          done
+          # mc isn't in the minio server image, so use the standalone client.
+          curl -fsSL https://dl.min.io/client/mc/release/linux-amd64/mc -o /usr/local/bin/mc
+          chmod +x /usr/local/bin/mc
+          mc alias set local http://localhost:9000 minioadmin minioadmin
+          mc mb local/duckle-test
       - name: Install DuckDB CLI
         run: |
           set -e
@@ -175,7 +181,7 @@ jobs:
           mkdir -p "$RUNNER_TEMP/duckdb"
           unzip -o duckdb.zip -d "$RUNNER_TEMP/duckdb"
           echo "DUCKLE_DUCKDB_BIN=$RUNNER_TEMP/duckdb/duckdb" >> "$GITHUB_ENV"
-      - name: Seed MinIO bucket with a test object
+      - name: Seed MinIO with a test object
         run: |
           set -e
           # Upload a small parquet file to s3://duckle-test/orders.parquet
