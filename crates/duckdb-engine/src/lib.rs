@@ -782,24 +782,25 @@ impl DuckdbEngine {
         ))
     }
 
-    /// Snowflake SQL API source. POSTs the SELECT, parses
-    /// resultSetMetaData.rowType for column names + data array,
-    /// writes rows as a JSON array file, then CREATEs node_id from
-    /// it via read_json_auto. Inline results only - large queries
-    /// that return a statementHandle for async/paginated retrieval
-    /// surface a clear error pointing the user at LIMIT.
+    /// Snowflake SQL API source. POSTs the SELECT, polls the
+    /// statementHandle if the server returned async, then walks
+    /// resultSetMetaData.partitionInfo[] fetching partitions 1..N
+    /// (partition 0 ships inline in the initial response). Each
+    /// partition's `data` array is concatenated and materialized
+    /// into node_id via read_json_auto.
     fn run_snowflake_source(
         &self,
         db: &Path,
         spec: &SnowflakeSourceSpec,
     ) -> Result<String, EngineError> {
-        let url = spec.endpoint.clone().unwrap_or_else(|| {
+        let base_url = spec.endpoint.clone().unwrap_or_else(|| {
             format!(
                 "https://{}.snowflakecomputing.com/api/v2/statements",
                 spec.account
             )
         });
         let auth_header = build_snowflake_auth_header(&spec.account, &spec.auth)?;
+        let is_jwt = matches!(spec.auth, SnowflakeAuth::Jwt { .. });
         let mut body_obj = serde_json::Map::new();
         body_obj.insert("statement".into(), JsonValue::String(spec.query.clone()));
         body_obj.insert("timeout".into(), JsonValue::Number(60.into()));
@@ -817,32 +818,23 @@ impl DuckdbEngine {
         }
         let body = serde_json::to_string(&JsonValue::Object(body_obj))
             .unwrap_or_else(|_| "{}".into());
-        let mut req = ureq::post(&url)
-            .set("Authorization", &auth_header)
-            .set("Content-Type", "application/json")
-            .set("Accept", "application/json");
-        if matches!(spec.auth, SnowflakeAuth::Jwt { .. }) {
-            req = req.set("X-Snowflake-Authorization-Token-Type", "KEYPAIR_JWT");
-        }
-        let response: JsonValue = match req.send_string(&body) {
-            Ok(r) => r
-                .into_json()
-                .map_err(|e| EngineError::Query(format!("Snowflake response not JSON: {}", e)))?,
-            Err(ureq::Error::Status(code, r)) => {
-                let body = r.into_string().unwrap_or_default();
-                return Err(EngineError::Query(format!(
-                    "Snowflake HTTP {} from {}: {}",
-                    code,
-                    url,
-                    body.chars().take(300).collect::<String>()
-                )));
-            }
-            Err(e) => {
-                return Err(EngineError::Query(format!(
-                    "Snowflake HTTP transport to {}: {}",
-                    url, e
-                )));
-            }
+        let initial = sf_request(&base_url, "POST", &auth_header, is_jwt, Some(&body))?;
+        // If the server handed us a statementHandle without data
+        // (async path: 202 in HTTP terms, but ureq returns 200/202
+        // both as Ok), poll until we see data.
+        let mut response = if initial.get("data").is_some() {
+            initial
+        } else {
+            let handle = initial
+                .get("statementHandle")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| {
+                    EngineError::Query(
+                        "Snowflake response has neither data nor statementHandle".into(),
+                    )
+                })?
+                .to_string();
+            poll_snowflake_until_done(&base_url, &auth_header, is_jwt, &handle)?
         };
         let cols = response
             .pointer("/resultSetMetaData/rowType")
@@ -853,31 +845,62 @@ impl DuckdbEngine {
             .iter()
             .filter_map(|c| c.get("name").and_then(|n| n.as_str()).map(String::from))
             .collect::<Vec<_>>();
-        let data = response
+        let mut all_data = response
             .get("data")
             .and_then(|v| v.as_array())
             .cloned()
             .unwrap_or_default();
-        materialize_arrayrows_as_table(db, &spec.node_id, &cols, &data)?;
+        // Multi-partition: partitionInfo[0] is what we just ate; fetch
+        // partitions 1..N. statementHandle is available even in the
+        // inline case.
+        let partition_count = response
+            .pointer("/resultSetMetaData/partitionInfo")
+            .and_then(|v| v.as_array())
+            .map(|a| a.len())
+            .unwrap_or(1);
+        if partition_count > 1 {
+            let handle = response
+                .get("statementHandle")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| {
+                    EngineError::Query(
+                        "Snowflake paged response missing statementHandle".into(),
+                    )
+                })?
+                .to_string();
+            for i in 1..partition_count {
+                let part_url = format!("{}/{}?partition={}", base_url, handle, i);
+                let part = sf_request(&part_url, "GET", &auth_header, is_jwt, None)?;
+                if let Some(part_data) = part.get("data").and_then(|v| v.as_array()) {
+                    all_data.extend(part_data.iter().cloned());
+                }
+            }
+        }
+        // Pretend warning to silence "response variable unused after
+        // reassignment" if all_data didn't grow.
+        let _ = &mut response;
+        materialize_arrayrows_as_table(db, &spec.node_id, &cols, &all_data)?;
         Ok(format!(
-            "snowflake: materialized {} rows into {}",
-            data.len(),
+            "snowflake: materialized {} rows ({} partition(s)) into {}",
+            all_data.len(),
+            partition_count,
             spec.node_id
         ))
     }
 
-    /// Databricks SQL source. Same shape as Snowflake; different JSON
-    /// paths for columns + data, and the manifest can carry
-    /// `total_chunk_count > 1` for paged results that we don't yet
-    /// follow (LIMIT or follow-up commit handles pagination).
+    /// Databricks SQL source. POSTs the SELECT, polls for SUCCEEDED
+    /// if the server returned PENDING/RUNNING after wait_timeout, then
+    /// follows result.next_chunk_internal_link until exhausted. Each
+    /// chunk's data_array is concatenated and materialized.
     fn run_databricks_source(
         &self,
         db: &Path,
         spec: &DatabricksSourceSpec,
     ) -> Result<String, EngineError> {
-        let url = spec.endpoint.clone().unwrap_or_else(|| {
+        let base_url = spec.endpoint.clone().unwrap_or_else(|| {
             format!("https://{}/api/2.0/sql/statements/", spec.workspace)
         });
+        let auth = format!("Bearer {}", spec.pat);
         let mut body_obj = serde_json::Map::new();
         body_obj.insert("statement".into(), JsonValue::String(spec.query.clone()));
         body_obj.insert(
@@ -900,28 +923,35 @@ impl DuckdbEngine {
         );
         let body = serde_json::to_string(&JsonValue::Object(body_obj))
             .unwrap_or_else(|_| "{}".into());
-        let response: JsonValue = match ureq::post(&url)
-            .set("Authorization", &format!("Bearer {}", spec.pat))
-            .set("Content-Type", "application/json")
-            .set("Accept", "application/json")
-            .send_string(&body)
+        let initial = dbr_request(&base_url, "POST", &auth, Some(&body))?;
+        // Poll until SUCCEEDED if we got PENDING/RUNNING back.
+        let response = match initial
+            .pointer("/status/state")
+            .and_then(|v| v.as_str())
+            .unwrap_or("SUCCEEDED")
         {
-            Ok(r) => r
-                .into_json()
-                .map_err(|e| EngineError::Query(format!("Databricks response not JSON: {}", e)))?,
-            Err(ureq::Error::Status(code, r)) => {
-                let body = r.into_string().unwrap_or_default();
-                return Err(EngineError::Query(format!(
-                    "Databricks HTTP {} from {}: {}",
-                    code,
-                    url,
-                    body.chars().take(300).collect::<String>()
-                )));
+            "SUCCEEDED" => initial,
+            "PENDING" | "RUNNING" => {
+                let statement_id = initial
+                    .get("statement_id")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| {
+                        EngineError::Query(
+                            "Databricks async response missing statement_id".into(),
+                        )
+                    })?
+                    .to_string();
+                let poll_url = format!("{}{}", base_url, statement_id);
+                poll_databricks_until_done(&poll_url, &auth)?
             }
-            Err(e) => {
+            other => {
+                let err = initial
+                    .pointer("/status/error/message")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("(no message)");
                 return Err(EngineError::Query(format!(
-                    "Databricks HTTP transport to {}: {}",
-                    url, e
+                    "Databricks statement state {}: {}",
+                    other, err
                 )));
             }
         };
@@ -936,15 +966,50 @@ impl DuckdbEngine {
             .iter()
             .filter_map(|c| c.get("name").and_then(|n| n.as_str()).map(String::from))
             .collect::<Vec<_>>();
-        let data = response
+        let mut all_data = response
             .pointer("/result/data_array")
             .and_then(|v| v.as_array())
             .cloned()
             .unwrap_or_default();
-        materialize_arrayrows_as_table(db, &spec.node_id, &cols, &data)?;
+        // Follow next_chunk_internal_link until None. The link is a
+        // path under the workspace; prepend https://workspace.
+        let mut next_link: Option<String> = response
+            .pointer("/result/next_chunk_internal_link")
+            .and_then(|v| v.as_str())
+            .map(String::from);
+        let mut chunks = 1_usize;
+        while let Some(link) = next_link {
+            // If endpoint override is in play (tests), prepend the
+            // override's scheme+host; otherwise use the workspace host.
+            let chunk_url = if let Some(ep) = &spec.endpoint {
+                // Extract "scheme://host[:port]" from ep so we can
+                // append the relative chunk link as-is.
+                let prefix_end = ep
+                    .find("://")
+                    .map(|i| {
+                        let after = &ep[i + 3..];
+                        i + 3 + after.find('/').unwrap_or(after.len())
+                    })
+                    .unwrap_or(ep.len());
+                format!("{}{}", &ep[..prefix_end], link)
+            } else {
+                format!("https://{}{}", spec.workspace, link)
+            };
+            let chunk = dbr_request(&chunk_url, "GET", &auth, None)?;
+            if let Some(d) = chunk.get("data_array").and_then(|v| v.as_array()) {
+                all_data.extend(d.iter().cloned());
+                chunks += 1;
+            }
+            next_link = chunk
+                .get("next_chunk_internal_link")
+                .and_then(|v| v.as_str())
+                .map(String::from);
+        }
+        materialize_arrayrows_as_table(db, &spec.node_id, &cols, &all_data)?;
         Ok(format!(
-            "databricks: materialized {} rows into {}",
-            data.len(),
+            "databricks: materialized {} rows ({} chunk(s)) into {}",
+            all_data.len(),
+            chunks,
             spec.node_id
         ))
     }
@@ -1252,6 +1317,147 @@ fn rest_source_apply(db: &Path, sql: &str) -> Result<(), EngineError> {
         )));
     }
     Ok(())
+}
+
+/// Snowflake SQL API request - shared by run_snowflake_source and
+/// its polling/partition helpers. method = "POST" or "GET"; for GET
+/// body is None.
+fn sf_request(
+    url: &str,
+    method: &str,
+    auth_header: &str,
+    is_jwt: bool,
+    body: Option<&str>,
+) -> Result<JsonValue, EngineError> {
+    let mut req = ureq::request(method, url)
+        .set("Authorization", auth_header)
+        .set("Accept", "application/json");
+    if body.is_some() {
+        req = req.set("Content-Type", "application/json");
+    }
+    if is_jwt {
+        req = req.set("X-Snowflake-Authorization-Token-Type", "KEYPAIR_JWT");
+    }
+    let resp = match body {
+        Some(b) => req.send_string(b),
+        None => req.call(),
+    };
+    match resp {
+        Ok(r) => r
+            .into_json()
+            .map_err(|e| EngineError::Query(format!("Snowflake response not JSON: {}", e))),
+        Err(ureq::Error::Status(code, r)) => {
+            let body = r.into_string().unwrap_or_default();
+            Err(EngineError::Query(format!(
+                "Snowflake HTTP {} from {}: {}",
+                code,
+                url,
+                body.chars().take(300).collect::<String>()
+            )))
+        }
+        Err(e) => Err(EngineError::Query(format!(
+            "Snowflake HTTP transport to {}: {}",
+            url, e
+        ))),
+    }
+}
+
+/// Snowflake async polling: GET /api/v2/statements/<handle> until
+/// the response carries `data`. Backoff is fixed 500ms; cap at 60
+/// iterations (~30s total) before bailing.
+fn poll_snowflake_until_done(
+    base_url: &str,
+    auth_header: &str,
+    is_jwt: bool,
+    handle: &str,
+) -> Result<JsonValue, EngineError> {
+    let poll_url = format!("{}/{}", base_url, handle);
+    for _ in 0..60 {
+        let resp = sf_request(&poll_url, "GET", auth_header, is_jwt, None)?;
+        if resp.get("data").is_some() {
+            return Ok(resp);
+        }
+        std::thread::sleep(std::time::Duration::from_millis(500));
+    }
+    Err(EngineError::Query(format!(
+        "Snowflake statement {} did not complete within 30s of polling",
+        handle
+    )))
+}
+
+/// Databricks Statement API request - shared by source + chunk
+/// follower. method = "POST" or "GET".
+fn dbr_request(
+    url: &str,
+    method: &str,
+    auth_header: &str,
+    body: Option<&str>,
+) -> Result<JsonValue, EngineError> {
+    let mut req = ureq::request(method, url)
+        .set("Authorization", auth_header)
+        .set("Accept", "application/json");
+    if body.is_some() {
+        req = req.set("Content-Type", "application/json");
+    }
+    let resp = match body {
+        Some(b) => req.send_string(b),
+        None => req.call(),
+    };
+    match resp {
+        Ok(r) => r
+            .into_json()
+            .map_err(|e| EngineError::Query(format!("Databricks response not JSON: {}", e))),
+        Err(ureq::Error::Status(code, r)) => {
+            let body = r.into_string().unwrap_or_default();
+            Err(EngineError::Query(format!(
+                "Databricks HTTP {} from {}: {}",
+                code,
+                url,
+                body.chars().take(300).collect::<String>()
+            )))
+        }
+        Err(e) => Err(EngineError::Query(format!(
+            "Databricks HTTP transport to {}: {}",
+            url, e
+        ))),
+    }
+}
+
+/// Databricks polling: GET .../statements/<id> until status.state
+/// becomes SUCCEEDED. Bails on FAILED / CANCELED / CLOSED. Cap at
+/// 60 iterations (~30s).
+fn poll_databricks_until_done(
+    poll_url: &str,
+    auth_header: &str,
+) -> Result<JsonValue, EngineError> {
+    for _ in 0..60 {
+        let resp = dbr_request(poll_url, "GET", auth_header, None)?;
+        let state = resp
+            .pointer("/status/state")
+            .and_then(|v| v.as_str())
+            .unwrap_or("UNKNOWN")
+            .to_string();
+        match state.as_str() {
+            "SUCCEEDED" => return Ok(resp),
+            "PENDING" | "RUNNING" => {
+                std::thread::sleep(std::time::Duration::from_millis(500));
+            }
+            other => {
+                let err = resp
+                    .pointer("/status/error/message")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("(no message)");
+                return Err(EngineError::Query(format!(
+                    "Databricks statement state {}: {}",
+                    other, err
+                )));
+            }
+        }
+    }
+    Err(EngineError::Query(format!(
+        "Databricks statement at {} did not succeed within 30s of polling",
+        poll_url
+    )))
 }
 
 /// Snowflake identifier quoting: double quotes, internal quotes

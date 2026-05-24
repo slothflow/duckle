@@ -2444,6 +2444,164 @@ fn text_reverse_repeat_and_compare() {
 }
 
 #[test]
+fn src_snowflake_walks_partitions() {
+    // Mock returns a partitionInfo with two entries; partition 0's
+    // data is in the initial response, partition 1 is fetched via
+    // ?partition=1. Verify both partitions land in the materialized table.
+    use std::io::{Read, Write};
+    use std::net::TcpListener;
+    use std::sync::Arc;
+    use std::time::Duration;
+
+    let engine = engine_or_skip!();
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+    let port = listener.local_addr().unwrap().port();
+
+    let initial_body = br#"{"code":"090001","statementHandle":"abc","resultSetMetaData":{"rowType":[{"name":"id","type":"fixed"},{"name":"name","type":"text"}],"partitionInfo":[{"rowCount":2},{"rowCount":2}]},"data":[["1","alice"],["2","bob"]]}"#;
+    let partition_body = br#"{"data":[["3","carol"],["4","dan"]]}"#;
+    let initial_len = initial_body.len();
+    let partition_len = partition_body.len();
+    let request_count = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let rc = request_count.clone();
+
+    let handle = std::thread::spawn(move || {
+        for stream in listener.incoming().take(2) {
+            let mut stream = match stream { Ok(s) => s, Err(_) => break };
+            stream.set_read_timeout(Some(Duration::from_millis(250))).ok();
+            stream.set_nodelay(true).ok();
+            let mut buf = Vec::with_capacity(8192);
+            let mut chunk = [0u8; 4096];
+            for _ in 0..16 {
+                match stream.read(&mut chunk) {
+                    Ok(0) => break,
+                    Ok(n) => buf.extend_from_slice(&chunk[..n]),
+                    Err(_) => break,
+                }
+            }
+            let idx = rc.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            let (body, len) = if idx == 0 {
+                (&initial_body[..], initial_len)
+            } else {
+                (&partition_body[..], partition_len)
+            };
+            let resp = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                len
+            );
+            let _ = stream.write_all(resp.as_bytes());
+            let _ = stream.write_all(body);
+            let _ = stream.flush();
+            let _ = stream.shutdown(std::net::Shutdown::Write);
+            std::thread::sleep(Duration::from_millis(100));
+        }
+    });
+
+    let tmp = tempfile::tempdir().unwrap();
+    let out = out_path(tmp.path(), "out.csv");
+    let endpoint = format!("http://127.0.0.1:{}/api/v2/statements", port);
+    let r = engine.execute_pipeline(&doc(
+        json!([
+            node("sf", "src.snowflake", json!({
+                "account": "test-account", "endpoint": endpoint,
+                "authType": "pat", "pat": "secret",
+                "query": "SELECT id, name FROM users"
+            })),
+            node("k", "snk.csv", json!({ "path": out, "hasHeader": true })),
+        ]),
+        json!([main_edge("e1", "sf", "k")]),
+    ));
+    let _ = handle.join();
+    assert_eq!(r.status, "ok", "snowflake paged failed: {:?}", r.error);
+    assert_eq!(
+        request_count.load(std::sync::atomic::Ordering::SeqCst),
+        2,
+        "expected 2 HTTP requests (initial + partition 1)"
+    );
+    let n = count(&format!("read_csv_auto('{}')", out));
+    assert_eq!(n, 4, "expected 4 total rows from 2 partitions, got {}", n);
+}
+
+#[test]
+fn src_databricks_follows_chunk_links() {
+    // Initial response carries result.next_chunk_internal_link pointing
+    // at chunk index 1; the engine GETs it and stops when no further
+    // link is present. Verify both chunks' data_array end up in the
+    // materialized table.
+    use std::io::{Read, Write};
+    use std::net::TcpListener;
+    use std::sync::Arc;
+    use std::time::Duration;
+
+    let engine = engine_or_skip!();
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+    let port = listener.local_addr().unwrap().port();
+
+    let initial_body = br#"{"statement_id":"x","status":{"state":"SUCCEEDED"},"manifest":{"schema":{"columns":[{"name":"id","type_text":"INT"},{"name":"name","type_text":"STRING"}]}},"result":{"data_array":[["1","alice"]],"next_chunk_internal_link":"/api/2.0/sql/statements/x/result/chunks/1"}}"#;
+    let chunk_body = br#"{"data_array":[["2","bob"],["3","carol"]]}"#;
+    let initial_len = initial_body.len();
+    let chunk_len = chunk_body.len();
+    let request_count = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let rc = request_count.clone();
+
+    let handle = std::thread::spawn(move || {
+        for stream in listener.incoming().take(2) {
+            let mut stream = match stream { Ok(s) => s, Err(_) => break };
+            stream.set_read_timeout(Some(Duration::from_millis(250))).ok();
+            stream.set_nodelay(true).ok();
+            let mut buf = Vec::with_capacity(8192);
+            let mut chunk = [0u8; 4096];
+            for _ in 0..16 {
+                match stream.read(&mut chunk) {
+                    Ok(0) => break,
+                    Ok(n) => buf.extend_from_slice(&chunk[..n]),
+                    Err(_) => break,
+                }
+            }
+            let idx = rc.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            let (body, len) = if idx == 0 {
+                (&initial_body[..], initial_len)
+            } else {
+                (&chunk_body[..], chunk_len)
+            };
+            let resp = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                len
+            );
+            let _ = stream.write_all(resp.as_bytes());
+            let _ = stream.write_all(body);
+            let _ = stream.flush();
+            let _ = stream.shutdown(std::net::Shutdown::Write);
+            std::thread::sleep(Duration::from_millis(100));
+        }
+    });
+
+    let tmp = tempfile::tempdir().unwrap();
+    let out = out_path(tmp.path(), "out.csv");
+    let endpoint = format!("http://127.0.0.1:{}/api/2.0/sql/statements/", port);
+    let r = engine.execute_pipeline(&doc(
+        json!([
+            node("db", "src.databricks", json!({
+                "workspace": "dbc-test.cloud.databricks.com",
+                "endpoint": endpoint, "pat": "dapi-secret",
+                "warehouseId": "wh-abc",
+                "query": "SELECT id, name FROM users"
+            })),
+            node("k", "snk.csv", json!({ "path": out, "hasHeader": true })),
+        ]),
+        json!([main_edge("e1", "db", "k")]),
+    ));
+    let _ = handle.join();
+    assert_eq!(r.status, "ok", "databricks paged failed: {:?}", r.error);
+    assert_eq!(
+        request_count.load(std::sync::atomic::Ordering::SeqCst),
+        2,
+        "expected 2 HTTP requests (initial + chunk 1)"
+    );
+    let n = count(&format!("read_csv_auto('{}')", out));
+    assert_eq!(n, 3, "expected 3 rows across 2 chunks, got {}", n);
+}
+
+#[test]
 fn src_snowflake_materializes_inline_result_set() {
     // Mock /api/v2/statements that returns Snowflake's inline-result
     // shape. Verifies the engine materializes the response as a
