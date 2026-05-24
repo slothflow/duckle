@@ -1337,12 +1337,13 @@ fn build_stage(
     } else if component_id == "ctl.foreach" {
         // Run a pipeline file once per upstream row. ${ITER_ITEM_<FIELD>}
         // (uppercased) substitutes to the row's value for each field;
-        // ${ITER_INDEX} is the row index.
+        // ${ITER_INDEX} is the row index. We pass the upstream view
+        // name through `from` so the executor can SELECT from it
+        // *before* our own pass-through SQL materializes the node.
         let path = string_prop(&props, "pipelineRef")
             .or_else(|| string_prop(&props, "foreachPipelineRef"))
             .filter(|s| !s.trim().is_empty())
             .ok_or_else(|| EngineError::Config(format!("{}: pipelineRef required", component_id)))?;
-        // Upstream IS required - foreach iterates over its rows.
         let from_view = inputs.main().ok_or_else(|| missing_input(node, "main"))?;
         foreach_pipeline_path = Some(path);
         let sql = format!(
@@ -1350,7 +1351,7 @@ fn build_stage(
             quote_ident(&node.id),
             quote_ident(from_view)
         );
-        (sql, StageKind::View, None)
+        (sql, StageKind::View, Some(from_view.to_string()))
     } else if component_id == "ctl.try" {
         // Side-effect fallback installer: pass through upstream
         // unchanged; on any subsequent stage failure, the engine
