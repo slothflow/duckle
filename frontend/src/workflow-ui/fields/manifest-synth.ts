@@ -1488,21 +1488,56 @@ function synthApiSource(comp: ComponentDef): ComponentManifest {
             ],
         },
         {
-            label: 'Pagination (cursor style)',
+            label: 'Pagination',
             fields: [
                 {
+                    key: 'paginationType',
+                    label: 'Style',
+                    kind: 'select',
+                    defaultValue: 'none',
+                    options: [
+                        { label: 'None (single-shot fetch)', value: 'none' },
+                        { label: 'Cursor (token in response body)', value: 'cursor' },
+                        { label: 'Offset / limit', value: 'offset' },
+                        { label: 'Page number', value: 'page' },
+                        { label: 'RFC 5988 Link header (rel="next")', value: 'link' },
+                    ],
+                },
+                {
                     key: 'cursorNextPath',
-                    label: 'Cursor JSON pointer',
+                    label: 'Cursor JSON pointer (cursor style)',
                     kind: 'text',
                     placeholder: '/meta/next_cursor',
-                    description: 'JSON pointer to the cursor / next-page token in each response. Empty = no pagination.',
                 },
                 {
                     key: 'cursorParam',
-                    label: 'Cursor query parameter',
+                    label: 'Cursor query parameter (cursor style)',
                     kind: 'text',
                     placeholder: 'cursor',
-                    description: 'Query string parameter name to send the cursor under on the next request.',
+                },
+                {
+                    key: 'offsetParam',
+                    label: 'Offset query parameter (offset style)',
+                    kind: 'text',
+                    placeholder: 'offset',
+                },
+                {
+                    key: 'pageSize',
+                    label: 'Page size (offset style)',
+                    kind: 'integer',
+                    defaultValue: 100,
+                },
+                {
+                    key: 'pageParam',
+                    label: 'Page query parameter (page style)',
+                    kind: 'text',
+                    placeholder: 'page',
+                },
+                {
+                    key: 'startPage',
+                    label: 'Start page (page style)',
+                    kind: 'integer',
+                    defaultValue: 1,
                 },
                 {
                     key: 'maxPages',

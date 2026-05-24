@@ -2647,6 +2647,231 @@ fn src_elastic_paginates_via_from_size() {
 }
 
 #[test]
+fn src_rest_paginates_via_offset() {
+    // 3 pages of size=2; the 3rd returns 1 row (< pageSize) so we stop.
+    use std::io::{Read, Write};
+    use std::net::TcpListener;
+    use std::sync::Arc;
+    use std::time::Duration;
+
+    let engine = engine_or_skip!();
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+    let port = listener.local_addr().unwrap().port();
+
+    let page1 = br#"[{"id":1},{"id":2}]"#;
+    let page2 = br#"[{"id":3},{"id":4}]"#;
+    let page3 = br#"[{"id":5}]"#;
+    let req_count = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let captured = Arc::new(std::sync::Mutex::new(Vec::<String>::new()));
+    let rc = req_count.clone();
+    let cap = captured.clone();
+
+    let handle = std::thread::spawn(move || {
+        for stream in listener.incoming().take(3) {
+            let mut stream = match stream { Ok(s) => s, Err(_) => break };
+            stream.set_read_timeout(Some(Duration::from_millis(250))).ok();
+            stream.set_nodelay(true).ok();
+            let mut buf = Vec::with_capacity(8192);
+            let mut chunk = [0u8; 4096];
+            for _ in 0..16 {
+                match stream.read(&mut chunk) {
+                    Ok(0) => break,
+                    Ok(n) => buf.extend_from_slice(&chunk[..n]),
+                    Err(_) => break,
+                }
+            }
+            cap.lock().unwrap().push(String::from_utf8_lossy(&buf).to_string());
+            let idx = rc.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            let body: &[u8] = match idx { 0 => page1, 1 => page2, _ => page3 };
+            let resp = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                body.len()
+            );
+            let _ = stream.write_all(resp.as_bytes());
+            let _ = stream.write_all(body);
+            let _ = stream.flush();
+            let _ = stream.shutdown(std::net::Shutdown::Write);
+            std::thread::sleep(Duration::from_millis(100));
+        }
+    });
+
+    let tmp = tempfile::tempdir().unwrap();
+    let out = out_path(tmp.path(), "out.csv");
+    let url = format!("http://127.0.0.1:{}/items", port);
+    let r = engine.execute_pipeline(&doc(
+        json!([
+            node("r", "src.rest", json!({
+                "url": url,
+                "paginationType": "offset",
+                "offsetParam": "from",
+                "pageSize": 2
+            })),
+            node("k", "snk.csv", json!({ "path": out, "hasHeader": true })),
+        ]),
+        json!([main_edge("e1", "r", "k")]),
+    ));
+    let _ = handle.join();
+    assert_eq!(r.status, "ok", "offset pagination failed: {:?}", r.error);
+    assert_eq!(req_count.load(std::sync::atomic::Ordering::SeqCst), 3);
+    let n = count(&format!("read_csv_auto('{}')", out));
+    assert_eq!(n, 5);
+    let reqs = captured.lock().unwrap();
+    assert!(reqs[1].contains("from=2"), "expected from=2 on 2nd request: {}", reqs[1]);
+    assert!(reqs[2].contains("from=4"), "expected from=4 on 3rd request: {}", reqs[2]);
+}
+
+#[test]
+fn src_rest_paginates_via_page_number() {
+    // 3 pages; the 3rd is empty (0 rows) so we stop.
+    use std::io::{Read, Write};
+    use std::net::TcpListener;
+    use std::sync::Arc;
+    use std::time::Duration;
+
+    let engine = engine_or_skip!();
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+    let port = listener.local_addr().unwrap().port();
+
+    let page1 = br#"[{"id":1},{"id":2}]"#;
+    let page2 = br#"[{"id":3}]"#;
+    let page3 = br#"[]"#;
+    let req_count = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let captured = Arc::new(std::sync::Mutex::new(Vec::<String>::new()));
+    let rc = req_count.clone();
+    let cap = captured.clone();
+
+    let handle = std::thread::spawn(move || {
+        for stream in listener.incoming().take(3) {
+            let mut stream = match stream { Ok(s) => s, Err(_) => break };
+            stream.set_read_timeout(Some(Duration::from_millis(250))).ok();
+            stream.set_nodelay(true).ok();
+            let mut buf = Vec::with_capacity(8192);
+            let mut chunk = [0u8; 4096];
+            for _ in 0..16 {
+                match stream.read(&mut chunk) {
+                    Ok(0) => break,
+                    Ok(n) => buf.extend_from_slice(&chunk[..n]),
+                    Err(_) => break,
+                }
+            }
+            cap.lock().unwrap().push(String::from_utf8_lossy(&buf).to_string());
+            let idx = rc.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            let body: &[u8] = match idx { 0 => page1, 1 => page2, _ => page3 };
+            let resp = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                body.len()
+            );
+            let _ = stream.write_all(resp.as_bytes());
+            let _ = stream.write_all(body);
+            let _ = stream.flush();
+            let _ = stream.shutdown(std::net::Shutdown::Write);
+            std::thread::sleep(Duration::from_millis(100));
+        }
+    });
+
+    let tmp = tempfile::tempdir().unwrap();
+    let out = out_path(tmp.path(), "out.csv");
+    let url = format!("http://127.0.0.1:{}/items", port);
+    let r = engine.execute_pipeline(&doc(
+        json!([
+            node("r", "src.rest", json!({
+                "url": url,
+                "paginationType": "page",
+                "pageParam": "p",
+                "startPage": 1
+            })),
+            node("k", "snk.csv", json!({ "path": out, "hasHeader": true })),
+        ]),
+        json!([main_edge("e1", "r", "k")]),
+    ));
+    let _ = handle.join();
+    assert_eq!(r.status, "ok", "page pagination failed: {:?}", r.error);
+    assert_eq!(req_count.load(std::sync::atomic::Ordering::SeqCst), 3);
+    let n = count(&format!("read_csv_auto('{}')", out));
+    assert_eq!(n, 3);
+    let reqs = captured.lock().unwrap();
+    assert!(reqs[1].contains("p=2"), "expected p=2 on 2nd: {}", reqs[1]);
+    assert!(reqs[2].contains("p=3"), "expected p=3 on 3rd: {}", reqs[2]);
+}
+
+#[test]
+fn src_rest_paginates_via_link_header() {
+    // RFC 5988 Link header with rel="next". Two pages; second has no Link.
+    use std::io::{Read, Write};
+    use std::net::TcpListener;
+    use std::sync::Arc;
+    use std::time::Duration;
+
+    let engine = engine_or_skip!();
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+    let port = listener.local_addr().unwrap().port();
+    let next_url = format!("http://127.0.0.1:{}/items?page=2", port);
+
+    let page1_body = br#"[{"id":1}]"#;
+    let page2_body = br#"[{"id":2}]"#;
+    let req_count = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let captured = Arc::new(std::sync::Mutex::new(Vec::<String>::new()));
+    let rc = req_count.clone();
+    let cap = captured.clone();
+    let nu = next_url.clone();
+
+    let handle = std::thread::spawn(move || {
+        for stream in listener.incoming().take(2) {
+            let mut stream = match stream { Ok(s) => s, Err(_) => break };
+            stream.set_read_timeout(Some(Duration::from_millis(250))).ok();
+            stream.set_nodelay(true).ok();
+            let mut buf = Vec::with_capacity(8192);
+            let mut chunk = [0u8; 4096];
+            for _ in 0..16 {
+                match stream.read(&mut chunk) {
+                    Ok(0) => break,
+                    Ok(n) => buf.extend_from_slice(&chunk[..n]),
+                    Err(_) => break,
+                }
+            }
+            cap.lock().unwrap().push(String::from_utf8_lossy(&buf).to_string());
+            let idx = rc.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            let (body, extra) = if idx == 0 {
+                (&page1_body[..], format!("Link: <{}>; rel=\"next\"\r\n", nu))
+            } else {
+                (&page2_body[..], String::new())
+            };
+            let resp = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n{}Connection: close\r\n\r\n",
+                body.len(),
+                extra
+            );
+            let _ = stream.write_all(resp.as_bytes());
+            let _ = stream.write_all(body);
+            let _ = stream.flush();
+            let _ = stream.shutdown(std::net::Shutdown::Write);
+            std::thread::sleep(Duration::from_millis(100));
+        }
+    });
+
+    let tmp = tempfile::tempdir().unwrap();
+    let out = out_path(tmp.path(), "out.csv");
+    let url = format!("http://127.0.0.1:{}/items", port);
+    let r = engine.execute_pipeline(&doc(
+        json!([
+            node("r", "src.rest", json!({
+                "url": url,
+                "paginationType": "link"
+            })),
+            node("k", "snk.csv", json!({ "path": out, "hasHeader": true })),
+        ]),
+        json!([main_edge("e1", "r", "k")]),
+    ));
+    let _ = handle.join();
+    assert_eq!(r.status, "ok", "link pagination failed: {:?}", r.error);
+    assert_eq!(req_count.load(std::sync::atomic::Ordering::SeqCst), 2);
+    let n = count(&format!("read_csv_auto('{}')", out));
+    assert_eq!(n, 2);
+    let reqs = captured.lock().unwrap();
+    assert!(reqs[1].contains("page=2"), "expected 2nd request to be /items?page=2: {}", reqs[1]);
+}
+
+#[test]
 fn src_rest_fetches_and_walks_cursor_pages() {
     // First response: 2 rows under /data + cursor=p2; engine GETs the
     // next page (also 2 rows, no further cursor). Total 4 rows expected,

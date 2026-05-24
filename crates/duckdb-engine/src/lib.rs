@@ -30,8 +30,8 @@ pub use plan::{CompiledPipeline, PipelineDoc, Stage, StageKind};
 use plan::{
     CassandraSinkSpec, CassandraSourceSpec, ClickHouseSinkSpec, ClickHouseSourceSpec,
     DatabricksSinkSpec, DatabricksSourceSpec, ElasticSourceSpec, MongoSinkSpec, MongoSourceSpec,
-    RestSourceSpec, SnowflakeAuth, SnowflakeSinkSpec, SnowflakeSourceSpec, SqlServerSinkSpec,
-    SqlServerSourceSpec, WebhookSpec,
+    RestPagination, RestSourceSpec, SnowflakeAuth, SnowflakeSinkSpec, SnowflakeSourceSpec,
+    SqlServerSinkSpec, SqlServerSourceSpec, WebhookSpec,
 };
 
 #[derive(Debug, Error)]
@@ -1482,6 +1482,13 @@ impl DuckdbEngine {
         let mut url = spec.url.clone();
         let mut all_rows: Vec<JsonValue> = Vec::new();
         let mut pages = 0_u64;
+        // Mutable state for offset / page strategies; cursor uses
+        // per-response extraction inside the loop.
+        let mut offset = 0_u64;
+        let mut page_no = match &spec.pagination {
+            RestPagination::Page { start_page, .. } => *start_page,
+            _ => 1,
+        };
         loop {
             // Build request
             let mut req = ureq::request(&spec.method, &url);
@@ -1499,10 +1506,8 @@ impl DuckdbEngine {
                 Some(b) => req.send_string(b),
                 None => req.call(),
             };
-            let response: JsonValue = match resp_result {
-                Ok(r) => r.into_json().map_err(|e| {
-                    EngineError::Query(format!("REST response not JSON: {}", e))
-                })?,
+            let response_raw = match resp_result {
+                Ok(r) => r,
                 Err(ureq::Error::Status(code, r)) => {
                     let body = r.into_string().unwrap_or_default();
                     return Err(EngineError::Query(format!(
@@ -1519,6 +1524,11 @@ impl DuckdbEngine {
                     )));
                 }
             };
+            // Capture Link header before consuming the response body.
+            let link_header = response_raw.header("link").map(String::from);
+            let response: JsonValue = response_raw
+                .into_json()
+                .map_err(|e| EngineError::Query(format!("REST response not JSON: {}", e)))?;
             // Extract rows array
             let rows = if spec.response_path.is_empty() {
                 response.as_array().cloned().unwrap_or_default()
@@ -1529,23 +1539,58 @@ impl DuckdbEngine {
                     .cloned()
                     .unwrap_or_default()
             };
+            let row_count = rows.len();
             all_rows.extend(rows);
             pages += 1;
-            // Cursor pagination: extract next cursor, append to URL
-            let next_cursor = match (&spec.cursor_next_path, &spec.cursor_param) {
-                (Some(p), Some(_)) => response
-                    .pointer(p)
-                    .and_then(|v| v.as_str())
-                    .filter(|s| !s.is_empty())
-                    .map(String::from),
-                _ => None,
-            };
-            match (next_cursor, &spec.cursor_param) {
-                (Some(token), Some(param)) if pages < spec.max_pages => {
-                    let sep = if spec.url.contains('?') { '&' } else { '?' };
-                    url = format!("{}{}{}={}", spec.url, sep, param, urlencode_simple(&token));
+            if pages >= spec.max_pages {
+                break;
+            }
+            // Decide whether to fetch another page.
+            match &spec.pagination {
+                RestPagination::None => break,
+                RestPagination::Cursor { next_path, param } => {
+                    let next = response
+                        .pointer(next_path)
+                        .and_then(|v| v.as_str())
+                        .filter(|s| !s.is_empty())
+                        .map(String::from);
+                    match next {
+                        Some(token) => {
+                            let sep = if spec.url.contains('?') { '&' } else { '?' };
+                            url = format!(
+                                "{}{}{}={}",
+                                spec.url,
+                                sep,
+                                param,
+                                urlencode_simple(&token)
+                            );
+                        }
+                        None => break,
+                    }
                 }
-                _ => break,
+                RestPagination::Offset { offset_param, page_size } => {
+                    // Stop when a page returns fewer rows than requested.
+                    if (row_count as u64) < *page_size {
+                        break;
+                    }
+                    offset = offset.saturating_add(*page_size);
+                    let sep = if spec.url.contains('?') { '&' } else { '?' };
+                    url = format!("{}{}{}={}", spec.url, sep, offset_param, offset);
+                }
+                RestPagination::Page { page_param, .. } => {
+                    if row_count == 0 {
+                        break;
+                    }
+                    page_no = page_no.saturating_add(1);
+                    let sep = if spec.url.contains('?') { '&' } else { '?' };
+                    url = format!("{}{}{}={}", spec.url, sep, page_param, page_no);
+                }
+                RestPagination::Link => {
+                    match link_header.as_deref().and_then(parse_link_next) {
+                        Some(next_url) => url = next_url,
+                        None => break,
+                    }
+                }
             }
         }
         materialize_jsonobjects_as_table(db, &spec.node_id, &all_rows)?;
@@ -2028,6 +2073,30 @@ fn now_nanos() -> u128 {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_nanos())
         .unwrap_or(0)
+}
+
+/// Parse an RFC 5988 Link header and return the URL of the rel="next"
+/// entry, if present. Format example:
+///   Link: <https://api.example.com/items?page=2>; rel="next", <...>; rel="prev"
+fn parse_link_next(header: &str) -> Option<String> {
+    for part in header.split(',') {
+        let p = part.trim();
+        if !p.starts_with('<') {
+            continue;
+        }
+        let close = match p.find('>') {
+            Some(i) => i,
+            None => continue,
+        };
+        let url = &p[1..close];
+        let rest = &p[close + 1..];
+        // Look for rel="next" anywhere in the params (case-insensitive).
+        let rest_lower = rest.to_ascii_lowercase();
+        if rest_lower.contains("rel=\"next\"") || rest_lower.contains("rel=next") {
+            return Some(url.to_string());
+        }
+    }
+    None
 }
 
 /// URL-encode a string for use as a query parameter value.

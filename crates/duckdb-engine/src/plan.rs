@@ -310,13 +310,29 @@ pub struct ElasticSourceSpec {
     pub max_pages: u64,
 }
 
+/// Pagination style for src.rest.
+#[derive(Debug, Clone)]
+pub enum RestPagination {
+    /// Single-shot fetch; no follow-up requests.
+    None,
+    /// Extract a cursor token from `next_path` in each response,
+    /// append as `?<param>=<cursor>` until the cursor is empty.
+    Cursor { next_path: String, param: String },
+    /// Increment `?<offset_param>=N` by `page_size` each call until a
+    /// page returns fewer than `page_size` rows.
+    Offset { offset_param: String, page_size: u64 },
+    /// Increment `?<page_param>=N` starting at `start_page` (default 1)
+    /// until a page returns 0 rows.
+    Page { page_param: String, start_page: u64 },
+    /// Follow RFC 5988 `Link` response header with rel="next".
+    Link,
+}
+
 /// src.rest: generic HTTP-API source. Fetches a URL, parses the JSON
 /// response, optionally walks a JSON pointer (`response_path`) to
 /// extract the array of row objects, and optionally follows
-/// cursor-style pagination by extracting a cursor token from a JSON
-/// pointer in each response and appending it as a query parameter
-/// to the next request. Materializes the accumulated rows as a
-/// DuckDB table via read_json_auto.
+/// pagination via cursor / offset / page-number / Link header.
+/// Materializes the accumulated rows as a DuckDB table via read_json_auto.
 #[derive(Debug, Clone)]
 pub struct RestSourceSpec {
     pub node_id: String,
@@ -328,12 +344,8 @@ pub struct RestSourceSpec {
     /// array of row objects. Empty string = the response root IS the
     /// array. Example: "/data" or "/results/items".
     pub response_path: String,
-    /// JSON pointer to the cursor / next-page token in each response.
-    /// None = no pagination (single-shot fetch).
-    pub cursor_next_path: Option<String>,
-    /// Query-string parameter name to send the cursor under. Required
-    /// when cursor_next_path is set.
-    pub cursor_param: Option<String>,
+    /// How to walk subsequent pages.
+    pub pagination: RestPagination,
     /// Hard cap on pages fetched (safety net against runaway loops).
     pub max_pages: u64,
 }
@@ -1430,12 +1442,48 @@ fn build_stage(
             }
         }
         let response_path = string_prop(&props, "responsePath").unwrap_or_default();
-        // Pagination config. cursor_next_path + cursor_param both
-        // optional; both must be non-empty for pagination to actually
-        // happen. paginationType prop in the form is descriptive (no
-        // 'offset' or 'page' modes implemented yet).
-        let cursor_next_path = string_prop(&props, "cursorNextPath").filter(|s| !s.is_empty());
-        let cursor_param = string_prop(&props, "cursorParam").filter(|s| !s.is_empty());
+        let pagination_type = string_prop(&props, "paginationType").unwrap_or_else(|| "none".into());
+        let pagination = match pagination_type.as_str() {
+            "cursor" => {
+                let next_path = string_prop(&props, "cursorNextPath").filter(|s| !s.is_empty());
+                let param = string_prop(&props, "cursorParam").filter(|s| !s.is_empty());
+                match (next_path, param) {
+                    (Some(n), Some(p)) => RestPagination::Cursor { next_path: n, param: p },
+                    _ => RestPagination::None,
+                }
+            }
+            "offset" => {
+                let param = string_prop(&props, "offsetParam")
+                    .filter(|s| !s.is_empty())
+                    .unwrap_or_else(|| "offset".into());
+                let page_size = props
+                    .get("pageSize")
+                    .and_then(|v| v.as_u64())
+                    .filter(|n| *n > 0)
+                    .unwrap_or(100);
+                RestPagination::Offset { offset_param: param, page_size }
+            }
+            "page" => {
+                let param = string_prop(&props, "pageParam")
+                    .filter(|s| !s.is_empty())
+                    .unwrap_or_else(|| "page".into());
+                let start_page = props
+                    .get("startPage")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(1);
+                RestPagination::Page { page_param: param, start_page }
+            }
+            "link" => RestPagination::Link,
+            _ => {
+                // Back-compat: if cursor_next_path is set, use cursor mode.
+                let next_path = string_prop(&props, "cursorNextPath").filter(|s| !s.is_empty());
+                let param = string_prop(&props, "cursorParam").filter(|s| !s.is_empty());
+                match (next_path, param) {
+                    (Some(n), Some(p)) => RestPagination::Cursor { next_path: n, param: p },
+                    _ => RestPagination::None,
+                }
+            }
+        };
         let max_pages = props
             .get("maxPages")
             .and_then(|v| v.as_u64())
@@ -1448,8 +1496,7 @@ fn build_stage(
             headers,
             body,
             response_path,
-            cursor_next_path,
-            cursor_param,
+            pagination,
             max_pages,
         });
         (String::new(), StageKind::View, None)
