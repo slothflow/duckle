@@ -885,7 +885,8 @@ fn build_view_sql(
             Ok(build_cloud_source(scheme, props))
         }
         "src.postgres" | "src.cockroach" | "src.mysql" | "src.mariadb"
-        | "src.motherduck" | "src.ducklake" | "src.pgvector" => build_relational_source(component_id, props),
+        | "src.motherduck" | "src.ducklake" | "src.pgvector"
+        | "src.redshift" | "src.bigquery" => build_relational_source(component_id, props),
         "src.avro" => Ok(build_avro_source(props)),
         "src.excel" => Ok(build_excel_source(props)),
         "src.iceberg" => Ok(build_iceberg_source(props)),
@@ -2917,11 +2918,16 @@ fn attach_prelude(component_id: &str, props: &JsonValue) -> String {
     // Cockroach speaks PG wire so it rides the postgres extension;
     // MariaDB speaks MySQL wire so it rides the mysql extension.
     match component_id {
-        "src.postgres" | "src.cockroach" | "src.pgvector" => {
-            return db_attach(props, "postgres", 5432, true);
+        "src.postgres" | "src.cockroach" | "src.pgvector" | "src.redshift" => {
+            // Redshift speaks the Postgres wire protocol with a different
+            // default port (5439). The DuckDB postgres extension is happy
+            // pointed at any pg-compatible endpoint.
+            let default_port = if component_id == "src.redshift" { 5439 } else { 5432 };
+            return db_attach(props, "postgres", default_port, true);
         }
-        "snk.postgres" | "snk.cockroach" | "snk.pgvector" => {
-            return db_attach(props, "postgres", 5432, false);
+        "snk.postgres" | "snk.cockroach" | "snk.pgvector" | "snk.redshift" => {
+            let default_port = if component_id == "snk.redshift" { 5439 } else { 5432 };
+            return db_attach(props, "postgres", default_port, false);
         }
         "src.mysql" | "src.mariadb" => return db_attach(props, "mysql", 3306, true),
         "snk.mysql" | "snk.mariadb" => return db_attach(props, "mysql", 3306, false),
@@ -2929,6 +2935,11 @@ fn attach_prelude(component_id: &str, props: &JsonValue) -> String {
         "snk.motherduck" => return md_attach(props, false),
         "src.ducklake" => return ducklake_attach(props, true),
         "snk.ducklake" => return ducklake_attach(props, false),
+        // BigQuery via the duckdb-bigquery community extension. The
+        // user's prop 'project' becomes the BigQuery project ID; the
+        // ATTACH alias is the standard duckle_src / duckle_dst.
+        "src.bigquery" => return bigquery_attach(props, true),
+        "snk.bigquery" => return bigquery_attach(props, false),
         // snk.excel COPYs through the DuckDB excel extension; LOAD is
         // enough since the install paths pre-fetched it.
         "snk.excel" => return "LOAD excel; ".into(),
@@ -3103,10 +3114,17 @@ fn relational_qualified(alias: &str, component_id: &str, schema: Option<&str>, t
     let default_schema: Option<&str> = if component_id.ends_with(".postgres")
         || component_id.ends_with(".cockroach")
         || component_id.ends_with(".pgvector")
+        || component_id.ends_with(".redshift")
     {
         Some("public")
     } else if component_id.ends_with(".motherduck") || component_id.ends_with(".ducklake") {
         Some("main")
+    } else if component_id.ends_with(".bigquery") {
+        // BigQuery's first level is a "dataset" - same shape as schema.
+        // Caller can supply dataset via either prop name; we leave the
+        // default empty so the ATTACH-time default dataset takes over
+        // when unqualified.
+        None
     } else {
         None // MySQL / MariaDB: skip the schema layer unless given
     };
@@ -3143,6 +3161,35 @@ fn ducklake_attach(props: &JsonValue, read_only: bool) -> String {
 /// an optional inline `motherduck_token` query parameter. If the token
 /// isn't in the form, MotherDuck falls back to the MOTHERDUCK_TOKEN env
 /// var, which lets a user keep credentials out of saved pipelines.
+/// BigQuery via the duckdb-bigquery community extension. ATTACHes a
+/// project by ID; auth uses the standard GCP credential discovery
+/// (GOOGLE_APPLICATION_CREDENTIALS env var, gcloud default, etc).
+/// User points the extension at a project via the 'project' prop;
+/// optional 'dataset' fills in the default dataset for unqualified
+/// table names.
+fn bigquery_attach(props: &JsonValue, read_only: bool) -> String {
+    let project = match string_prop(props, "project").filter(|s| !s.is_empty()) {
+        Some(p) => p,
+        None => return String::new(),
+    };
+    let dataset = string_prop(props, "dataset").filter(|s| !s.is_empty());
+    let attach_target = match dataset {
+        Some(d) => format!("project={} dataset={}", project, d),
+        None => format!("project={}", project),
+    };
+    let (alias, mode) = if read_only {
+        ("duckle_src", " (READ_ONLY)")
+    } else {
+        ("duckle_dst", "")
+    };
+    // INSTALL/LOAD the community extension. The community: tag tells
+    // DuckDB to fetch from the community-extensions repo.
+    format!(
+        "INSTALL bigquery FROM community; LOAD bigquery; ATTACH '{}' AS {} (TYPE bigquery{}); ",
+        attach_target, alias, mode
+    )
+}
+
 fn md_attach(props: &JsonValue, read_only: bool) -> String {
     let db = match string_prop(props, "database").filter(|s| !s.is_empty()) {
         Some(d) => d,
@@ -4288,7 +4335,8 @@ fn build_sink_sql(
         "snk.s3" | "snk.gcs" | "snk.azureblob" => Ok(build_cloud_sink(props, from_view)),
         "snk.sqlite" | "snk.duckdb" => Ok(build_db_sink(props, from_view)),
         "snk.postgres" | "snk.cockroach" | "snk.mysql" | "snk.mariadb"
-        | "snk.motherduck" | "snk.ducklake" | "snk.pgvector" => build_relational_sink(component_id, props, from_view),
+        | "snk.motherduck" | "snk.ducklake" | "snk.pgvector"
+        | "snk.redshift" | "snk.bigquery" => build_relational_sink(component_id, props, from_view),
         "snk.excel" => Ok(build_excel_sink(props, from_view)),
         "snk.spatial" => Ok(build_spatial_sink(props, from_view)),
         "snk.iceberg" => Ok(build_iceberg_sink(props, from_view)),

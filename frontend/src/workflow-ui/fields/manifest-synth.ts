@@ -773,6 +773,47 @@ function synthDbSink(comp: ComponentDef): ComponentManifest {
 }
 
 function synthWarehouseSource(comp: ComponentDef): ComponentManifest {
+    if (comp.id === 'src.redshift') {
+        // Redshift speaks the Postgres wire protocol; reuse the same
+        // libpq-style connection form (host/port/db/user/password) as
+        // src.postgres but with the Redshift default port (5439).
+        return base(comp, [
+            { label: 'Redshift connection', fields: dbConnectionFields(comp.id) },
+            { label: 'Source table', fields: [
+                { key: 'schemaName', label: 'Schema', kind: 'text', defaultValue: 'public' },
+                { key: 'tableName', label: 'Table', kind: 'text', required: true, placeholder: 'orders' },
+            ] },
+        ]);
+    }
+    if (comp.id === 'src.bigquery') {
+        return base(comp, [
+            {
+                label: 'BigQuery project',
+                fields: [
+                    { key: 'project', label: 'Project ID', kind: 'text', required: true, placeholder: 'my-gcp-project' },
+                    { key: 'dataset', label: 'Default dataset', kind: 'text', placeholder: 'analytics' },
+                ],
+            },
+            {
+                label: 'Source table',
+                fields: [
+                    { key: 'schemaName', label: 'Dataset', kind: 'text', placeholder: 'analytics' },
+                    { key: 'tableName', label: 'Table', kind: 'text', required: true, placeholder: 'events' },
+                ],
+            },
+            {
+                label: 'Auth',
+                fields: [
+                    {
+                        key: 'credentialsPath',
+                        label: 'Service account JSON path (optional)',
+                        kind: 'file-path',
+                        description: 'When empty the engine relies on the standard GCP credential discovery (GOOGLE_APPLICATION_CREDENTIALS / gcloud default).',
+                    },
+                ],
+            },
+        ]);
+    }
     if (comp.id === 'src.motherduck') {
         // MotherDuck is DuckDB-native, no account/warehouse/role layer.
         // Just a database name plus an optional inline token (otherwise
@@ -811,6 +852,72 @@ function synthWarehouseSource(comp: ComponentDef): ComponentManifest {
 }
 
 function synthWarehouseSink(comp: ComponentDef): ComponentManifest {
+    if (comp.id === 'snk.redshift') {
+        return base(comp, [
+            { label: 'Redshift connection', fields: dbConnectionFields(comp.id) },
+            { label: 'Destination', fields: [
+                { key: 'schemaName', label: 'Schema', kind: 'text', defaultValue: 'public' },
+                { key: 'tableName', label: 'Table', kind: 'text', required: true, placeholder: 'orders' },
+                {
+                    key: 'mode',
+                    label: 'Write mode',
+                    kind: 'select',
+                    defaultValue: 'overwrite',
+                    options: [
+                        { label: 'Create or replace', value: 'overwrite' },
+                        { label: 'Append (insert)', value: 'append' },
+                        { label: 'Truncate + insert', value: 'truncate' },
+                        { label: 'Upsert on conflict', value: 'upsert' },
+                    ],
+                },
+                {
+                    key: 'conflictColumns',
+                    label: 'Conflict columns (for upsert)',
+                    kind: 'columns',
+                },
+            ] },
+        ], 'upstream');
+    }
+    if (comp.id === 'snk.bigquery') {
+        return base(comp, [
+            {
+                label: 'BigQuery project',
+                fields: [
+                    { key: 'project', label: 'Project ID', kind: 'text', required: true },
+                    { key: 'dataset', label: 'Default dataset', kind: 'text', placeholder: 'analytics' },
+                ],
+            },
+            {
+                label: 'Destination',
+                fields: [
+                    { key: 'schemaName', label: 'Dataset', kind: 'text', placeholder: 'analytics' },
+                    { key: 'tableName', label: 'Table', kind: 'text', required: true, placeholder: 'events' },
+                    {
+                        key: 'mode',
+                        label: 'Write mode',
+                        kind: 'select',
+                        defaultValue: 'overwrite',
+                        options: [
+                            { label: 'Create or replace', value: 'overwrite' },
+                            { label: 'Append (insert)', value: 'append' },
+                            { label: 'Truncate + insert', value: 'truncate' },
+                        ],
+                    },
+                ],
+            },
+            {
+                label: 'Auth',
+                fields: [
+                    {
+                        key: 'credentialsPath',
+                        label: 'Service account JSON path (optional)',
+                        kind: 'file-path',
+                        description: 'When empty the engine relies on the standard GCP credential discovery.',
+                    },
+                ],
+            },
+        ], 'upstream');
+    }
     if (comp.id === 'snk.motherduck') {
         // Mirror src.motherduck: compact form (database + token + schema +
         // tableName + mode) instead of the Snowflake-style warehouse fields.
