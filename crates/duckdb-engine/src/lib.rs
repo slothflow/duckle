@@ -30,7 +30,7 @@ pub use plan::{CompiledPipeline, PipelineDoc, Stage, StageKind};
 use plan::{
     ClickHouseSinkSpec, ClickHouseSourceSpec, DatabricksSinkSpec, DatabricksSourceSpec,
     ElasticSourceSpec, MongoSinkSpec, MongoSourceSpec, RestSourceSpec, SnowflakeAuth,
-    SnowflakeSinkSpec, SnowflakeSourceSpec, WebhookSpec,
+    SnowflakeSinkSpec, SnowflakeSourceSpec, SqlServerSinkSpec, SqlServerSourceSpec, WebhookSpec,
 };
 
 #[derive(Debug, Error)]
@@ -376,6 +376,10 @@ impl DuckdbEngine {
                     self.run_clickhouse_sink(&db_path, spec)
                 } else if let Some(spec) = stage.clickhouse_source.as_ref() {
                     self.run_clickhouse_source(&db_path, spec)
+                } else if let Some(spec) = stage.sqlserver_sink.as_ref() {
+                    self.run_sqlserver_sink(&db_path, spec)
+                } else if let Some(spec) = stage.sqlserver_source.as_ref() {
+                    self.run_sqlserver_source(&db_path, spec)
                 } else if let Some(spec) = stage.upsert.as_ref() {
                     // Relational-DB upsert: DESCRIBE the upstream first to
                     // get the column list, then assemble INSERT ... ON
@@ -799,6 +803,184 @@ impl DuckdbEngine {
         Ok(format!(
             "snowflake: inserted {} rows into {}",
             total_inserted, spec.table
+        ))
+    }
+
+    /// SQL Server / Synapse sink via tiberius. Builds multi-row INSERT
+    /// VALUES statements batched at spec.batch_size (default 1000 -
+    /// SQL Server's per-INSERT VALUES cap). Values are interpolated as
+    /// SQL literals via the shared json_to_sql_literal helper - not
+    /// parameterized; safe for pipeline-produced data but document
+    /// users not to wire untrusted upstream into SQL Server directly.
+    fn run_sqlserver_sink(
+        &self,
+        db: &Path,
+        spec: &SqlServerSinkSpec,
+    ) -> Result<String, EngineError> {
+        let select = format!("SELECT * FROM {}", plan::quote_ident(&spec.from_view));
+        let rows = self.run_rows(Some(db), &select)?;
+        if rows.is_empty() {
+            return Ok(format!(
+                "sqlserver: 0 rows to insert into [{}].[{}]",
+                spec.schema, spec.table
+            ));
+        }
+        let cols: Vec<String> = match rows[0].as_object() {
+            Some(o) => o.keys().cloned().collect(),
+            None => {
+                return Err(EngineError::Query(
+                    "sqlserver: upstream rows aren't JSON objects".into(),
+                ));
+            }
+        };
+        let qualified = format!(
+            "{}.{}.{}",
+            ss_quote_ident(&spec.database),
+            ss_quote_ident(&spec.schema),
+            ss_quote_ident(&spec.table),
+        );
+        let cols_list = cols
+            .iter()
+            .map(|c| ss_quote_ident(c))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .map_err(|e| EngineError::Query(format!("sqlserver: tokio rt: {}", e)))?;
+        let total = rt
+            .block_on(async {
+                use tokio_util::compat::TokioAsyncWriteCompatExt;
+                let mut config = tiberius::Config::new();
+                config.host(&spec.host);
+                config.port(spec.port);
+                config.authentication(tiberius::AuthMethod::sql_server(
+                    &spec.user,
+                    &spec.password,
+                ));
+                config.database(&spec.database);
+                if spec.trust_cert {
+                    config.trust_cert();
+                }
+                let tcp = tokio::net::TcpStream::connect(config.get_addr())
+                    .await
+                    .map_err(|e| format!("connect: {}", e))?;
+                tcp.set_nodelay(true).ok();
+                let mut client = tiberius::Client::connect(config, tcp.compat_write())
+                    .await
+                    .map_err(|e| format!("tds handshake: {}", e))?;
+                let mut total = 0_usize;
+                for chunk in rows.chunks(spec.batch_size) {
+                    let values: Vec<String> = chunk
+                        .iter()
+                        .map(|row| {
+                            let row_obj = row.as_object();
+                            let vals: Vec<String> = cols
+                                .iter()
+                                .map(|c| {
+                                    let v = row_obj
+                                        .and_then(|o| o.get(c))
+                                        .unwrap_or(&JsonValue::Null);
+                                    json_to_sql_literal(v)
+                                })
+                                .collect();
+                            format!("({})", vals.join(", "))
+                        })
+                        .collect();
+                    let stmt = format!(
+                        "INSERT INTO {} ({}) VALUES {}",
+                        qualified,
+                        cols_list,
+                        values.join(", ")
+                    );
+                    client
+                        .execute(stmt, &[])
+                        .await
+                        .map_err(|e| format!("execute: {}", e))?;
+                    total += chunk.len();
+                }
+                Ok::<usize, String>(total)
+            })
+            .map_err(|e| EngineError::Query(format!("sqlserver sink: {}", e)))?;
+        Ok(format!(
+            "sqlserver: inserted {} rows into [{}].[{}].[{}]",
+            total, spec.database, spec.schema, spec.table
+        ))
+    }
+
+    /// SQL Server / Synapse source via tiberius. Runs the query,
+    /// iterates the result stream, converts each row's ColumnData
+    /// to JSON, and materializes via the jsonobjects helper.
+    fn run_sqlserver_source(
+        &self,
+        db: &Path,
+        spec: &SqlServerSourceSpec,
+    ) -> Result<String, EngineError> {
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .map_err(|e| EngineError::Query(format!("sqlserver: tokio rt: {}", e)))?;
+        let rows: Vec<JsonValue> = rt
+            .block_on(async {
+                use tokio_util::compat::TokioAsyncWriteCompatExt;
+                let mut config = tiberius::Config::new();
+                config.host(&spec.host);
+                config.port(spec.port);
+                config.authentication(tiberius::AuthMethod::sql_server(
+                    &spec.user,
+                    &spec.password,
+                ));
+                config.database(&spec.database);
+                if spec.trust_cert {
+                    config.trust_cert();
+                }
+                let tcp = tokio::net::TcpStream::connect(config.get_addr())
+                    .await
+                    .map_err(|e| format!("connect: {}", e))?;
+                tcp.set_nodelay(true).ok();
+                let mut client = tiberius::Client::connect(config, tcp.compat_write())
+                    .await
+                    .map_err(|e| format!("tds handshake: {}", e))?;
+                let stream = client
+                    .query(&spec.query, &[])
+                    .await
+                    .map_err(|e| format!("query: {}", e))?;
+                let rows = stream
+                    .into_first_result()
+                    .await
+                    .map_err(|e| format!("collect: {}", e))?;
+                let mut out = Vec::with_capacity(rows.len());
+                for row in rows.iter() {
+                    let mut obj = serde_json::Map::new();
+                    for (i, col) in row.columns().iter().enumerate() {
+                        let name = col.name().to_string();
+                        let v: JsonValue = if let Ok(s) = row.try_get::<&str, _>(i) {
+                            s.map(|x| JsonValue::String(x.to_string()))
+                                .unwrap_or(JsonValue::Null)
+                        } else if let Ok(n) = row.try_get::<i64, _>(i) {
+                            n.map(JsonValue::from).unwrap_or(JsonValue::Null)
+                        } else if let Ok(n) = row.try_get::<i32, _>(i) {
+                            n.map(JsonValue::from).unwrap_or(JsonValue::Null)
+                        } else if let Ok(n) = row.try_get::<f64, _>(i) {
+                            n.and_then(|x| serde_json::Number::from_f64(x).map(JsonValue::Number))
+                                .unwrap_or(JsonValue::Null)
+                        } else if let Ok(b) = row.try_get::<bool, _>(i) {
+                            b.map(JsonValue::Bool).unwrap_or(JsonValue::Null)
+                        } else {
+                            JsonValue::Null
+                        };
+                        obj.insert(name, v);
+                    }
+                    out.push(JsonValue::Object(obj));
+                }
+                Ok::<Vec<JsonValue>, String>(out)
+            })
+            .map_err(|e| EngineError::Query(format!("sqlserver source: {}", e)))?;
+        let count = rows.len();
+        materialize_jsonobjects_as_table(db, &spec.node_id, &rows)?;
+        Ok(format!(
+            "sqlserver: materialized {} rows into {}",
+            count, spec.node_id
         ))
     }
 
@@ -2023,6 +2205,11 @@ fn build_snowflake_auth_header(
 /// doubled. Works in both Spark SQL and ANSI mode.
 fn db_quote_ident(s: &str) -> String {
     format!("`{}`", s.replace('`', "``"))
+}
+
+/// SQL Server identifier quoting: square brackets, internal `]` doubled.
+fn ss_quote_ident(s: &str) -> String {
+    format!("[{}]", s.replace(']', "]]"))
 }
 
 /// Render a serde_json::Value as a Snowflake SQL literal.

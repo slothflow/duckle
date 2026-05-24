@@ -80,6 +80,10 @@ pub struct Stage {
     pub clickhouse_sink: Option<ClickHouseSinkSpec>,
     /// ClickHouse HTTP-API source (POST SELECT ... FORMAT JSON).
     pub clickhouse_source: Option<ClickHouseSourceSpec>,
+    /// SQL Server / Synapse INSERT via tiberius (multi-row VALUES).
+    pub sqlserver_sink: Option<SqlServerSinkSpec>,
+    /// SQL Server / Synapse SELECT via tiberius.
+    pub sqlserver_source: Option<SqlServerSourceSpec>,
     /// Milliseconds the executor sleeps before running this stage.
     /// Set by ctl.wait and ctl.throttle. None = no delay.
     pub wait_ms: Option<u64>,
@@ -155,6 +159,38 @@ pub struct SnowflakeSourceSpec {
     pub warehouse: Option<String>,
     pub role: Option<String>,
     pub query: String,
+}
+
+/// snk.sqlserver / snk.synapse: TDS INSERT via tiberius. Synapse
+/// rides the same wire. Multi-row VALUES batched at 1000 rows (the
+/// SQL Server max per INSERT).
+#[derive(Debug, Clone)]
+pub struct SqlServerSinkSpec {
+    pub from_view: String,
+    pub host: String,
+    pub port: u16,
+    pub user: String,
+    pub password: String,
+    pub database: String,
+    pub schema: String,
+    pub table: String,
+    pub batch_size: usize,
+    /// If true, skip TLS cert verification - useful for self-signed
+    /// dev servers. Production users leave this off.
+    pub trust_cert: bool,
+}
+
+/// src.sqlserver / src.synapse: TDS SELECT via tiberius.
+#[derive(Debug, Clone)]
+pub struct SqlServerSourceSpec {
+    pub node_id: String,
+    pub host: String,
+    pub port: u16,
+    pub user: String,
+    pub password: String,
+    pub database: String,
+    pub query: String,
+    pub trust_cert: bool,
 }
 
 /// snk.clickhouse: HTTP INSERT to a ClickHouse table.
@@ -652,6 +688,8 @@ fn build_stage(
     let mut mongo_source: Option<MongoSourceSpec> = None;
     let mut clickhouse_sink: Option<ClickHouseSinkSpec> = None;
     let mut clickhouse_source: Option<ClickHouseSourceSpec> = None;
+    let mut sqlserver_sink: Option<SqlServerSinkSpec> = None;
+    let mut sqlserver_source: Option<SqlServerSourceSpec> = None;
     let mut wait_ms: Option<u64> = None;
     // Advanced settings (universal across components, written by the
     // Properties Panel's Advanced tab). Engine honours them per stage.
@@ -878,6 +916,36 @@ fn build_stage(
                 .and_then(|v| v.as_u64())
                 .filter(|n| *n > 0 && *n <= 50) // Databricks max is 50s
                 .unwrap_or(30),
+        });
+        (String::new(), StageKind::Sink, Some(from_view.to_string()))
+    } else if component_id == "snk.sqlserver" || component_id == "snk.synapse" {
+        // Synapse rides the SQL Server wire; same tiberius path.
+        let from_view = inputs.main().ok_or_else(|| missing_input(node, "main"))?;
+        let host = string_prop(&props, "host")
+            .filter(|s| !s.is_empty())
+            .ok_or_else(|| EngineError::Config(format!("{}: host required", component_id)))?;
+        let user = string_prop(&props, "user")
+            .filter(|s| !s.is_empty())
+            .ok_or_else(|| EngineError::Config(format!("{}: user required", component_id)))?;
+        let password = string_prop(&props, "password").unwrap_or_default();
+        let database = string_prop(&props, "database")
+            .filter(|s| !s.is_empty())
+            .ok_or_else(|| EngineError::Config(format!("{}: database required", component_id)))?;
+        let table = string_prop(&props, "tableName")
+            .or_else(|| string_prop(&props, "table"))
+            .filter(|s| !s.is_empty())
+            .ok_or_else(|| EngineError::Config(format!("{}: tableName required", component_id)))?;
+        sqlserver_sink = Some(SqlServerSinkSpec {
+            from_view: from_view.to_string(),
+            host,
+            port: props.get("port").and_then(|v| v.as_u64()).unwrap_or(1433) as u16,
+            user,
+            password,
+            database,
+            schema: string_prop(&props, "schema").unwrap_or_else(|| "dbo".into()),
+            table,
+            batch_size: props.get("batchSize").and_then(|v| v.as_u64()).filter(|n| *n > 0).unwrap_or(1000) as usize,
+            trust_cert: props.get("trustCert").and_then(|v| v.as_bool()).unwrap_or(false),
         });
         (String::new(), StageKind::Sink, Some(from_view.to_string()))
     } else if component_id == "snk.clickhouse" {
@@ -1189,6 +1257,35 @@ fn build_stage(
                 .unwrap_or(100),
         });
         (String::new(), StageKind::View, None)
+    } else if component_id == "src.sqlserver" || component_id == "src.synapse" {
+        let host = string_prop(&props, "host")
+            .filter(|s| !s.is_empty())
+            .ok_or_else(|| EngineError::Config(format!("{}: host required", component_id)))?;
+        let user = string_prop(&props, "user")
+            .filter(|s| !s.is_empty())
+            .ok_or_else(|| EngineError::Config(format!("{}: user required", component_id)))?;
+        let database = string_prop(&props, "database")
+            .filter(|s| !s.is_empty())
+            .ok_or_else(|| EngineError::Config(format!("{}: database required", component_id)))?;
+        let query = string_prop(&props, "query")
+            .filter(|s| !s.trim().is_empty())
+            .or_else(|| {
+                let table = string_prop(&props, "tableName").filter(|s| !s.is_empty())?;
+                let schema = string_prop(&props, "schema").unwrap_or_else(|| "dbo".into());
+                Some(format!("SELECT * FROM [{}].[{}]", schema, table))
+            })
+            .ok_or_else(|| EngineError::Config(format!("{}: query or tableName required", component_id)))?;
+        sqlserver_source = Some(SqlServerSourceSpec {
+            node_id: node.id.clone(),
+            host,
+            port: props.get("port").and_then(|v| v.as_u64()).unwrap_or(1433) as u16,
+            user,
+            password: string_prop(&props, "password").unwrap_or_default(),
+            database,
+            query,
+            trust_cert: props.get("trustCert").and_then(|v| v.as_bool()).unwrap_or(false),
+        });
+        (String::new(), StageKind::View, None)
     } else if component_id == "src.clickhouse" {
         let endpoint = string_prop(&props, "endpoint")
             .filter(|s| !s.is_empty())
@@ -1443,6 +1540,8 @@ fn build_stage(
         mongo_source,
         clickhouse_sink,
         clickhouse_source,
+        sqlserver_sink,
+        sqlserver_source,
         wait_ms,
         retry_attempts,
         retry_backoff_ms,

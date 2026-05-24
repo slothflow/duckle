@@ -755,6 +755,30 @@ function synthLakehouseSink(comp: ComponentDef): ComponentManifest {
 }
 
 function synthDbSource(comp: ComponentDef): ComponentManifest {
+    if (comp.id === 'src.sqlserver' || comp.id === 'src.synapse') {
+        const vendor = comp.id === 'src.sqlserver' ? 'SQL Server' : 'Azure Synapse';
+        return base(comp, [
+            {
+                label: `${vendor} connection`,
+                fields: [
+                    { key: 'host', label: 'Host', kind: 'text', required: true, placeholder: 'mssql.example.com' },
+                    { key: 'port', label: 'Port', kind: 'integer', defaultValue: 1433 },
+                    { key: 'user', label: 'User', kind: 'text', required: true },
+                    { key: 'password', label: 'Password', kind: 'text', placeholder: '••••••••' },
+                    { key: 'database', label: 'Database', kind: 'text', required: true },
+                    { key: 'trustCert', label: 'Trust TLS cert (dev / self-signed)', kind: 'bool', defaultValue: false },
+                ],
+            },
+            {
+                label: 'Query',
+                fields: [
+                    { key: 'schema', label: 'Schema', kind: 'text', defaultValue: 'dbo' },
+                    { key: 'tableName', label: 'Table (for SELECT *)', kind: 'text', placeholder: 'orders' },
+                    { key: 'query', label: 'Or custom SQL', kind: 'expression', rows: 4, placeholder: 'SELECT * FROM ...' },
+                ],
+            },
+        ]);
+    }
     if (comp.id === 'src.clickhouse') {
         return base(comp, [
             {
@@ -777,6 +801,30 @@ function synthDbSource(comp: ComponentDef): ComponentManifest {
 }
 
 function synthDbSink(comp: ComponentDef): ComponentManifest {
+    if (comp.id === 'snk.sqlserver' || comp.id === 'snk.synapse') {
+        const vendor = comp.id === 'snk.sqlserver' ? 'SQL Server' : 'Azure Synapse';
+        return base(comp, [
+            {
+                label: `${vendor} connection`,
+                fields: [
+                    { key: 'host', label: 'Host', kind: 'text', required: true, placeholder: 'mssql.example.com' },
+                    { key: 'port', label: 'Port', kind: 'integer', defaultValue: 1433 },
+                    { key: 'user', label: 'User', kind: 'text', required: true },
+                    { key: 'password', label: 'Password', kind: 'text', placeholder: '••••••••' },
+                    { key: 'database', label: 'Database', kind: 'text', required: true },
+                    { key: 'trustCert', label: 'Trust TLS cert (dev / self-signed)', kind: 'bool', defaultValue: false },
+                ],
+            },
+            {
+                label: 'Destination',
+                fields: [
+                    { key: 'schema', label: 'Schema', kind: 'text', defaultValue: 'dbo' },
+                    { key: 'tableName', label: 'Table', kind: 'text', required: true, placeholder: 'orders' },
+                    { key: 'batchSize', label: 'Insert batch size (max 1000)', kind: 'integer', defaultValue: 1000 },
+                ],
+            },
+        ], 'upstream');
+    }
     if (comp.id === 'snk.clickhouse') {
         return base(comp, [
             {
