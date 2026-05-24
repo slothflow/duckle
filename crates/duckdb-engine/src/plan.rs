@@ -980,6 +980,9 @@ fn build_view_sql(
         "xf.text.match" => build_text_match(inputs, props),
         "xf.text.reverse" => build_text_reverse(inputs, props),
         "xf.text.repeat" => build_text_repeat(inputs, props),
+        "xf.text.replace" => build_text_replace(inputs, props),
+        "xf.text.slug" => build_text_slug(inputs, props),
+        "xf.text.strip_html" => build_text_strip_html(inputs, props),
         "xf.compare" => build_compare(inputs, props),
         "xf.arr.element" | "xf.arr.distinct" | "xf.arr.explode" => {
             build_array(inputs, props, component_id)
@@ -3409,6 +3412,103 @@ fn build_zscore(inputs: &NodeInputs, props: &JsonValue) -> Result<String, String
         out = quote_ident(&output),
         up = quote_ident(upstream)
     ))
+}
+
+/// Literal Replace: DuckDB replace(string, search, replacement).
+/// Different from xf.regex - this is a literal substring swap, no
+/// regex metacharacters.
+fn build_text_replace(inputs: &NodeInputs, props: &JsonValue) -> Result<String, String> {
+    let upstream = inputs.main().ok_or_else(|| missing_input_msg("xf.text.replace"))?;
+    let column = string_prop(props, "column")
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| "Replace needs a column".to_string())?;
+    let search = string_prop(props, "search")
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| "Replace needs a search string".to_string())?;
+    let replacement = string_prop(props, "replacement").unwrap_or_default();
+    let output = string_prop(props, "outputColumn")
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| column.clone());
+    let qcol = quote_ident(&column);
+    let expr = format!(
+        "replace(CAST({} AS VARCHAR), '{}', '{}')",
+        qcol,
+        sql_escape(&search),
+        sql_escape(&replacement)
+    );
+    if output == column {
+        Ok(format!(
+            "SELECT * REPLACE ({} AS {}) FROM {}",
+            expr,
+            qcol,
+            quote_ident(upstream)
+        ))
+    } else {
+        Ok(format!(
+            "SELECT *, {} AS {} FROM {}",
+            expr,
+            quote_ident(&output),
+            quote_ident(upstream)
+        ))
+    }
+}
+
+/// URL Slug: lowercase + strip non-alphanumerics + collapse runs of
+/// whitespace into single hyphens + trim leading/trailing hyphens.
+/// "Hello, World!" -> "hello-world".
+fn build_text_slug(inputs: &NodeInputs, props: &JsonValue) -> Result<String, String> {
+    let upstream = inputs.main().ok_or_else(|| missing_input_msg("xf.text.slug"))?;
+    let column = string_prop(props, "column")
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| "Slug needs a column".to_string())?;
+    let output = string_prop(props, "outputColumn")
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| format!("{}_slug", column));
+    let qcol = quote_ident(&column);
+    // Lower, replace any run of non-alphanumerics with a single hyphen,
+    // then trim leading/trailing hyphens.
+    let expr = format!(
+        "trim(regexp_replace(lower(CAST({} AS VARCHAR)), '[^a-z0-9]+', '-', 'g'), '-')",
+        qcol
+    );
+    Ok(format!(
+        "SELECT *, {} AS {} FROM {}",
+        expr,
+        quote_ident(&output),
+        quote_ident(upstream)
+    ))
+}
+
+/// Strip HTML: remove all <...> tag spans via regex. Leaves the text
+/// content. Standard newsletter / scrape-cleanup helper.
+fn build_text_strip_html(inputs: &NodeInputs, props: &JsonValue) -> Result<String, String> {
+    let upstream = inputs.main().ok_or_else(|| missing_input_msg("xf.text.strip_html"))?;
+    let column = string_prop(props, "column")
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| "Strip HTML needs a column".to_string())?;
+    let output = string_prop(props, "outputColumn")
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| column.clone());
+    let qcol = quote_ident(&column);
+    let expr = format!(
+        "regexp_replace(CAST({} AS VARCHAR), '<[^>]+>', '', 'g')",
+        qcol
+    );
+    if output == column {
+        Ok(format!(
+            "SELECT * REPLACE ({} AS {}) FROM {}",
+            expr,
+            qcol,
+            quote_ident(upstream)
+        ))
+    } else {
+        Ok(format!(
+            "SELECT *, {} AS {} FROM {}",
+            expr,
+            quote_ident(&output),
+            quote_ident(upstream)
+        ))
+    }
 }
 
 /// Text Reverse: reverse the characters in a string column.

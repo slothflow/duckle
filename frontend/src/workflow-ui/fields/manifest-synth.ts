@@ -1935,6 +1935,26 @@ function synthStringTransform(comp: ComponentDef): ComponentManifest {
             { key: 'outputColumn', label: 'Output column', kind: 'text', placeholder: '<column>_reversed' },
         ] }], 'upstream');
     }
+    if (comp.id === 'xf.text.replace') {
+        return base(comp, [{ label: 'Literal replace', fields: [
+            { key: 'column', label: 'Column', kind: 'column', required: true },
+            { key: 'search', label: 'Search string', kind: 'text', required: true },
+            { key: 'replacement', label: 'Replacement', kind: 'text' },
+            { key: 'outputColumn', label: 'Output column', kind: 'text', placeholder: 'leave blank to overwrite' },
+        ] }], 'upstream');
+    }
+    if (comp.id === 'xf.text.slug') {
+        return base(comp, [{ label: 'URL slug', fields: [
+            { key: 'column', label: 'Column', kind: 'column', required: true },
+            { key: 'outputColumn', label: 'Output column', kind: 'text', placeholder: '<column>_slug' },
+        ] }], 'upstream');
+    }
+    if (comp.id === 'xf.text.strip_html') {
+        return base(comp, [{ label: 'Strip HTML', fields: [
+            { key: 'column', label: 'Column', kind: 'column', required: true },
+            { key: 'outputColumn', label: 'Output column', kind: 'text', placeholder: 'leave blank to overwrite' },
+        ] }], 'upstream');
+    }
     if (comp.id === 'xf.text.repeat') {
         return base(comp, [{ label: 'Repeat', fields: [
             { key: 'column', label: 'Column', kind: 'column', required: true },

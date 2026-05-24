@@ -2343,6 +2343,57 @@ fn snk_webhook_posts_one_request_per_row() {
 }
 
 #[test]
+fn text_replace_slug_and_strip_html() {
+    let engine = engine_or_skip!();
+    let tmp = tempfile::tempdir().unwrap();
+    let csv = write_file(
+        tmp.path(),
+        "in.csv",
+        "id,title,html\n1,Hello World!,<p>Hi <b>there</b></p>\n2,Foo Bar Baz,<div>x</div>\n",
+    );
+    let out = out_path(tmp.path(), "out.csv");
+    let r = engine.execute_pipeline(&doc(
+        json!([
+            node("s", "src.csv", json!({ "path": csv, "hasHeader": true })),
+            node("rep", "xf.text.replace", json!({
+                "column": "title", "search": "World", "replacement": "Galaxy",
+                "outputColumn": "title2"
+            })),
+            node("sg", "xf.text.slug", json!({ "column": "title", "outputColumn": "slug" })),
+            node("sh", "xf.text.strip_html", json!({ "column": "html", "outputColumn": "text" })),
+            node("k", "snk.csv", json!({ "path": out, "hasHeader": true })),
+        ]),
+        json!([
+            main_edge("e1", "s", "rep"),
+            main_edge("e2", "rep", "sg"),
+            main_edge("e3", "sg", "sh"),
+            main_edge("e4", "sh", "k"),
+        ]),
+    ));
+    assert_eq!(r.status, "ok", "replace/slug/strip_html failed: {:?}", r.error);
+    let r1_title = scalar_string(&format!(
+        "SELECT title2 FROM read_csv_auto('{}') WHERE id = 1",
+        out
+    ));
+    let r1_slug = scalar_string(&format!(
+        "SELECT slug FROM read_csv_auto('{}') WHERE id = 1",
+        out
+    ));
+    let r1_text = scalar_string(&format!(
+        "SELECT text FROM read_csv_auto('{}') WHERE id = 1",
+        out
+    ));
+    let r2_slug = scalar_string(&format!(
+        "SELECT slug FROM read_csv_auto('{}') WHERE id = 2",
+        out
+    ));
+    assert_eq!(r1_title, "Hello Galaxy!");
+    assert_eq!(r1_slug, "hello-world");
+    assert_eq!(r1_text, "Hi there");
+    assert_eq!(r2_slug, "foo-bar-baz");
+}
+
+#[test]
 fn text_reverse_repeat_and_compare() {
     let engine = engine_or_skip!();
     let tmp = tempfile::tempdir().unwrap();
