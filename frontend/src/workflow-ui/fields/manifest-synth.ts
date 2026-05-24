@@ -1269,6 +1269,34 @@ function synthNoSqlSource(comp: ComponentDef): ComponentManifest {
 }
 
 function synthNoSqlSink(comp: ComponentDef): ComponentManifest {
+    if (comp.id === 'snk.elastic' || comp.id === 'snk.opensearch') {
+        const vendor = comp.id === 'snk.elastic' ? 'Elasticsearch' : 'OpenSearch';
+        return base(
+            comp,
+            [
+                {
+                    label: `${vendor} cluster`,
+                    fields: [
+                        { key: 'endpoint', label: 'Cluster endpoint', kind: 'text', required: true, placeholder: 'https://my-cluster.es.cloud.es.io' },
+                        { key: 'index', label: 'Index', kind: 'text', required: true, placeholder: 'docs' },
+                        { key: 'apiKey', label: 'API key', kind: 'text', placeholder: '••••••••' },
+                    ],
+                },
+                {
+                    label: 'Body shape',
+                    fields: [
+                        {
+                            key: 'shapeHint',
+                            label: 'Row shape',
+                            kind: 'text',
+                            description: `Each upstream row is sent as a doc, preceded by a {"index":{"_index":"<index>"}} action line. Content-Type is application/x-ndjson.`,
+                        },
+                    ],
+                },
+            ],
+            'upstream',
+        );
+    }
     return base(
         comp,
         [
@@ -2778,6 +2806,57 @@ function synthVectorSink(comp: ComponentDef): ComponentManifest {
                         label: 'Row shape',
                         kind: 'text',
                         description: 'Each upstream row should already have {id, vector, payload}. Use Project / Add Column upstream to reshape if needed.',
+                    },
+                ],
+            },
+        ], 'upstream');
+    }
+    if (comp.id === 'snk.weaviate') {
+        return base(comp, [
+            {
+                label: 'Weaviate cluster',
+                fields: [
+                    {
+                        key: 'endpoint',
+                        label: 'Cluster endpoint',
+                        kind: 'text',
+                        required: true,
+                        placeholder: 'https://my-cluster.weaviate.network',
+                    },
+                    { key: 'apiKey', label: 'API key', kind: 'text', placeholder: '••••••••' },
+                ],
+            },
+            {
+                label: 'Body shape',
+                fields: [
+                    {
+                        key: 'shapeHint',
+                        label: 'Row shape',
+                        kind: 'text',
+                        description: 'Each upstream row should already have {class, properties, vector}. The engine wraps the batch in {objects: [...]}.',
+                    },
+                ],
+            },
+        ], 'upstream');
+    }
+    if (comp.id === 'snk.milvus') {
+        return base(comp, [
+            {
+                label: 'Milvus cluster',
+                fields: [
+                    { key: 'endpoint', label: 'Cluster endpoint', kind: 'text', required: true, placeholder: 'https://in03-...api.cloud.zilliz.com' },
+                    { key: 'collection', label: 'Collection', kind: 'text', required: true, placeholder: 'documents' },
+                    { key: 'apiKey', label: 'API key (Bearer)', kind: 'text', placeholder: '••••••••' },
+                ],
+            },
+            {
+                label: 'Body shape',
+                fields: [
+                    {
+                        key: 'shapeHint',
+                        label: 'Row shape',
+                        kind: 'text',
+                        description: 'Each upstream row should have {id, vector, ...}. The engine wraps as {collectionName, data: [...]}.',
                     },
                 ],
             },

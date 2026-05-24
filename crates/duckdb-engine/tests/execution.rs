@@ -2393,6 +2393,128 @@ fn text_reverse_repeat_and_compare() {
 }
 
 #[test]
+fn snk_elastic_emits_ndjson_bulk_pairs() {
+    // ES bulk API: action line then doc line, repeated, separated by \n,
+    // Content-Type: application/x-ndjson.
+    use std::io::{Read, Write};
+    use std::net::TcpListener;
+    use std::sync::mpsc;
+    use std::time::Duration;
+
+    let engine = engine_or_skip!();
+    let (tx, rx) = mpsc::channel::<Vec<u8>>();
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+    let port = listener.local_addr().unwrap().port();
+
+    let handle = std::thread::spawn(move || {
+        for stream in listener.incoming().take(1) {
+            let mut stream = match stream { Ok(s) => s, Err(_) => break };
+            stream.set_read_timeout(Some(Duration::from_millis(250))).ok();
+            stream.set_nodelay(true).ok();
+            let mut buf = Vec::with_capacity(8192);
+            let mut chunk = [0u8; 4096];
+            for _ in 0..16 {
+                match stream.read(&mut chunk) {
+                    Ok(0) => break,
+                    Ok(n) => buf.extend_from_slice(&chunk[..n]),
+                    Err(_) => break,
+                }
+            }
+            let _ = tx.send(buf);
+            let _ = stream.write_all(
+                b"HTTP/1.1 200 OK\r\nContent-Length: 14\r\nConnection: close\r\n\r\n{\"errors\":false}",
+            );
+            let _ = stream.flush();
+            let _ = stream.shutdown(std::net::Shutdown::Write);
+            std::thread::sleep(Duration::from_millis(100));
+        }
+    });
+
+    let tmp = tempfile::tempdir().unwrap();
+    let csv = write_file(tmp.path(), "in.csv", "id,name\n1,alice\n2,bob\n");
+    let endpoint = format!("http://127.0.0.1:{}", port);
+    let r = engine.execute_pipeline(&doc(
+        json!([
+            node("s", "src.csv", json!({ "path": csv, "hasHeader": true })),
+            node("e", "snk.elastic", json!({
+                "endpoint": endpoint, "index": "docs"
+            })),
+        ]),
+        json!([main_edge("e1", "s", "e")]),
+    ));
+    assert_eq!(r.status, "ok", "elastic bulk failed: {:?}", r.error);
+
+    let req = rx.recv_timeout(Duration::from_secs(5)).expect("expected 1 bulk request");
+    let _ = handle.join();
+    let body = String::from_utf8_lossy(&req).to_string();
+    // NDJSON: each row should have an action line + doc line.
+    assert!(body.contains("application/x-ndjson"), "expected ndjson content-type: {}", body);
+    assert!(body.contains("\"_index\":\"docs\""), "expected index action with docs: {}", body);
+    assert!(body.contains("alice") && body.contains("bob"), "expected docs in body: {}", body);
+    // Action and doc are separated by \n, action appears twice (one per row).
+    let action_count = body.matches("\"_index\":\"docs\"").count();
+    assert_eq!(action_count, 2, "expected 2 index actions, got {}: {}", action_count, body);
+}
+
+#[test]
+fn snk_milvus_injects_collection_name_alongside_data() {
+    use std::io::{Read, Write};
+    use std::net::TcpListener;
+    use std::sync::mpsc;
+    use std::time::Duration;
+
+    let engine = engine_or_skip!();
+    let (tx, rx) = mpsc::channel::<Vec<u8>>();
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+    let port = listener.local_addr().unwrap().port();
+
+    let handle = std::thread::spawn(move || {
+        for stream in listener.incoming().take(1) {
+            let mut stream = match stream { Ok(s) => s, Err(_) => break };
+            stream.set_read_timeout(Some(Duration::from_millis(250))).ok();
+            stream.set_nodelay(true).ok();
+            let mut buf = Vec::with_capacity(8192);
+            let mut chunk = [0u8; 4096];
+            for _ in 0..16 {
+                match stream.read(&mut chunk) {
+                    Ok(0) => break,
+                    Ok(n) => buf.extend_from_slice(&chunk[..n]),
+                    Err(_) => break,
+                }
+            }
+            let _ = tx.send(buf);
+            let _ = stream.write_all(
+                b"HTTP/1.1 200 OK\r\nContent-Length: 4\r\nConnection: close\r\n\r\n{}\r\n",
+            );
+            let _ = stream.flush();
+            let _ = stream.shutdown(std::net::Shutdown::Write);
+            std::thread::sleep(Duration::from_millis(100));
+        }
+    });
+
+    let tmp = tempfile::tempdir().unwrap();
+    let csv = write_file(tmp.path(), "in.csv", "id,vector\n1,\"[0.1, 0.2]\"\n");
+    let endpoint = format!("http://127.0.0.1:{}", port);
+    let r = engine.execute_pipeline(&doc(
+        json!([
+            node("s", "src.csv", json!({ "path": csv, "hasHeader": true })),
+            node("m", "snk.milvus", json!({
+                "endpoint": endpoint, "collection": "embeddings"
+            })),
+        ]),
+        json!([main_edge("e1", "s", "m")]),
+    ));
+    assert_eq!(r.status, "ok", "milvus insert failed: {:?}", r.error);
+
+    let req = rx.recv_timeout(Duration::from_secs(5)).expect("expected 1 milvus request");
+    let _ = handle.join();
+    let body = String::from_utf8_lossy(&req).to_string();
+    // body shape: {"collectionName":"embeddings","data":[{...}]}
+    assert!(body.contains("\"collectionName\":\"embeddings\""), "expected collectionName: {}", body);
+    assert!(body.contains("\"data\""), "expected data key: {}", body);
+}
+
+#[test]
 fn snk_pinecone_wraps_batch_in_vectors_key() {
     // Pinecone wants {"vectors": [...]}; we should see that exact wrap
     // in the single batched request the engine sends.

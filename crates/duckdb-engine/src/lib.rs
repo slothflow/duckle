@@ -562,15 +562,17 @@ impl DuckdbEngine {
         } else {
             spec.method.to_uppercase()
         };
-        let dispatch = |body: String| -> Result<(), EngineError> {
+        let dispatch = |body: String, default_ct: &str| -> Result<(), EngineError> {
             let mut req = ureq::request(&method, &spec.url);
+            let has_ct = spec
+                .headers
+                .iter()
+                .any(|(k, _)| k.eq_ignore_ascii_case("content-type"));
             for (k, v) in &spec.headers {
                 req = req.set(k, v);
             }
-            // Always set a content-type if the caller didn't, since
-            // every body we send here is JSON.
-            if !spec.headers.iter().any(|(k, _)| k.eq_ignore_ascii_case("content-type")) {
-                req = req.set("content-type", "application/json");
+            if !has_ct {
+                req = req.set("content-type", default_ct);
             }
             match req.send_string(&body) {
                 Ok(_) => Ok(()),
@@ -591,23 +593,51 @@ impl DuckdbEngine {
         };
         match spec.body_shape.as_str() {
             "batch" => {
-                let body = match spec.body_wrap.as_deref() {
-                    Some(wrap_key) => {
-                        // Wrap the array in {wrap_key: [...]} for vendors
-                        // like Pinecone ('vectors') or Qdrant ('points').
-                        let wrapped = serde_json::json!({ wrap_key: rows });
-                        serde_json::to_string(&wrapped).unwrap_or_else(|_| "{}".into())
+                // Wrap the rows array in {body_wrap: [...]} when set,
+                // and merge any body_extras (e.g. Milvus's collectionName).
+                let body = if spec.body_wrap.is_some() || !spec.body_extras.is_empty() {
+                    let mut obj = serde_json::Map::new();
+                    if let Some(wrap_key) = &spec.body_wrap {
+                        obj.insert(
+                            wrap_key.clone(),
+                            serde_json::Value::Array(rows.clone()),
+                        );
                     }
-                    None => serde_json::to_string(&rows).unwrap_or_else(|_| "[]".into()),
+                    for (k, v) in &spec.body_extras {
+                        obj.insert(k.clone(), v.clone());
+                    }
+                    serde_json::to_string(&serde_json::Value::Object(obj))
+                        .unwrap_or_else(|_| "{}".into())
+                } else {
+                    serde_json::to_string(&rows).unwrap_or_else(|_| "[]".into())
                 };
-                dispatch(body)?;
+                dispatch(body, "application/json")?;
                 Ok(format!("sent 1 batch ({} rows) to {}", rows.len(), spec.url))
+            }
+            "ndjson_bulk" => {
+                // Each row produces TWO lines: an action then the doc.
+                // The action template lives in spec.bulk_action (set by
+                // snk.elastic / snk.opensearch with the index name baked in).
+                let action = spec
+                    .bulk_action
+                    .as_deref()
+                    .unwrap_or("{\"index\":{}}");
+                let mut body = String::new();
+                for row in &rows {
+                    body.push_str(action);
+                    body.push('\n');
+                    let doc = serde_json::to_string(row).unwrap_or_else(|_| "{}".into());
+                    body.push_str(&doc);
+                    body.push('\n');
+                }
+                dispatch(body, "application/x-ndjson")?;
+                Ok(format!("bulk-indexed {} docs to {}", rows.len(), spec.url))
             }
             _ => {
                 let mut sent = 0_usize;
                 for row in &rows {
                     let body = serde_json::to_string(row).unwrap_or_else(|_| "{}".into());
-                    dispatch(body)?;
+                    dispatch(body, "application/json")?;
                     sent += 1;
                 }
                 Ok(format!("sent {} rows to {}", sent, spec.url))

@@ -526,8 +526,8 @@ export const PALETTE: Category[] = [
                 components: [
                     snk('mongodb', 'MongoDB', 'planned'),
                     snk('redis', 'Redis', 'planned'),
-                    snk('elastic', 'Elasticsearch', 'planned'),
-                    snk('opensearch', 'OpenSearch', 'planned'),
+                    snk('elastic', 'Elasticsearch', 'available', 'Bulk-index docs via the _bulk NDJSON API (configurable host, index, ApiKey auth)'),
+                    snk('opensearch', 'OpenSearch', 'available', 'Bulk-index docs via the OpenSearch _bulk NDJSON API (same shape as Elasticsearch)'),
                 ],
             },
             {
@@ -537,9 +537,9 @@ export const PALETTE: Category[] = [
                     snk('pgvector', 'pgvector (Postgres)', 'available', 'Write embeddings to a Postgres table (server must have CREATE EXTENSION vector)'),
                     snk('pinecone', 'Pinecone', 'available', 'Upsert vectors to a Pinecone index via /vectors/upsert with Api-Key auth'),
                     snk('qdrant', 'Qdrant', 'available', 'Upsert points to a Qdrant collection via PUT /collections/{name}/points'),
-                    snk('weaviate', 'Weaviate', 'preview'),
+                    snk('weaviate', 'Weaviate', 'available', 'Batch upsert objects to a Weaviate cluster via /v1/batch/objects with Bearer auth'),
                     snk('chroma', 'Chroma', 'preview'),
-                    snk('milvus', 'Milvus', 'preview'),
+                    snk('milvus', 'Milvus', 'available', 'Insert rows to a Milvus collection via /v1/vector/insert'),
                     snk('lancedb', 'LanceDB', 'preview'),
                 ],
             },

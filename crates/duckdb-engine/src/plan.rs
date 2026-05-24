@@ -80,22 +80,33 @@ pub struct TextSearchSpec {
 
 /// snk.webhook / snk.rest / vendor HTTP sinks: one HTTP POST/PUT
 /// per row, or a single batched request whose body is the entire
-/// result as a JSON array. ureq keeps the per-stage CLI shape we
-/// already use; no tokio required.
+/// result as a JSON array or NDJSON bulk doc set. ureq keeps the
+/// per-stage CLI shape we already use; no tokio required.
 #[derive(Debug, Clone)]
 pub struct WebhookSpec {
     pub from_view: String,
     pub url: String,
     pub method: String,
     pub headers: Vec<(String, String)>,
-    /// Body shape: 'row' (one POST per row, body = row JSON) or 'batch'
-    /// (single POST, body = entire result as JSON array).
+    /// Body shape:
+    ///   'row'         - one POST per row, body = row JSON
+    ///   'batch'       - single POST, body = entire result as JSON array
+    ///   'ndjson_bulk' - single POST, NDJSON pairs (action + doc per row)
+    ///                   for Elasticsearch / OpenSearch bulk APIs.
     pub body_shape: String,
     /// Optional batch-mode wrap: when set, the array body is wrapped
-    /// in {body_wrap: [...]} so vendors like Pinecone (wrap='vectors')
-    /// or Qdrant (wrap='points') get the shape they expect without
-    /// the user having to hand-build the JSON.
+    /// in {body_wrap: [...]} so vendors like Pinecone ('vectors'),
+    /// Qdrant ('points'), or Weaviate ('objects') get the shape they
+    /// expect without the user hand-building the JSON.
     pub body_wrap: Option<String>,
+    /// Extra static fields injected into the wrapped object alongside
+    /// the array. Used by Milvus ({collectionName: ..., data: [...]})
+    /// and other vendors whose body has metadata + the array side by
+    /// side.
+    pub body_extras: Vec<(String, serde_json::Value)>,
+    /// NDJSON bulk only: the action line emitted before each row.
+    /// E.g. `{"index":{"_index":"docs"}}` for Elasticsearch bulk.
+    pub bulk_action: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -465,6 +476,8 @@ fn build_stage(
             headers,
             body_shape,
             body_wrap,
+            body_extras: Vec::new(),
+            bulk_action: None,
         });
         (String::new(), StageKind::Sink, Some(from_view.to_string()))
     } else if component_id == "snk.pinecone" {
@@ -489,6 +502,8 @@ fn build_stage(
             headers,
             body_shape: "batch".into(),
             body_wrap: Some("vectors".into()),
+            body_extras: Vec::new(),
+            bulk_action: None,
         });
         (String::new(), StageKind::Sink, Some(from_view.to_string()))
     } else if component_id == "snk.qdrant" {
@@ -520,6 +535,101 @@ fn build_stage(
             headers,
             body_shape: "batch".into(),
             body_wrap: Some("points".into()),
+            body_extras: Vec::new(),
+            bulk_action: None,
+        });
+        (String::new(), StageKind::Sink, Some(from_view.to_string()))
+    } else if component_id == "snk.weaviate" {
+        // Weaviate batch objects endpoint:
+        //   POST {endpoint}/v1/batch/objects
+        //   { "objects": [ { class, properties, vector }, ... ] }
+        // Auth via Bearer token (apiKey) when supplied.
+        let from_view = inputs.main().ok_or_else(|| missing_input(node, "main"))?;
+        let endpoint = string_prop(&props, "endpoint")
+            .filter(|s| !s.is_empty())
+            .ok_or_else(|| EngineError::Config(format!("{}: endpoint required (e.g. 'https://my-cluster.weaviate.network')", component_id)))?;
+        let api_key = string_prop(&props, "apiKey").unwrap_or_default();
+        let url = format!("{}/v1/batch/objects", endpoint.trim_end_matches('/'));
+        let mut headers = headers_from_props(&props);
+        if !api_key.is_empty() {
+            headers.push(("Authorization".into(), format!("Bearer {}", api_key)));
+        }
+        webhook = Some(WebhookSpec {
+            from_view: from_view.to_string(),
+            url,
+            method: "POST".into(),
+            headers,
+            body_shape: "batch".into(),
+            body_wrap: Some("objects".into()),
+            body_extras: Vec::new(),
+            bulk_action: None,
+        });
+        (String::new(), StageKind::Sink, Some(from_view.to_string()))
+    } else if component_id == "snk.milvus" {
+        // Milvus REST insert:
+        //   POST {endpoint}/v1/vector/insert
+        //   { "collectionName": "...", "data": [ {id, vector, ...}, ... ] }
+        // body_extras puts the collectionName next to data.
+        let from_view = inputs.main().ok_or_else(|| missing_input(node, "main"))?;
+        let endpoint = string_prop(&props, "endpoint")
+            .filter(|s| !s.is_empty())
+            .ok_or_else(|| EngineError::Config(format!("{}: endpoint required", component_id)))?;
+        let collection = string_prop(&props, "collection")
+            .filter(|s| !s.is_empty())
+            .ok_or_else(|| EngineError::Config(format!("{}: collection required", component_id)))?;
+        let api_key = string_prop(&props, "apiKey").unwrap_or_default();
+        let url = format!("{}/v1/vector/insert", endpoint.trim_end_matches('/'));
+        let mut headers = headers_from_props(&props);
+        if !api_key.is_empty() {
+            headers.push(("Authorization".into(), format!("Bearer {}", api_key)));
+        }
+        webhook = Some(WebhookSpec {
+            from_view: from_view.to_string(),
+            url,
+            method: "POST".into(),
+            headers,
+            body_shape: "batch".into(),
+            body_wrap: Some("data".into()),
+            body_extras: vec![(
+                "collectionName".into(),
+                serde_json::Value::String(collection),
+            )],
+            bulk_action: None,
+        });
+        (String::new(), StageKind::Sink, Some(from_view.to_string()))
+    } else if component_id == "snk.elastic" || component_id == "snk.opensearch" {
+        // Elasticsearch / OpenSearch bulk API:
+        //   POST {host}/{index}/_bulk
+        //   action_line\n
+        //   document_line\n
+        //   ... (repeated, NDJSON, no trailing comma)
+        // Content-Type: application/x-ndjson.
+        let from_view = inputs.main().ok_or_else(|| missing_input(node, "main"))?;
+        let host = string_prop(&props, "endpoint")
+            .or_else(|| string_prop(&props, "host"))
+            .filter(|s| !s.is_empty())
+            .ok_or_else(|| EngineError::Config(format!("{}: endpoint required", component_id)))?;
+        let index = string_prop(&props, "index")
+            .filter(|s| !s.is_empty())
+            .ok_or_else(|| EngineError::Config(format!("{}: index required", component_id)))?;
+        let api_key = string_prop(&props, "apiKey").unwrap_or_default();
+        let url = format!("{}/_bulk", host.trim_end_matches('/'));
+        let mut headers = headers_from_props(&props);
+        headers.push(("Content-Type".into(), "application/x-ndjson".into()));
+        if !api_key.is_empty() {
+            headers.push(("Authorization".into(), format!("ApiKey {}", api_key)));
+        }
+        // index action template: {"index": {"_index": "<index>"}}
+        let action_line = format!("{{\"index\":{{\"_index\":\"{}\"}}}}", index.replace('"', "\\\""));
+        webhook = Some(WebhookSpec {
+            from_view: from_view.to_string(),
+            url,
+            method: "POST".into(),
+            headers,
+            body_shape: "ndjson_bulk".into(),
+            body_wrap: None,
+            body_extras: Vec::new(),
+            bulk_action: Some(action_line),
         });
         (String::new(), StageKind::Sink, Some(from_view.to_string()))
     } else if component_id.starts_with("snk.") {
