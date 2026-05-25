@@ -6,10 +6,10 @@ reel; this is the full ledger.
 
 The palette currently carries **312 components**, broken down:
 
-- **291 available** - executes on the DuckDB engine today
+- **292 available** - executes on the DuckDB engine today
 - **5 preview** - configurable in the designer (drag, wire, set
   properties); execution is being wired engine-by-engine
-- **16 planned** - reserved in the palette so the roadmap is visible,
+- **15 planned** - reserved in the palette so the roadmap is visible,
   not yet executable
 
 If you drop a planned or preview tile and try to run, the executor
@@ -25,7 +25,7 @@ it's a preview component.` rather than silently doing nothing.
 | Component | Notes |
 |---|---|
 | `src.pulsar` / `snk.pulsar` | The `pulsar` Rust crate compiles its protobuf definitions with `prost-build` which requires `protoc` to be installed at build time. That breaks the self-contained build. Options: vendor protoc via `protoc-bin-vendored`; hand-roll the subset of Pulsar protobuf ops we need; wait for an alt crate. **Deferred until a build approach lands.** Pulsar has no REST data plane to fall back on. |
-| `src.kinesis` / `snk.kinesis` | AWS SDK for Rust; sizeable dep tree |
+| `snk.kinesis` | Kinesis PutRecord/PutRecords via HTTP+SigV4 - same path as src.kinesis (the SigV4 helper is in place); just needs the publish flow wired |
 | `src.eventhubs` | Azure AMQP via `azure_sdk_eventhubs` |
 
 `src.kafka`, `snk.kafka`, `src.redpanda`, `snk.redpanda` shipped via

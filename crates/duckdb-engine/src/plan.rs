@@ -175,6 +175,8 @@ pub struct Stage {
     pub webhook_source: Option<WebhookSourceSpec>,
     /// DynamoDB Scan via direct HTTP + SigV4 (no AWS SDK).
     pub dynamodb_source: Option<DynamoDbSourceSpec>,
+    /// Kinesis single-shard read via direct HTTP + SigV4.
+    pub kinesis_source: Option<KinesisSourceSpec>,
     /// xf.ai.embed (per-row embedding).
     pub ai_embed: Option<AiEmbedSpec>,
     /// code.wasm (per-row WebAssembly transform).
@@ -671,6 +673,26 @@ pub struct DynamoDbSourceSpec {
     pub table_name: String,
     pub limit_per_page: u64,
     pub max_pages: u64,
+}
+
+/// src.kinesis: read records from a single Kinesis shard via direct
+/// HTTP + SigV4. ListShards -> GetShardIterator(TRIM_HORIZON or
+/// LATEST) -> GetRecords loop until max_records or no more data.
+/// Each record's Data is base64-decoded; if the decoded payload is
+/// valid JSON object, that object is the row; otherwise we emit
+/// {partition_key, sequence_number, data}. Multi-shard parallelism
+/// deferred to a follow-up.
+#[derive(Debug, Clone)]
+pub struct KinesisSourceSpec {
+    pub node_id: String,
+    pub region: String,
+    pub access_key_id: String,
+    pub secret_access_key: String,
+    pub session_token: Option<String>,
+    pub stream_name: String,
+    pub shard_index: usize,
+    pub iterator_type: String,
+    pub max_records: u64,
 }
 
 /// src.webhook: bind 127.0.0.1:port, accept up to `max_requests`
@@ -1455,6 +1477,7 @@ fn build_stage(
     let mut email_sink: Option<EmailSinkSpec> = None;
     let mut webhook_source: Option<WebhookSourceSpec> = None;
     let mut dynamodb_source: Option<DynamoDbSourceSpec> = None;
+    let mut kinesis_source: Option<KinesisSourceSpec> = None;
     let mut ai_embed: Option<AiEmbedSpec> = None;
     let mut wasm: Option<WasmSpec> = None;
     let mut javascript: Option<JavaScriptSpec> = None;
@@ -2581,6 +2604,43 @@ fn build_stage(
                 .filter(|n| *n > 0),
         });
         (String::new(), StageKind::View, None)
+    } else if component_id == "src.kinesis" {
+        // Single-shard Kinesis read. iteratorType in
+        // {TRIM_HORIZON, LATEST, AT_TIMESTAMP, AT/AFTER_SEQUENCE_NUMBER};
+        // we expose only the simple two-value choice for v1.
+        let region = string_prop(&props, "region")
+            .filter(|s| !s.is_empty())
+            .ok_or_else(|| EngineError::Config(format!("{}: region required", component_id)))?;
+        let access_key_id = string_prop(&props, "accessKeyId")
+            .filter(|s| !s.is_empty())
+            .ok_or_else(|| EngineError::Config(format!("{}: accessKeyId required", component_id)))?;
+        let secret_access_key = string_prop(&props, "secretAccessKey")
+            .filter(|s| !s.is_empty())
+            .ok_or_else(|| EngineError::Config(format!("{}: secretAccessKey required", component_id)))?;
+        let stream_name = string_prop(&props, "streamName")
+            .filter(|s| !s.is_empty())
+            .ok_or_else(|| EngineError::Config(format!("{}: streamName required", component_id)))?;
+        kinesis_source = Some(KinesisSourceSpec {
+            node_id: node.id.clone(),
+            region,
+            access_key_id,
+            secret_access_key,
+            session_token: string_prop(&props, "sessionToken").filter(|s| !s.is_empty()),
+            stream_name,
+            shard_index: props
+                .get("shardIndex")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0) as usize,
+            iterator_type: string_prop(&props, "iteratorType")
+                .filter(|s| s == "TRIM_HORIZON" || s == "LATEST")
+                .unwrap_or_else(|| "TRIM_HORIZON".into()),
+            max_records: props
+                .get("maxRecords")
+                .and_then(|v| v.as_u64())
+                .filter(|n| *n > 0)
+                .unwrap_or(1000),
+        });
+        (String::new(), StageKind::View, None)
     } else if component_id == "src.dynamodb" {
         // DynamoDB Scan via direct HTTP + SigV4. Pure JSON wire
         // protocol; we avoid pulling in the 300-service aws-sdk-rust
@@ -3615,6 +3675,7 @@ fn build_stage(
         email_sink,
         webhook_source,
         dynamodb_source,
+        kinesis_source,
         wait_ms,
         retry_attempts,
         retry_backoff_ms,

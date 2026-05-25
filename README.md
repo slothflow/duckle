@@ -51,7 +51,7 @@ Duckle is in **early development**. The visual designer, the DuckDB execution en
 
 **Scope, stated plainly:** Duckle is a single-machine, embedded studio. If you outgrow one box, point Duckle's output at the system that scales. It will not pretend to be a cluster.
 
-The component palette ships **312 nodes** so the roadmap is visible in the product itself. As of the latest engine cut: **291 available**, **5 preview**, **16 planned**. Each node is tagged by availability:
+The component palette ships **312 nodes** so the roadmap is visible in the product itself. As of the latest engine cut: **292 available**, **5 preview**, **15 planned**. Each node is tagged by availability:
 
 - **Available** runs on the DuckDB engine today.
 - **Preview** is configurable in the designer now (drag, wire, set properties); execution is being wired engine-by-engine. This currently covers the AI transforms and some vector DB read sources.
@@ -99,8 +99,8 @@ Duckle is not a CSV tool with extras. It reads a broad set of formats and source
 | **Cloud warehouses** | **Snowflake** (SQL API + PAT/JWT auth, paginated), **BigQuery** (community extension), **Redshift** (postgres ATTACH), **Databricks SQL** (Statement Execution API + chunk follow), **Azure Synapse** (TDS) | Available |
 | **Avro files** | Apache Avro container files (.avro / .ocf) via the pure-Rust `apache-avro` crate. The OCF header carries the schema; no schema config needed. | Available |
 | **XML** | Read XML via `quick-xml` with a slash-separated rowPath; attributes prefix `@`, text goes to `_text`, repeated siblings collapse to arrays | Available |
-| **Streaming** | **Apache Kafka / Redpanda** (batch-consume via the pure-Rust `rskafka` driver), **NATS JetStream** (subscribe-with-timeout via `async-nats`), **GCP Pub/Sub** (pull via REST API + auto-ack), **RabbitMQ** (basic_get poll loop via the pure-Rust `lapin` AMQP driver) | Available |
-| **Streaming** | Pulsar, Kinesis, Event Hubs | Planned |
+| **Streaming** | **Apache Kafka / Redpanda** (batch-consume via the pure-Rust `rskafka` driver), **NATS JetStream** (subscribe-with-timeout via `async-nats`), **GCP Pub/Sub** (pull via REST API + auto-ack), **RabbitMQ** (basic_get poll loop via the pure-Rust `lapin` AMQP driver), **AWS Kinesis** (single-shard read via direct HTTP + SigV4 - no AWS SDK; ListShards -> GetShardIterator -> GetRecords) | Available |
+| **Streaming** | Pulsar, Event Hubs, multi-shard Kinesis | Planned |
 | **APIs and SaaS** | **REST** (cursor / offset / page / Link header pagination), **GraphQL**. Vendor tiles: **Salesforce, HubSpot, Pipedrive, Zendesk, Intercom, Stripe, QuickBooks, Xero, Shopify, Notion, Airtable, Asana, Trello, ClickUp, Monday.com, GitHub, GitLab, Linear, Jira, Slack, Discord, Telegram, Twilio, Mailchimp, SendGrid, Segment** (thin pre-configured wrappers over REST/GraphQL) | Available |
 | **APIs and SaaS** | **OData v4** (thin alias over src.rest; default responsePath `/value` + follows `@odata.nextLink` across pages; works with SAP, D365, Microsoft Graph) | Available |
 | **APIs and SaaS** | **SOAP** / **generic XML APIs** (thin alias; POST + `text/xml` defaults; `responseFormat=xml` walks the element path into the response body. SOAPAction header settable via `soapAction` prop. Namespace prefixes (`soap:Envelope`) match local-name in the row path) | Available |

@@ -33,12 +33,12 @@ use plan::{
     ClickHouseSourceSpec, ClipboardSourceSpec, DatabricksSinkSpec, DatabricksSourceSpec,
     DynamoDbSourceSpec, ElasticSourceSpec, EmailSinkSpec, EmailSourceSpec, FormatFileSinkSpec,
     FormatFileSourceSpec, FormatKind, FtpSourceSpec, GitSourceSpec, JavaScriptSpec, KafkaSinkSpec,
-    KafkaSourceSpec, MilvusSourceSpec, MongoSinkSpec, MongoSourceSpec, NatsSinkSpec, NatsSourceSpec,
-    OracleSinkSpec, OracleSourceSpec, PubSubSinkSpec, PubSubSourceSpec, QdrantSourceSpec,
-    RabbitSinkSpec, RabbitSourceSpec, RedisSinkSpec, RedisSourceSpec, RestPagination,
-    RestResponseFormat, RestSourceSpec, ShellSpec, SnowflakeAuth, SnowflakeSinkSpec,
-    SnowflakeSourceSpec, SqlServerSinkSpec, SqlServerSourceSpec, WasmSpec, WeaviateSourceSpec,
-    WebhookSourceSpec, WebhookSpec, XmlSinkSpec, XmlSourceSpec,
+    KafkaSourceSpec, KinesisSourceSpec, MilvusSourceSpec, MongoSinkSpec, MongoSourceSpec,
+    NatsSinkSpec, NatsSourceSpec, OracleSinkSpec, OracleSourceSpec, PubSubSinkSpec,
+    PubSubSourceSpec, QdrantSourceSpec, RabbitSinkSpec, RabbitSourceSpec, RedisSinkSpec,
+    RedisSourceSpec, RestPagination, RestResponseFormat, RestSourceSpec, ShellSpec, SnowflakeAuth,
+    SnowflakeSinkSpec, SnowflakeSourceSpec, SqlServerSinkSpec, SqlServerSourceSpec, WasmSpec,
+    WeaviateSourceSpec, WebhookSourceSpec, WebhookSpec, XmlSinkSpec, XmlSourceSpec,
 };
 
 #[derive(Debug, Error)]
@@ -574,6 +574,8 @@ impl DuckdbEngine {
                     self.run_email_sink(&db_path, spec)
                 } else if let Some(spec) = stage.dynamodb_source.as_ref() {
                     self.run_dynamodb_source(&db_path, spec)
+                } else if let Some(spec) = stage.kinesis_source.as_ref() {
+                    self.run_kinesis_source(&db_path, spec)
                 } else if let Some(spec) = stage.upsert.as_ref() {
                     // Relational-DB upsert: DESCRIBE the upstream first to
                     // get the column list, then assemble INSERT ... ON
@@ -2480,6 +2482,176 @@ impl DuckdbEngine {
         Ok(format!(
             "ai.embed ({}): embedded {} row(s) into {}",
             spec.model, count, spec.node_id
+        ))
+    }
+
+    /// src.kinesis: single-shard read via direct HTTP + AWS SigV4
+    /// (reuses the helper shipped with src.dynamodb). 3-step protocol
+    /// per AWS Kinesis API:
+    ///   1. ListShards -> get shard IDs
+    ///   2. GetShardIterator -> get a starting iterator
+    ///   3. GetRecords loop -> consume up to max_records
+    /// Each record's Data field is base64-encoded; if the decoded
+    /// payload is a JSON object the object is the row, otherwise we
+    /// fall back to {partition_key, sequence_number, data}.
+    fn run_kinesis_source(
+        &self,
+        db: &Path,
+        spec: &KinesisSourceSpec,
+    ) -> Result<String, EngineError> {
+        use base64::engine::general_purpose::STANDARD as B64;
+        use base64::Engine as _;
+        self.check_cancelled()?;
+        let host = format!("kinesis.{}.amazonaws.com", spec.region);
+        let endpoint = format!("https://{}/", host);
+        // Helper: sign + post a Kinesis JSON request, return parsed response.
+        let call = |target: &str, body: &serde_json::Value| -> Result<JsonValue, EngineError> {
+            let body_str = body.to_string();
+            let now = chrono::Utc::now();
+            let datetime = now.format("%Y%m%dT%H%M%SZ").to_string();
+            let date = now.format("%Y%m%d").to_string();
+            let signed = aws_sigv4_sign(
+                "POST",
+                "/",
+                "",
+                &host,
+                &datetime,
+                &date,
+                "kinesis",
+                &spec.region,
+                target,
+                &body_str,
+                &spec.access_key_id,
+                &spec.secret_access_key,
+                spec.session_token.as_deref(),
+            );
+            let mut req = ureq::post(&endpoint)
+                .set("Host", &host)
+                .set("Content-Type", "application/x-amz-json-1.0")
+                .set("X-Amz-Date", &datetime)
+                .set("X-Amz-Target", target)
+                .set("Authorization", &signed.authorization);
+            if let Some(tok) = &spec.session_token {
+                req = req.set("X-Amz-Security-Token", tok);
+            }
+            match req.send_string(&body_str) {
+                Ok(r) => r
+                    .into_json()
+                    .map_err(|e| EngineError::Query(format!("kinesis parse: {}", e))),
+                Err(ureq::Error::Status(code, r)) => {
+                    let b = r.into_string().unwrap_or_default();
+                    Err(EngineError::Query(format!(
+                        "kinesis HTTP {} {}: {}",
+                        code, target, b
+                    )))
+                }
+                Err(e) => Err(EngineError::Query(format!("kinesis transport: {}", e))),
+            }
+        };
+        // 1. ListShards
+        let shards_resp = call(
+            "Kinesis_20131202.ListShards",
+            &serde_json::json!({"StreamName": spec.stream_name}),
+        )?;
+        let shards = shards_resp
+            .get("Shards")
+            .and_then(|v| v.as_array())
+            .cloned()
+            .unwrap_or_default();
+        let shard_id = shards
+            .get(spec.shard_index)
+            .and_then(|s| s.get("ShardId"))
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| {
+                EngineError::Query(format!(
+                    "kinesis: no shard at index {} (got {} shards)",
+                    spec.shard_index,
+                    shards.len()
+                ))
+            })?;
+        // 2. GetShardIterator
+        let iter_resp = call(
+            "Kinesis_20131202.GetShardIterator",
+            &serde_json::json!({
+                "StreamName": spec.stream_name,
+                "ShardId": shard_id,
+                "ShardIteratorType": spec.iterator_type,
+            }),
+        )?;
+        let mut shard_iter = iter_resp
+            .get("ShardIterator")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| EngineError::Query("kinesis: no ShardIterator returned".into()))?
+            .to_string();
+        // 3. GetRecords loop.
+        let mut out: Vec<JsonValue> = Vec::new();
+        let mut polls = 0;
+        while (out.len() as u64) < spec.max_records && polls < 100 {
+            self.check_cancelled()?;
+            let remaining = (spec.max_records - out.len() as u64).min(10000);
+            let rec_resp = call(
+                "Kinesis_20131202.GetRecords",
+                &serde_json::json!({
+                    "ShardIterator": shard_iter,
+                    "Limit": remaining,
+                }),
+            )?;
+            let records = rec_resp
+                .get("Records")
+                .and_then(|v| v.as_array())
+                .cloned()
+                .unwrap_or_default();
+            let got = records.len();
+            for r in records {
+                if (out.len() as u64) >= spec.max_records {
+                    break;
+                }
+                let data_b64 = r.get("Data").and_then(|v| v.as_str()).unwrap_or("");
+                let partition_key = r
+                    .get("PartitionKey")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                let sequence_number = r
+                    .get("SequenceNumber")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                let decoded = B64.decode(data_b64).unwrap_or_default();
+                let decoded_str = String::from_utf8_lossy(&decoded).into_owned();
+                // If JSON object, that IS the row; otherwise fallback row.
+                match serde_json::from_str::<JsonValue>(&decoded_str) {
+                    Ok(JsonValue::Object(o)) => out.push(JsonValue::Object(o)),
+                    _ => {
+                        let mut row = serde_json::Map::new();
+                        row.insert("partition_key".into(), JsonValue::String(partition_key));
+                        row.insert(
+                            "sequence_number".into(),
+                            JsonValue::String(sequence_number),
+                        );
+                        row.insert("data".into(), JsonValue::String(decoded_str));
+                        out.push(JsonValue::Object(row));
+                    }
+                }
+            }
+            // Advance iterator. If response gives a NextShardIterator,
+            // we follow it; otherwise we're done.
+            match rec_resp.get("NextShardIterator").and_then(|v| v.as_str()) {
+                Some(next) => shard_iter = next.to_string(),
+                None => break,
+            }
+            // If this poll returned nothing and we're at the tip,
+            // stop - don't busy-loop on an empty stream.
+            if got == 0 {
+                break;
+            }
+            polls += 1;
+        }
+        let count = out.len();
+        materialize_jsonobjects_as_table(db, &spec.node_id, &out)?;
+        Ok(format!(
+            "kinesis: read {} record(s) from {}/shard[{}] -> {}",
+            count, spec.stream_name, spec.shard_index, spec.node_id
         ))
     }
 
