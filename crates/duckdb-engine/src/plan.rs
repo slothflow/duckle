@@ -3803,6 +3803,7 @@ fn build_view_sql(
         "xf.num.sign" => build_sign(inputs, props),
         "xf.rank.filter" => build_rank_filter(inputs, props),
         "xf.fill_forward" => build_fill_forward(inputs, props),
+        "xf.fill_backward" => build_fill_backward(inputs, props),
         "xf.cumulative" => build_cumulative(inputs, props),
         "xf.dt.bin" => build_dt_bin(inputs, props),
         "xf.arr.length" => build_arr_length(inputs, props),
@@ -6805,6 +6806,41 @@ fn build_fill_forward(inputs: &NodeInputs, props: &JsonValue) -> Result<String, 
     let qcol = quote_ident(&column);
     Ok(format!(
         "SELECT * REPLACE (last_value({col} IGNORE NULLS) OVER ({part}ORDER BY {ord} ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS {col}) FROM {up}",
+        col = qcol,
+        part = partition_clause,
+        ord = quote_ident(&order_col),
+        up = quote_ident(upstream)
+    ))
+}
+
+/// Backward-fill: replace NULL values with the next non-null value
+/// within a group, ordered by a sort column. Pandas-style bfill /
+/// "fill up" - useful when the first readings of a series are missing
+/// and you'd rather impute from the future than leave them null.
+/// Uses first_value(col IGNORE NULLS) over an unbounded following
+/// window so the current row sees the nearest non-null ahead of it.
+fn build_fill_backward(inputs: &NodeInputs, props: &JsonValue) -> Result<String, String> {
+    let upstream = inputs.main().ok_or_else(|| missing_input_msg("xf.fill_backward"))?;
+    let column = string_prop(props, "column")
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| "Backward Fill needs a column".to_string())?;
+    let order_col = string_prop(props, "orderBy")
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| "Backward Fill needs an orderBy column".to_string())?;
+    let partition: Vec<String> = columns_from_props(props, "partitionBy").unwrap_or_default();
+    let partition_clause = if partition.is_empty() {
+        String::new()
+    } else {
+        let cols = partition
+            .iter()
+            .map(|c| quote_ident(c))
+            .collect::<Vec<_>>()
+            .join(", ");
+        format!("PARTITION BY {} ", cols)
+    };
+    let qcol = quote_ident(&column);
+    Ok(format!(
+        "SELECT * REPLACE (first_value({col} IGNORE NULLS) OVER ({part}ORDER BY {ord} ROWS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING) AS {col}) FROM {up}",
         col = qcol,
         part = partition_clause,
         ord = quote_ident(&order_col),

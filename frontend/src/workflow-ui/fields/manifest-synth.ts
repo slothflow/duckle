@@ -2134,6 +2134,18 @@ function synthRowTransform(comp: ComponentDef): ComponentManifest {
             },
         ], 'upstream');
     }
+    if (id === 'xf.fill_backward') {
+        return base(comp, [
+            {
+                label: 'Backward fill',
+                fields: [
+                    { key: 'column', label: 'Column to fill', kind: 'column', required: true },
+                    { key: 'orderBy', label: 'Order by column', kind: 'column', required: true, description: 'The window is ordered by this column (usually a timestamp). Nulls take the next non-null value at a later position in the order.' },
+                    { key: 'partitionBy', label: 'Group by (optional)', kind: 'columns', description: 'Fill independently within each group.' },
+                ],
+            },
+        ], 'upstream');
+    }
     if (id === 'xf.topn' || id === 'xf.sample' || id === 'xf.skip') {
         return base(comp, [
             {

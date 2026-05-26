@@ -4765,6 +4765,55 @@ fn fill_forward_propagates_last_non_null() {
 }
 
 #[test]
+fn fill_backward_propagates_next_non_null() {
+    let engine = engine_or_skip!();
+    let tmp = tempfile::tempdir().unwrap();
+    // Two sensors. Each has a gap at the start (null at ts=1 for A,
+    // nulls at ts=1 and ts=2 for B) - classic case where backward
+    // fill is the right tool and forward fill would leave nulls.
+    let csv = write_file(
+        tmp.path(),
+        "readings.csv",
+        "sensor,ts,reading\nA,1,\nA,2,10\nA,3,\nA,4,20\nB,1,\nB,2,\nB,3,15\n",
+    );
+    let out = out_path(tmp.path(), "out.csv");
+    let r = engine.execute_pipeline(&doc(
+        json!([
+            node("s", "src.csv", json!({ "path": csv, "hasHeader": true })),
+            node("f", "xf.fill_backward", json!({
+                "column": "reading", "orderBy": "ts", "partitionBy": ["sensor"]
+            })),
+            node("k", "snk.csv", json!({ "path": out, "hasHeader": true })),
+        ]),
+        json!([main_edge("e1", "s", "f"), main_edge("e2", "f", "k")]),
+    ));
+    assert_eq!(r.status, "ok", "fill_backward failed: {:?}", r.error);
+    // A@ts=1 was null; should fill to 10 (next non-null at ts=2).
+    let r_a1 = scalar_string(&format!(
+        "SELECT CAST(reading AS VARCHAR) FROM read_csv_auto('{}') WHERE sensor = 'A' AND ts = 1",
+        out
+    ));
+    // A@ts=3 was null; should fill to 20 (next non-null at ts=4).
+    let r_a3 = scalar_string(&format!(
+        "SELECT CAST(reading AS VARCHAR) FROM read_csv_auto('{}') WHERE sensor = 'A' AND ts = 3",
+        out
+    ));
+    // B@ts=1 and B@ts=2 were both null; both should fill to 15 (next non-null at ts=3).
+    let r_b1 = scalar_string(&format!(
+        "SELECT CAST(reading AS VARCHAR) FROM read_csv_auto('{}') WHERE sensor = 'B' AND ts = 1",
+        out
+    ));
+    let r_b2 = scalar_string(&format!(
+        "SELECT CAST(reading AS VARCHAR) FROM read_csv_auto('{}') WHERE sensor = 'B' AND ts = 2",
+        out
+    ));
+    assert_eq!(r_a1, "10", "A@ts=1 should backward-fill to 10");
+    assert_eq!(r_a3, "20", "A@ts=3 should backward-fill to 20");
+    assert_eq!(r_b1, "15", "B@ts=1 should backward-fill to 15");
+    assert_eq!(r_b2, "15", "B@ts=2 should backward-fill to 15 (not bleed from A)");
+}
+
+#[test]
 fn text_base64_roundtrips() {
     let engine = engine_or_skip!();
     let tmp = tempfile::tempdir().unwrap();

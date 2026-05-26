@@ -57,7 +57,7 @@
 
 - [Capabilities matrix](#capabilities)
 - [Sources](#sources-73-available)
-- [Transforms](#transforms-122-available)
+- [Transforms](#transforms-123-available)
 - [Sinks](#sinks-57-available)
 - [Data quality](#data-quality-12-available)
 - [Custom code](#custom-code-7-available)
@@ -210,12 +210,12 @@ Duckle is not a CSV tool with extras. It reads a broad set of formats and source
 | **Desktop** | System clipboard (pure-Rust `arboard`, auto-detects JSON-array shape) | Available |
 | **Repos** | Git (commit log or file tree from a local working copy; shells out to system `git` CLI) | Available |
 
-### Transforms (122 available)
+### Transforms (123 available)
 
 | Group | Operations |
 |---|---|
 | **Fields** | Map (visual row mapper), Project / Select, Cast, Rename, Add / Drop / Reorder Column, Coalesce, UUID v4 |
-| **Rows** | Filter (visual or raw SQL, with reject port), Distinct, Sample, Top N / Limit, Sort, Skip, Top N per Group, Forward Fill |
+| **Rows** | Filter (visual or raw SQL, with reject port), Distinct, Sample, Top N / Limit, Sort, Skip, Top N per Group, Forward Fill, Backward Fill |
 | **Aggregate** | Group By, Rollup, Cube, Count, Window Aggregate, Cumulative, Approx Quantile (t-digest), Approx Count Distinct (HyperLogLog) |
 | **Join** | Inner, Left, Right, Full Outer, Cross, Lookup, Semi, Anti, Spatial Join |
 | **Set operations** | Union, Union All, Intersect, Except / Minus |
@@ -454,7 +454,7 @@ A wider tour of the workflow.
 | Step | What you do | Where to look |
 |---|---|---|
 | **1. Sources** | Drag a source, point it at a file / DB / cloud URL / SaaS endpoint. Click **Autodetect schema** to read columns + a sample. | [Sources reference](#sources-73-available) |
-| **2. Transforms** | Wire transforms to source output ports. Configure in the Properties panel. **Preview** tab shows live rows; **Plan** tab shows generated SQL. | [Transforms reference](#transforms-122-available) |
+| **2. Transforms** | Wire transforms to source output ports. Configure in the Properties panel. **Preview** tab shows live rows; **Plan** tab shows generated SQL. | [Transforms reference](#transforms-123-available) |
 | **3. Data quality** | Drop in a validator (Not-Null, Range, Regex, Uniqueness). Passing rows continue on the main port; failures route to the **reject** port. | [Data quality reference](#data-quality-12-available) |
 | **4. Sinks** | Finish with a sink (file, DB, cloud, vector DB, message bus, email). Set write mode (overwrite, append, truncate, upsert). | [Sinks reference](#sinks-57-available) |
 | **5. Run** | Press **Run** to execute on DuckDB. Nodes light up stage by stage; **Output** + **Console** show row counts, timing, errors. Stop button kills mid-run. | [Run feedback](#orchestration-and-workspace) |
