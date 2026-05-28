@@ -128,6 +128,14 @@ lettre = { version = "0.11", default-features = false, features = ["builder", "s
 default = ["oracle"]
 oracle = ["dep:oracle"]
 
+# Issue #4 repro harness: connects to a live Oracle, replays
+# run_oracle_source faithfully, and times each phase. Gated so a
+# --no-default-features build (no `oracle` dep) skips it instead of
+# failing on the unresolved `oracle::` imports.
+[[example]]
+name = "oracle_repro"
+required-features = ["oracle"]
+
 [dev-dependencies]
 tempfile = "3.10"
 rand = "0.8"

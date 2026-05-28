@@ -1670,8 +1670,52 @@ impl DuckdbEngine {
         db: &Path,
         spec: &OracleSourceSpec,
     ) -> Result<String, EngineError> {
+        // Liveness trace (issue #4): each phase plus periodic row progress
+        // is timestamped to a temp file so a stuck pull can be located from
+        // the log even when the desktop shows no console. Truncated per run.
+        let trace_path = std::env::temp_dir().join("duckle-oracle-trace.log");
+        let _ = std::fs::remove_file(&trace_path);
+        let t0 = std::time::Instant::now();
+        let mark = |msg: &str| {
+            use std::io::Write;
+            let line = format!(
+                "[+{:>7}ms] [{}] {}",
+                t0.elapsed().as_millis(),
+                spec.node_id,
+                msg
+            );
+            if let Ok(mut f) = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&trace_path)
+            {
+                let _ = writeln!(f, "{}", line);
+            }
+            eprintln!("[duckle:oracle] {}", line);
+        };
+        mark(&format!("connecting to {} as {}", spec.connect, spec.user));
+
         let conn = oracle::Connection::connect(&spec.user, &spec.password, &spec.connect)
             .map_err(|e| EngineError::Query(format!("oracle connect: {}", e)))?;
+        mark("connected; normalizing NLS session formats");
+
+        // Issue #4 robustness (not a confirmed fix): pin the session NLS
+        // formats to a stable ISO-ish shape so serialized DATE/TIMESTAMP
+        // strings do not vary with the server locale. A format that forces
+        // read_json_auto to re-sniff every row is the leading remaining
+        // hypothesis for the wide-table slowdown. Best-effort: a server
+        // that rejects any of these still proceeds with its defaults.
+        for nls in [
+            "ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY-MM-DD HH24:MI:SS'",
+            "ALTER SESSION SET NLS_TIMESTAMP_FORMAT = 'YYYY-MM-DD HH24:MI:SS.FF6'",
+            "ALTER SESSION SET NLS_TIMESTAMP_TZ_FORMAT = 'YYYY-MM-DD HH24:MI:SS.FF6 TZH:TZM'",
+        ] {
+            if let Err(e) = conn.execute(nls, &[]) {
+                mark(&format!("NLS set skipped: {}", e));
+            }
+        }
+        mark("preparing query");
+
         // Issue #4: the default Oracle prefetch is tiny (often 1 row
         // per round trip). On a 10 000-row x 37-column table that's
         // 10 000 network round trips, which presented to users as
@@ -1690,6 +1734,8 @@ impl DuckdbEngine {
             .iter()
             .map(|c| c.name().to_string())
             .collect();
+        mark(&format!("query open; {} columns; streaming rows", cols.len()));
+
         // Stream rows straight to the NDJSON temp file. The previous
         // Vec<JsonValue> collector held the entire result set in RAM
         // before handing it to DuckDB - on a million-row x 37-col pull
@@ -1705,8 +1751,19 @@ impl DuckdbEngine {
             }
             writer.write_row(&JsonValue::Object(obj))?;
             count += 1;
+            if count % 25_000 == 0 {
+                mark(&format!("fetched {} rows", count));
+            }
         }
+        mark(&format!(
+            "fetch complete: {} rows; materializing into DuckDB",
+            count
+        ));
         writer.finalize_into_table(db, &spec.node_id)?;
+        mark(&format!(
+            "materialize complete: {} into {}",
+            count, spec.node_id
+        ));
         Ok(format!(
             "oracle: materialized {} rows into {}",
             count, spec.node_id
