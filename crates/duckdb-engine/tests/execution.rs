@@ -181,6 +181,39 @@ fn csv_filter_parquet_end_to_end() {
 }
 
 #[test]
+fn csv_distinct_parquet_reports_rows() {
+    // Mirrors a user pipeline (CSV -> Distinct -> Parquet) that reported
+    // "0 rows written" despite RUN SUCCEEDED. Verify the batched executor
+    // populates per-node row counts for a distinct-then-sink graph.
+    let tmp = tempfile::tempdir().unwrap();
+    let csv = write_file(
+        tmp.path(),
+        "in.csv",
+        "Index,name\n1,alice\n2,bob\n2,bob\n3,carol\n",
+    );
+    let out = out_path(tmp.path(), "out.parquet");
+
+    let engine = engine_or_skip!();
+    let d = doc(
+        json!([
+            node("s1", "src.csv", json!({ "path": csv, "hasHeader": true })),
+            node("d1", "xf.distinct", json!({ "columns": ["Index"] })),
+            node("k1", "snk.parquet", json!({ "path": out })),
+        ]),
+        json!([main_edge("e1", "s1", "d1"), main_edge("e2", "d1", "k1")]),
+    );
+
+    let result = engine.execute_pipeline(&d);
+    assert_eq!(result.status, "ok", "run failed: {:?}", result.error);
+    // 3 distinct Index values -> sink writes 3 rows, and that count must
+    // surface on the node status (not None / 0).
+    let sink = result.nodes.get("k1").expect("sink status present");
+    assert_eq!(sink.rows, Some(3), "sink should report 3 rows, got {:?}", sink.rows);
+    let src = result.nodes.get("s1").expect("source status present");
+    assert_eq!(src.rows, Some(4), "source should report 4 rows, got {:?}", src.rows);
+}
+
+#[test]
 fn csv_to_csv_roundtrip_preserves_rows() {
     let tmp = tempfile::tempdir().unwrap();
     let csv = write_file(
