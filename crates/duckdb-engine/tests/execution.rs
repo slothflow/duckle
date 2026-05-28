@@ -2836,6 +2836,69 @@ fn src_rest_paginates_via_offset() {
 }
 
 #[test]
+fn src_rest_errors_when_maxpages_truncates() {
+    // Every page is full (2 rows), so the source never ends on its own;
+    // maxPages=2 stops it. That stop must surface as an ERROR, not a
+    // silent partial pull (the "reached maxPages with more data" bug).
+    use std::io::{Read, Write};
+    use std::net::TcpListener;
+    use std::time::Duration;
+
+    let engine = engine_or_skip!();
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+    let port = listener.local_addr().unwrap().port();
+
+    let full_page = br#"[{"id":1},{"id":2}]"#;
+    let handle = std::thread::spawn(move || {
+        for stream in listener.incoming().take(2) {
+            let mut stream = match stream {
+                Ok(s) => s,
+                Err(_) => break,
+            };
+            stream.set_read_timeout(Some(Duration::from_millis(250))).ok();
+            let mut chunk = [0u8; 4096];
+            for _ in 0..16 {
+                match stream.read(&mut chunk) {
+                    Ok(0) => break,
+                    Ok(_) => break,
+                    Err(_) => break,
+                }
+            }
+            let resp = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                full_page.len()
+            );
+            let _ = stream.write_all(resp.as_bytes());
+            let _ = stream.write_all(full_page);
+            let _ = stream.flush();
+            let _ = stream.shutdown(std::net::Shutdown::Write);
+            std::thread::sleep(Duration::from_millis(50));
+        }
+    });
+
+    let tmp = tempfile::tempdir().unwrap();
+    let out = out_path(tmp.path(), "out.csv");
+    let url = format!("http://127.0.0.1:{}/items", port);
+    let r = engine.execute_pipeline(&doc(
+        json!([
+            node("r", "src.rest", json!({
+                "url": url,
+                "paginationType": "offset",
+                "offsetParam": "from",
+                "pageSize": 2,
+                "maxPages": 2
+            })),
+            node("k", "snk.csv", json!({ "path": out, "hasHeader": true })),
+        ]),
+        json!([main_edge("e1", "r", "k")]),
+    ));
+    let _ = handle.join();
+    assert_eq!(r.status, "error", "truncation should fail the run, got {:?}", r.status);
+    let err = r.error.unwrap_or_default();
+    assert!(err.contains("maxPages"), "error should mention maxPages, got: {}", err);
+}
+
+#[test]
 fn src_rest_paginates_via_page_number() {
     // 3 pages; the 3rd is empty (0 rows) so we stop.
     use std::io::{Read, Write};

@@ -2345,8 +2345,21 @@ impl DuckdbEngine {
             }
             match result.get("next_page_offset") {
                 Some(off) if !off.is_null() => next_offset = Some(off.clone()),
-                _ => break,
+                _ => {
+                    next_offset = None;
+                    break;
+                }
             }
+        }
+        // A non-null cursor surviving the loop means we stopped on the
+        // page cap, not because the scroll was exhausted: more points
+        // remain. Fail loud rather than materialize a silent subset.
+        if next_offset.is_some() {
+            return Err(pagination_capped_err(
+                "qdrant",
+                all_points.len(),
+                spec.max_pages,
+            ));
         }
         let count = all_points.len();
         materialize_jsonobjects_as_table(db, &spec.node_id, &all_points)?;
@@ -2368,6 +2381,7 @@ impl DuckdbEngine {
         let base = spec.endpoint.trim_end_matches('/');
         let mut all_objects: Vec<JsonValue> = Vec::new();
         let mut after: Option<String> = None;
+        let mut more_pending = false;
         for _ in 0..spec.max_pages {
             self.check_cancelled()?;
             let mut url = format!(
@@ -2407,6 +2421,7 @@ impl DuckdbEngine {
                 }
             };
             let Some(objs) = resp.get("objects").and_then(|v| v.as_array()) else {
+                more_pending = false;
                 break;
             };
             let page_len = objs.len();
@@ -2430,12 +2445,26 @@ impl DuckdbEngine {
                 all_objects.push(JsonValue::Object(obj));
             }
             if page_len < spec.page_size as usize {
+                more_pending = false;
                 break;
             }
             match last_id {
-                Some(id) => after = Some(id),
-                None => break,
+                Some(id) => {
+                    after = Some(id);
+                    more_pending = true;
+                }
+                None => {
+                    more_pending = false;
+                    break;
+                }
             }
+        }
+        if more_pending {
+            return Err(pagination_capped_err(
+                "weaviate",
+                all_objects.len(),
+                spec.max_pages,
+            ));
         }
         let count = all_objects.len();
         materialize_jsonobjects_as_table(db, &spec.node_id, &all_objects)?;
@@ -2457,6 +2486,7 @@ impl DuckdbEngine {
         let url = format!("{}/v1/vector/query", base);
         let mut all_rows: Vec<JsonValue> = Vec::new();
         let mut offset: u64 = 0;
+        let mut more_pending = false;
         for _ in 0..spec.max_pages {
             self.check_cancelled()?;
             let mut body = serde_json::Map::new();
@@ -2505,6 +2535,7 @@ impl DuckdbEngine {
                 }
             };
             let Some(arr) = resp.get("data").and_then(|v| v.as_array()) else {
+                more_pending = false;
                 break;
             };
             let page_len = arr.len();
@@ -2512,9 +2543,18 @@ impl DuckdbEngine {
                 all_rows.push(v.clone());
             }
             if page_len < spec.page_size as usize {
+                more_pending = false;
                 break;
             }
             offset += spec.page_size;
+            more_pending = true;
+        }
+        if more_pending {
+            return Err(pagination_capped_err(
+                "milvus",
+                all_rows.len(),
+                spec.max_pages,
+            ));
         }
         let count = all_rows.len();
         materialize_jsonobjects_as_table(db, &spec.node_id, &all_rows)?;
@@ -3556,6 +3596,16 @@ impl DuckdbEngine {
             if last_key.is_none() {
                 break;
             }
+        }
+        // A surviving LastEvaluatedKey means the scan stopped on the page
+        // cap with more rows still to read - fail loud, don't silently
+        // materialize a partial scan.
+        if last_key.is_some() {
+            return Err(pagination_capped_err(
+                "dynamodb",
+                all_rows.len(),
+                spec.max_pages,
+            ));
         }
         let count = all_rows.len();
         materialize_jsonobjects_as_table(db, &spec.node_id, &all_rows)?;
@@ -5322,6 +5372,7 @@ impl DuckdbEngine {
         };
         let mut all_rows: Vec<JsonValue> = Vec::new();
         let mut pages = 0_u64;
+        let mut truncated = false;
         match &spec.pagination {
             ElasticPagination::FromSize => {
                 let mut from = 0_u64;
@@ -5347,7 +5398,11 @@ impl DuckdbEngine {
                         all_rows.push(source);
                     }
                     pages += 1;
-                    if (hit_count as u64) < spec.size || pages >= spec.max_pages {
+                    if (hit_count as u64) < spec.size {
+                        break;
+                    }
+                    if pages >= spec.max_pages {
+                        truncated = true;
                         break;
                     }
                     from = from.saturating_add(spec.size);
@@ -5387,12 +5442,16 @@ impl DuckdbEngine {
                         all_rows.push(source);
                     }
                     pages += 1;
-                    if hit_count == 0 || pages >= spec.max_pages {
+                    if hit_count == 0 {
                         break;
                     }
                     if (hit_count as u64) < spec.size {
                         // Last page didn't fill - we're done even with
                         // search_after.
+                        break;
+                    }
+                    if pages >= spec.max_pages {
+                        truncated = true;
                         break;
                     }
                     last_sort = match next_after {
@@ -5401,6 +5460,13 @@ impl DuckdbEngine {
                     };
                 }
             }
+        }
+        if truncated {
+            return Err(pagination_capped_err(
+                "elastic",
+                all_rows.len(),
+                spec.max_pages,
+            ));
         }
         materialize_jsonobjects_as_table(db, &spec.node_id, &all_rows)?;
         Ok(format!(
@@ -5429,6 +5495,7 @@ impl DuckdbEngine {
         let mut url = spec.url.clone();
         let mut all_rows: Vec<JsonValue> = Vec::new();
         let mut pages = 0_u64;
+        let mut truncated = false;
         // Mutable state for offset / page strategies; cursor uses
         // per-response extraction inside the loop.
         let mut offset = 0_u64;
@@ -5505,12 +5572,13 @@ impl DuckdbEngine {
             let row_count = rows.len();
             all_rows.extend(rows);
             pages += 1;
-            if pages >= spec.max_pages {
-                break;
-            }
-            // Decide whether to fetch another page.
-            match &spec.pagination {
-                RestPagination::None => break,
+            // Determine whether another page exists (and set up the next
+            // request URL as a side effect). Done BEFORE the page-cap
+            // check so we can tell "genuinely exhausted" (advanced=false)
+            // from "stopped at the cap with more to fetch" (advanced=true
+            // while pages >= max_pages).
+            let advanced = match &spec.pagination {
+                RestPagination::None => false,
                 RestPagination::Cursor { next_path, param } => {
                     let next = response
                         .pointer(next_path)
@@ -5527,31 +5595,39 @@ impl DuckdbEngine {
                                 param,
                                 urlencode_simple(&token)
                             );
+                            true
                         }
-                        None => break,
+                        None => false,
                     }
                 }
                 RestPagination::Offset { offset_param, page_size } => {
-                    // Stop when a page returns fewer rows than requested.
+                    // A short page means we have reached the end.
                     if (row_count as u64) < *page_size {
-                        break;
+                        false
+                    } else {
+                        offset = offset.saturating_add(*page_size);
+                        let sep = if spec.url.contains('?') { '&' } else { '?' };
+                        url = format!("{}{}{}={}", spec.url, sep, offset_param, offset);
+                        true
                     }
-                    offset = offset.saturating_add(*page_size);
-                    let sep = if spec.url.contains('?') { '&' } else { '?' };
-                    url = format!("{}{}{}={}", spec.url, sep, offset_param, offset);
                 }
                 RestPagination::Page { page_param, .. } => {
                     if row_count == 0 {
-                        break;
+                        false
+                    } else {
+                        page_no = page_no.saturating_add(1);
+                        let sep = if spec.url.contains('?') { '&' } else { '?' };
+                        url = format!("{}{}{}={}", spec.url, sep, page_param, page_no);
+                        true
                     }
-                    page_no = page_no.saturating_add(1);
-                    let sep = if spec.url.contains('?') { '&' } else { '?' };
-                    url = format!("{}{}{}={}", spec.url, sep, page_param, page_no);
                 }
                 RestPagination::Link => {
                     match link_header.as_deref().and_then(parse_link_next) {
-                        Some(next_url) => url = next_url,
-                        None => break,
+                        Some(next_url) => {
+                            url = next_url;
+                            true
+                        }
+                        None => false,
                     }
                 }
                 RestPagination::NextUrl { next_path } => {
@@ -5561,11 +5637,28 @@ impl DuckdbEngine {
                         .filter(|s| !s.is_empty())
                         .map(String::from);
                     match next {
-                        Some(next_url) => url = next_url,
-                        None => break,
+                        Some(next_url) => {
+                            url = next_url;
+                            true
+                        }
+                        None => false,
                     }
                 }
+            };
+            if !advanced {
+                break;
             }
+            if pages >= spec.max_pages {
+                truncated = true;
+                break;
+            }
+        }
+        if truncated {
+            return Err(pagination_capped_err(
+                "rest",
+                all_rows.len(),
+                spec.max_pages,
+            ));
         }
         materialize_jsonobjects_as_table(db, &spec.node_id, &all_rows)?;
         Ok(format!(
@@ -6246,6 +6339,20 @@ fn drain_batched_markers(
             });
         }
     }
+}
+
+/// Error returned when a paginated source stops at its `maxPages` cap
+/// while more data is still available upstream. `maxPages` is a runaway
+/// safety net, not a hard maximum, so hitting it means the result was
+/// truncated - surface that loudly instead of reporting a partial pull
+/// as success (silent data loss).
+fn pagination_capped_err(component: &str, fetched: usize, max_pages: u64) -> EngineError {
+    EngineError::Query(format!(
+        "{}: reached the maxPages={} page limit after {} row(s); more data may remain upstream. \
+         Raise the 'maxPages' property to pull the complete result set (maxPages is a runaway \
+         safety cap, not a hard maximum).",
+        component, max_pages, fetched
+    ))
 }
 
 /// Read an NDJSON file (one JSON object per line) emitted by DuckDB's
