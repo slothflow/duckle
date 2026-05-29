@@ -5144,13 +5144,17 @@ fn build_array(inputs: &NodeInputs, props: &JsonValue, component_id: &str) -> Re
     let column = require_column(props)?;
     let col = quote_ident(&column);
     if component_id == "xf.arr.explode" {
-        // One row per element, keeping the other columns.
+        // One row per element, keeping the other columns. Outer-style: a
+        // NULL or empty array yields one row with a NULL element instead
+        // of being silently dropped. Plain unnest() of NULL/[] produces
+        // zero rows, which loses the row's other columns entirely - real
+        // data loss for sparse arrays. The CASE injects a single NULL
+        // element so the row survives; untyped [NULL] unifies with any
+        // array element type.
         return Ok(format!(
-            "SELECT unnest({}) AS {}, * EXCLUDE ({}) FROM {}",
-            col,
-            col,
-            col,
-            quote_ident(upstream)
+            "SELECT unnest(CASE WHEN {c} IS NULL OR length({c}) = 0 THEN [NULL] ELSE {c} END) AS {c}, * EXCLUDE ({c}) FROM {up}",
+            c = col,
+            up = quote_ident(upstream)
         ));
     }
     let expr = match component_id {
@@ -5402,12 +5406,18 @@ fn build_normalize(inputs: &NodeInputs, props: &JsonValue) -> Result<String, Str
         .ok_or_else(|| "Normalize needs a column to split".to_string())?;
     let q = quote_ident(&col);
     let sep = string_prop(props, "separator").unwrap_or_else(|| ",".into());
+    // Outer-style unnest: a NULL (or empty) array/string yields one row
+    // with a NULL element rather than being silently dropped (plain
+    // unnest of NULL/[] produces zero rows, losing the row's other
+    // columns). Matches the xf.arr.explode behavior.
     let value_expr = if sep.is_empty() {
-        // Empty separator means the column is already an array; just unnest.
-        format!("unnest({q})")
+        // Empty separator means the column is already an array.
+        format!("unnest(CASE WHEN {q} IS NULL OR length({q}) = 0 THEN [NULL] ELSE {q} END)")
     } else {
         let sep_sql = sep.replace('\'', "''");
-        format!("unnest(string_split(CAST({q} AS VARCHAR), '{sep_sql}'))")
+        format!(
+            "unnest(CASE WHEN {q} IS NULL THEN [NULL] ELSE string_split(CAST({q} AS VARCHAR), '{sep_sql}') END)"
+        )
     };
     Ok(format!(
         "SELECT * EXCLUDE ({q}), {value_expr} AS {q} FROM {}",
@@ -7960,11 +7970,22 @@ fn build_text_similarity(inputs: &NodeInputs, props: &JsonValue) -> Result<Strin
     let output = string_prop(props, "outputColumn")
         .filter(|s| !s.is_empty())
         .unwrap_or_else(|| format!("{}_{}_{}_score", left_col, right_col, fn_name));
+    let l = quote_ident(&left_col);
+    let r = quote_ident(&right_col);
+    // jaccard() raises "argument too short!" on an empty-string input,
+    // which aborts the whole run on the first empty row. Guard it: an
+    // empty (or NULL) value on either side yields a NULL score instead.
+    // The other algorithms handle empty/short strings fine.
+    let expr = if fn_name == "jaccard" {
+        format!(
+            "CASE WHEN CAST({l} AS VARCHAR) = '' OR CAST({r} AS VARCHAR) = '' THEN NULL \
+             ELSE jaccard(CAST({l} AS VARCHAR), CAST({r} AS VARCHAR)) END"
+        )
+    } else {
+        format!("{fn_name}(CAST({l} AS VARCHAR), CAST({r} AS VARCHAR))")
+    };
     Ok(format!(
-        "SELECT *, {fn}(CAST({l} AS VARCHAR), CAST({r} AS VARCHAR)) AS {out} FROM {up}",
-        fn = fn_name,
-        l = quote_ident(&left_col),
-        r = quote_ident(&right_col),
+        "SELECT *, {expr} AS {out} FROM {up}",
         out = quote_ident(&output),
         up = quote_ident(upstream)
     ))
