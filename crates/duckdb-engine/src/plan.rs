@@ -4604,7 +4604,15 @@ fn build_sort(inputs: &NodeInputs, props: &JsonValue) -> Result<String, String> 
                             .get("direction")
                             .and_then(JsonValue::as_str)
                             .unwrap_or("asc");
-                        Some(format!("{} {}", quote_ident(col), dir.to_uppercase()))
+                        // Allowlist the direction: an unexpected token spliced
+                        // raw would make a malformed ORDER BY / parser error
+                        // (audit B5). Map asc/desc explicitly; anything else
+                        // falls back to ASC, matching the single-column branch.
+                        let dir_kw = match dir.trim().to_ascii_lowercase().as_str() {
+                            "desc" => "DESC",
+                            _ => "ASC",
+                        };
+                        Some(format!("{} {}", quote_ident(col), dir_kw))
                     } else {
                         None
                     }
@@ -5034,6 +5042,58 @@ fn require_column(props: &JsonValue) -> Result<String, String> {
         .ok_or_else(|| "This transform needs a column".to_string())
 }
 
+/// Escape stray literal `%` in an xf.format pattern so printf does not
+/// mis-parse them as conversion specifiers. A bare `%` not beginning a
+/// valid spec corrupts the output (audit B5: '100% done' -> '100 5one').
+/// Each `%` that does NOT start a valid printf conversion (optional
+/// flags/width/precision then a conversion char, or `%%`) is doubled;
+/// intended specifiers like %s, %d, %.2f, %% are left untouched.
+fn escape_stray_printf_percents(pattern: &str) -> String {
+    let bytes = pattern.as_bytes();
+    let mut out = String::with_capacity(pattern.len() + 4);
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] != b'%' {
+            let ch = pattern[i..].chars().next().unwrap();
+            out.push(ch);
+            i += ch.len_utf8();
+            continue;
+        }
+        let mut j = i + 1;
+        if j < bytes.len() && bytes[j] == b'%' {
+            out.push_str("%%");
+            i = j + 1;
+            continue;
+        }
+        while j < bytes.len() && matches!(bytes[j], b'-' | b'+' | b' ' | b'0' | b'#') {
+            j += 1;
+        }
+        while j < bytes.len() && bytes[j].is_ascii_digit() {
+            j += 1;
+        }
+        if j < bytes.len() && bytes[j] == b'.' {
+            j += 1;
+            while j < bytes.len() && bytes[j].is_ascii_digit() {
+                j += 1;
+            }
+        }
+        let is_spec = j < bytes.len()
+            && matches!(
+                bytes[j],
+                b's' | b'd' | b'i' | b'u' | b'f' | b'F' | b'g' | b'G' | b'e' | b'E'
+                    | b'x' | b'X' | b'o' | b'c' | b'b'
+            );
+        if is_spec {
+            out.push_str(&pattern[i..=j]);
+            i = j + 1;
+        } else {
+            out.push_str("%%");
+            i += 1;
+        }
+    }
+    out
+}
+
 fn build_string(inputs: &NodeInputs, props: &JsonValue, component_id: &str) -> Result<String, String> {
     let upstream = inputs.main().ok_or_else(|| missing_input_msg(component_id))?;
     let column = require_column(props)?;
@@ -5081,7 +5141,7 @@ fn build_string(inputs: &NodeInputs, props: &JsonValue, component_id: &str) -> R
         }
         "xf.concat" => format!("concat(CAST({} AS VARCHAR), '{}')", col, sql_escape(&pattern)),
         "xf.split" => format!("string_split(CAST({} AS VARCHAR), '{}')", col, sql_escape(&pattern)),
-        "xf.format" => format!("printf('{}', {})", sql_escape(&pattern), col),
+        "xf.format" => format!("printf('{}', {})", sql_escape(&escape_stray_printf_percents(&pattern)), col),
         other => return Err(format!("String op '{}' is not implemented", other)),
     };
     Ok(apply_col_expr(upstream, &column, expr, string_prop(props, "outputColumn")))
@@ -5092,6 +5152,25 @@ fn build_numeric(inputs: &NodeInputs, props: &JsonValue, component_id: &str) -> 
     let column = require_column(props)?;
     let col = quote_ident(&column);
     let arg = num_prop(props, "argument");
+    // num_prop accepts any f64-parseable string, including 'inf'/'nan'/
+    // 'infinity', which it then emits BARE as an operand. DuckDB parses
+    // those tokens as column references, not float literals, so the stage
+    // fails with a confusing "column not found" binder error (audit B5,
+    // verified). Reject a non-finite numeric argument with a clear planner
+    // error. Overflow literals like 1e400 stay allowed - DuckDB accepts
+    // them - so only the literal inf/nan spellings are guarded.
+    if let Some(a) = arg.as_deref() {
+        let low = a.trim().to_ascii_lowercase();
+        if matches!(
+            low.as_str(),
+            "inf" | "-inf" | "+inf" | "infinity" | "-infinity" | "+infinity" | "nan" | "-nan" | "+nan"
+        ) {
+            return Err(format!(
+                "{}: numeric argument must be a finite number (got '{}')",
+                component_id, a
+            ));
+        }
+    }
     let expr = match component_id {
         "xf.num.round" => format!("round({}, {})", col, arg.unwrap_or_else(|| "0".into())),
         "xf.num.abs" => format!("abs({})", col),
@@ -6028,13 +6107,18 @@ fn build_addcol(inputs: &NodeInputs, props: &JsonValue) -> Result<String, String
         .cloned()
         .unwrap_or_default();
     // Optional declared `type`: when the form picks a type for the new
-    // column, wrap the expression in a CAST so the column actually has
-    // that type. Previously `type` was ignored and the column took
-    // whatever type the expression evaluated to, making the UI's type
-    // selector cosmetic.
+    // column, wrap the expression in a cast so the column actually has that
+    // type. Use TRY_CAST by default (mirrors build_cast): a hard CAST aborts
+    // the whole run on the first value the expression can't coerce - one bad
+    // row killing the pipeline. TRY_CAST nulls the bad cell instead. The
+    // onError prop opts into the strict path (onError=='fail').
+    let cast_fn = match string_prop(props, "onError").as_deref() {
+        Some("fail") => "CAST",
+        _ => "TRY_CAST",
+    };
     let typed_expr = |expr: &str, ty: Option<&str>| -> String {
         match ty.map(str::trim).filter(|s| !s.is_empty()) {
-            Some(t) => format!("CAST(({}) AS {})", expr, duckle_type_to_duckdb(t)),
+            Some(t) => format!("{}(({}) AS {})", cast_fn, expr, duckle_type_to_duckdb(t)),
             None => expr.to_string(),
         }
     };
@@ -9139,6 +9223,83 @@ mod tests {
             scd.sql.contains("UNION ALL BY NAME"),
             "SCD1 must align by name, got: {}",
             scd.sql
+        );
+    }
+
+    #[test]
+    fn printf_escapes_stray_percent_but_keeps_specs() {
+        // audit B5: a literal % not forming a spec must be doubled so
+        // printf prints it; real conversion specs are preserved.
+        assert_eq!(escape_stray_printf_percents("100% done"), "100%% done");
+        assert_eq!(escape_stray_printf_percents("%s"), "%s");
+        assert_eq!(escape_stray_printf_percents("%.2f"), "%.2f");
+        assert_eq!(escape_stray_printf_percents("val %s (100%%)"), "val %s (100%%)");
+        assert_eq!(escape_stray_printf_percents("50% off %d items"), "50%% off %d items");
+        assert_eq!(escape_stray_printf_percents("no percents"), "no percents");
+    }
+
+    #[test]
+    fn numeric_rejects_non_finite_argument() {
+        // audit B5: 'inf'/'nan' as a numeric op argument bind as columns
+        // in DuckDB -> confusing binder error. Reject at plan time.
+        for bad in ["inf", "Infinity", "nan", "-inf"] {
+            let p = pipeline_from_json(&format!(
+                r#"{{
+                  "nodes": [
+                    {{"id":"s","position":{{"x":0,"y":0}},"data":{{
+                      "label":"CSV","componentId":"src.csv",
+                      "properties":{{"path":"/tmp/x.csv","hasHeader":true}}}}}},
+                    {{"id":"n","position":{{"x":0,"y":0}},"data":{{
+                      "label":"Pow","componentId":"xf.num.power",
+                      "properties":{{"column":"v","argument":"{}"}}}}}},
+                    {{"id":"k","position":{{"x":0,"y":0}},"data":{{
+                      "label":"out","componentId":"snk.parquet",
+                      "properties":{{"path":"/tmp/o.parquet"}}}}}}
+                  ],
+                  "edges": [
+                    {{"id":"e1","source":"s","target":"n","data":{{"connectionType":"main"}}}},
+                    {{"id":"e2","source":"n","target":"k","data":{{"connectionType":"main"}}}}
+                  ]
+                }}"#,
+                bad
+            ));
+            assert!(
+                compile(&p).is_err(),
+                "numeric op with argument '{}' should be rejected",
+                bad
+            );
+        }
+    }
+
+    #[test]
+    fn addcol_typed_expr_defaults_to_try_cast() {
+        // audit B5: a typed Add-Column should TRY_CAST by default so one
+        // bad value nulls the cell instead of aborting the run.
+        let p = pipeline_from_json(
+            r#"{
+              "nodes": [
+                {"id":"s","position":{"x":0,"y":0},"data":{
+                  "label":"CSV","componentId":"src.csv",
+                  "properties":{"path":"/tmp/x.csv","hasHeader":true}}},
+                {"id":"a","position":{"x":0,"y":0},"data":{
+                  "label":"Add","componentId":"xf.addcol",
+                  "properties":{"name":"n","type":"int64","expression":"v"}}},
+                {"id":"k","position":{"x":0,"y":0},"data":{
+                  "label":"out","componentId":"snk.parquet",
+                  "properties":{"path":"/tmp/o.parquet"}}}
+              ],
+              "edges": [
+                {"id":"e1","source":"s","target":"a","data":{"connectionType":"main"}},
+                {"id":"e2","source":"a","target":"k","data":{"connectionType":"main"}}
+              ]
+            }"#,
+        );
+        let compiled = compile(&p).unwrap();
+        let add = compiled.stages.iter().find(|s| s.node_id == "a").unwrap();
+        assert!(
+            add.sql.contains("TRY_CAST((v) AS BIGINT)"),
+            "typed addcol should TRY_CAST by default, got: {}",
+            add.sql
         );
     }
 
