@@ -6407,82 +6407,187 @@ fn build_rename(inputs: &NodeInputs, props: &JsonValue) -> Result<String, String
     ))
 }
 
-fn lookup_in_mapper_msg() -> String {
-    "Map: an expression references a lookup input (e.g. lookup_1.col), but the Map node only \
-     reads its main input and does not join lookup inputs - that reference would silently \
-     resolve to the wrong data. Use a Join node to combine the inputs first, then Map over the \
-     joined result."
-        .to_string()
+/// A configured lookup join on a Map (tMap-style) node.
+struct MapLookup {
+    port: String,
+    view: String,
+    left_keys: Vec<String>,
+    right_keys: Vec<String>,
+    kind: &'static str,
 }
 
 fn build_mapper(inputs: &NodeInputs, props: &JsonValue) -> Result<String, String> {
     let upstream = inputs.main().ok_or_else(|| "mapper: missing main input".to_string())?;
-    // The Map form writes `expressions` as key-value pairs:
-    // output column name -> SQL expression.
+
+    // Collect the output (name, raw expression) pairs. The Map form writes
+    // either `expressions` (key-value: out name -> SQL) or a structured
+    // `mapper.outputs` array ({name, expression}). Both are accepted.
+    let mut outputs: Vec<(String, String)> = Vec::new();
     if let Some(pairs) = props.get("expressions").and_then(JsonValue::as_array) {
         for kv in pairs {
-            if let Some(expr) = kv.get("value").and_then(JsonValue::as_str) {
-                if references_lookup_port(expr) {
-                    return Err(lookup_in_mapper_msg());
+            let name = kv.get("key").and_then(JsonValue::as_str).unwrap_or("").trim();
+            let expr = kv.get("value").and_then(JsonValue::as_str).unwrap_or("").trim();
+            if !name.is_empty() && !expr.is_empty() {
+                outputs.push((name.to_string(), expr.to_string()));
+            }
+        }
+    }
+    if outputs.is_empty() {
+        if let Some(outs) = props.get("mapper").and_then(|m| m.get("outputs")).and_then(JsonValue::as_array) {
+            for o in outs {
+                let name = o.get("name").and_then(JsonValue::as_str).unwrap_or("").trim();
+                let expr = o
+                    .get("expression")
+                    .or_else(|| o.get("expr"))
+                    .and_then(JsonValue::as_str)
+                    .unwrap_or("")
+                    .trim();
+                if !name.is_empty() && !expr.is_empty() {
+                    outputs.push((name.to_string(), expr.to_string()));
                 }
             }
         }
-        let terms: Vec<String> = pairs
-            .iter()
-            .filter_map(|kv| {
-                let name = kv.get("key").and_then(JsonValue::as_str)?.trim();
-                let expr = kv.get("value").and_then(JsonValue::as_str)?.trim();
-                if name.is_empty() || expr.is_empty() {
-                    return None;
-                }
-                Some(format!("{} AS {}", strip_port_prefixes(expr), quote_ident(name)))
-            })
-            .collect();
-        if !terms.is_empty() {
-            return Ok(format!("SELECT {} FROM {}", terms.join(", "), quote_ident(upstream)));
-        }
     }
-    let mapper = props.get("mapper");
-    let outputs = mapper
-        .and_then(|m| m.get("outputs"))
-        .and_then(JsonValue::as_array)
-        .cloned()
-        .unwrap_or_default();
-    if outputs.is_empty() {
-        return Ok(format!("SELECT * FROM {}", quote_ident(upstream)));
-    }
-    let mut select_terms = Vec::new();
-    for o in &outputs {
-        let name = o.get("name").and_then(JsonValue::as_str).unwrap_or("col");
-        let expr_raw = o
-            .get("expression")
-            .or_else(|| o.get("expr"))
-            .and_then(JsonValue::as_str)
-            .unwrap_or("NULL");
-        // The visual mapper emits references like `main.col` or
-        // `lookup_1.col`. main.* is stripped to a bare column ref; a
-        // lookup reference can't be honored (the Map node never joins
-        // its lookup inputs), so fail loud instead of silently binding
-        // it to a main column or emitting broken SQL.
-        if references_lookup_port(expr_raw) {
-            return Err(lookup_in_mapper_msg());
-        }
-        let expr = strip_port_prefixes(expr_raw);
-        select_terms.push(format!("{} AS {}", expr, quote_ident(name)));
-    }
-    let filter = mapper
-        .and_then(|m| m.get("filter"))
-        .and_then(JsonValue::as_str)
-        .map(|s| s.trim())
+
+    // Optional output filter (WHERE), from either `filter` or `mapper.filter`.
+    let filter = string_prop(props, "filter")
+        .or_else(|| props.get("mapper").and_then(|m| m.get("filter")).and_then(JsonValue::as_str).map(String::from))
+        .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty());
-    let mut sql = format!(
-        "SELECT {} FROM {}",
-        select_terms.join(", "),
-        quote_ident(upstream)
-    );
-    if let Some(predicate) = filter {
+
+    // Parse the lookup join config: props.lookups = [{port, leftKey,
+    // rightKey, joinType}]. Each port must be wired as an actual input
+    // (read by exact handle name - NodeInputs::lookup(idx) does NOT map to
+    // lookup_1/2/3, see plan.rs ~1776).
+    let mut lookups: Vec<MapLookup> = Vec::new();
+    if let Some(arr) = props.get("lookups").and_then(JsonValue::as_array) {
+        for entry in arr {
+            let port = entry
+                .get("port")
+                .and_then(JsonValue::as_str)
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .ok_or_else(|| "Map: each lookup needs a 'port' (e.g. lookup_1)".to_string())?;
+            let view = inputs
+                .ports
+                .get(port)
+                .and_then(|v| v.first())
+                .ok_or_else(|| format!(
+                    "Map: lookup config references port '{}' but no input is wired into it",
+                    port
+                ))?
+                .clone();
+            let left_keys = parse_key_list(
+                entry.get("leftKey").and_then(JsonValue::as_str).unwrap_or(""),
+            );
+            let right_keys = parse_key_list(
+                entry.get("rightKey").and_then(JsonValue::as_str).unwrap_or(""),
+            );
+            if left_keys.is_empty() || right_keys.is_empty() {
+                return Err(format!(
+                    "Map: lookup '{}' needs leftKey and rightKey",
+                    port
+                ));
+            }
+            if left_keys.len() != right_keys.len() {
+                return Err(format!(
+                    "Map: lookup '{}' leftKey and rightKey must have the same number of columns (got {} vs {})",
+                    port, left_keys.len(), right_keys.len()
+                ));
+            }
+            let kind = match entry.get("joinType").and_then(JsonValue::as_str) {
+                Some("inner") => "INNER",
+                Some("left") | None => "LEFT",
+                Some(other) => {
+                    return Err(format!(
+                        "Map: lookup '{}' joinType must be 'inner' or 'left' (got '{}')",
+                        port, other
+                    ))
+                }
+            };
+            lookups.push(MapLookup { port: port.to_string(), view, left_keys, right_keys, kind });
+        }
+    }
+
+    // Validate every lookup port referenced in an expression / filter is
+    // either configured above or at least wired - otherwise the generated
+    // SQL would reference an unknown relation. This replaces the old blanket
+    // "Map can't join" refusal with a precise, actionable error.
+    let configured: std::collections::BTreeSet<&str> =
+        lookups.iter().map(|l| l.port.as_str()).collect();
+    let mut referenced: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+    for (_, expr) in &outputs {
+        referenced.extend(referenced_lookup_ports(expr));
+    }
+    if let Some(f) = &filter {
+        referenced.extend(referenced_lookup_ports(f));
+    }
+    for port in &referenced {
+        if !configured.contains(port.as_str()) {
+            return Err(format!(
+                "Map: an expression references lookup port '{}', but it is not configured in 'lookups' (add a lookup with join keys for it)",
+                port
+            ));
+        }
+    }
+
+    // No lookups configured AND nothing references one: behave exactly like
+    // the original single-input mapper (strip the `main.` prefix off
+    // expressions). Preserves prior behavior + tests.
+    if lookups.is_empty() {
+        if outputs.is_empty() {
+            return Ok(format!("SELECT * FROM {}", quote_ident(upstream)));
+        }
+        let terms: Vec<String> = outputs
+            .iter()
+            .map(|(name, expr)| format!("{} AS {}", strip_port_prefixes(expr), quote_ident(name)))
+            .collect();
+        let mut sql = format!("SELECT {} FROM {}", terms.join(", "), quote_ident(upstream));
+        if let Some(predicate) = &filter {
+            sql.push_str(" WHERE ");
+            sql.push_str(&strip_port_prefixes(predicate));
+        }
+        return Ok(sql);
+    }
+
+    // Join path. Alias each input by its (unique) view name, quoted.
+    // main -> "<upstream>", lookup_1 -> "<view1>", etc.
+    let mut aliases: std::collections::BTreeMap<String, String> = std::collections::BTreeMap::new();
+    aliases.insert("main".to_string(), quote_ident(upstream));
+    for l in &lookups {
+        aliases.insert(l.port.clone(), quote_ident(&l.view));
+    }
+
+    if outputs.is_empty() {
+        return Err("Map: define at least one output expression when using lookups".to_string());
+    }
+    let terms: Vec<String> = outputs
+        .iter()
+        .map(|(name, expr)| format!("{} AS {}", qualify_port_refs(expr, &aliases), quote_ident(name)))
+        .collect();
+
+    // FROM main JOIN lookup_1 ON main.k = lookup_1.k [AND ...] JOIN ...
+    // Left keys qualify against main; right keys against the lookup view.
+    let main_alias = aliases.get("main").cloned().unwrap_or_else(|| quote_ident(upstream));
+    let mut from = quote_ident(upstream);
+    for l in &lookups {
+        let look_alias = aliases.get(&l.port).cloned().unwrap_or_else(|| quote_ident(&l.view));
+        let on = l
+            .left_keys
+            .iter()
+            .zip(l.right_keys.iter())
+            .map(|(lk, rk)| {
+                format!("{}.{} = {}.{}", main_alias, quote_ident(lk), look_alias, quote_ident(rk))
+            })
+            .collect::<Vec<_>>()
+            .join(" AND ");
+        from.push_str(&format!(" {} JOIN {} ON {}", l.kind, look_alias, on));
+    }
+
+    let mut sql = format!("SELECT {} FROM {}", terms.join(", "), from);
+    if let Some(predicate) = &filter {
         sql.push_str(" WHERE ");
-        sql.push_str(predicate);
+        sql.push_str(&qualify_port_refs(predicate, &aliases));
     }
     Ok(sql)
 }
@@ -6506,22 +6611,143 @@ fn strip_port_prefixes(expr: &str) -> String {
     out
 }
 
-/// True when an expression references a `lookup` port (e.g.
-/// `lookup_1.col`). The Map node only reads its `main` upstream and
-/// never joins the lookup inputs, so stripping a lookup prefix would
-/// silently bind the reference to a `main` column (wrong data) or fail
-/// with an opaque binder error. Callers fail loud instead. Mirrors
-/// strip_port_prefixes' tokenization so plain columns like
-/// `lookups_total` don't false-positive (requires `lookup...` followed
-/// immediately by a dot).
-fn references_lookup_port(expr: &str) -> bool {
-    for token in expr.split_inclusive(|c: char| !c.is_alphanumeric() && c != '_' && c != '.') {
-        let (alpha, rest) = split_leading_token(token);
-        if !alpha.is_empty() && alpha.starts_with("lookup") && rest.starts_with('.') {
-            return true;
+/// Collect the set of `lookup_N` port names an expression references
+/// (e.g. `lookup_1.name + lookup_2.code` -> {lookup_1, lookup_2}). Used to
+/// validate that every referenced lookup is actually configured/wired.
+/// String literals are skipped so `'lookup_9.x'` inside a quoted string is
+/// not treated as a reference.
+fn referenced_lookup_ports(expr: &str) -> std::collections::BTreeSet<String> {
+    let mut out = std::collections::BTreeSet::new();
+    let bytes = expr.as_bytes();
+    let mut i = 0;
+    let mut in_str = false;
+    while i < bytes.len() {
+        let c = bytes[i] as char;
+        if in_str {
+            if c == '\'' {
+                // '' is an escaped quote, stays in the string.
+                if i + 1 < bytes.len() && bytes[i + 1] == b'\'' {
+                    i += 2;
+                    continue;
+                }
+                in_str = false;
+            }
+            i += 1;
+            continue;
         }
+        if c == '\'' {
+            in_str = true;
+            i += 1;
+            continue;
+        }
+        // Start of an identifier (not preceded by an identifier char, so we
+        // don't match the tail of `my_lookup_1`).
+        let prev_ident = i > 0 && {
+            let p = bytes[i - 1] as char;
+            p.is_alphanumeric() || p == '_'
+        };
+        if !prev_ident && (c.is_ascii_alphabetic() || c == '_') {
+            let start = i;
+            while i < bytes.len() {
+                let ch = bytes[i] as char;
+                if ch.is_alphanumeric() || ch == '_' {
+                    i += 1;
+                } else {
+                    break;
+                }
+            }
+            let ident = &expr[start..i];
+            if ident.starts_with("lookup") && i < bytes.len() && bytes[i] == b'.' {
+                out.insert(ident.to_string());
+            }
+            continue;
+        }
+        i += 1;
     }
-    false
+    out
+}
+
+/// Rewrite `main.col` / `lookup_N.col` references in an expression to
+/// quoted, aliased column references (e.g. `"orders"."id"`), using the
+/// alias map (port -> already-quoted view name). String literals are left
+/// untouched, so an expression like `'http://main.x'` is not corrupted -
+/// this is the key difference from strip_port_prefixes, which is not
+/// string-aware and is only safe on the no-lookup single-input path.
+fn qualify_port_refs(
+    expr: &str,
+    aliases: &std::collections::BTreeMap<String, String>,
+) -> String {
+    let bytes = expr.as_bytes();
+    let mut out = String::with_capacity(expr.len() + 16);
+    let mut i = 0;
+    let mut in_str = false;
+    while i < bytes.len() {
+        let c = bytes[i] as char;
+        if in_str {
+            out.push(c);
+            if c == '\'' {
+                if i + 1 < bytes.len() && bytes[i + 1] == b'\'' {
+                    out.push('\'');
+                    i += 2;
+                    continue;
+                }
+                in_str = false;
+            }
+            i += 1;
+            continue;
+        }
+        if c == '\'' {
+            in_str = true;
+            out.push(c);
+            i += 1;
+            continue;
+        }
+        let prev_ident = i > 0 && {
+            let p = bytes[i - 1] as char;
+            p.is_alphanumeric() || p == '_'
+        };
+        if !prev_ident && (c.is_ascii_alphabetic() || c == '_') {
+            let start = i;
+            while i < bytes.len() {
+                let ch = bytes[i] as char;
+                if ch.is_alphanumeric() || ch == '_' {
+                    i += 1;
+                } else {
+                    break;
+                }
+            }
+            let ident = &expr[start..i];
+            // A `<port>.<col>` reference: rewrite to alias + quoted column.
+            if i < bytes.len() && bytes[i] == b'.' {
+                if let Some(alias) = aliases.get(ident) {
+                    // Consume the dot + the following column identifier.
+                    let mut j = i + 1;
+                    let col_start = j;
+                    while j < bytes.len() {
+                        let ch = bytes[j] as char;
+                        if ch.is_alphanumeric() || ch == '_' {
+                            j += 1;
+                        } else {
+                            break;
+                        }
+                    }
+                    if j > col_start {
+                        let col = &expr[col_start..j];
+                        out.push_str(alias);
+                        out.push('.');
+                        out.push_str(&quote_ident(col));
+                        i = j;
+                        continue;
+                    }
+                }
+            }
+            out.push_str(ident);
+            continue;
+        }
+        out.push(c);
+        i += 1;
+    }
+    out
 }
 
 fn split_leading_token(s: &str) -> (&str, &str) {
@@ -8940,6 +9166,124 @@ mod tests {
 
     fn pipeline_from_json(s: &str) -> PipelineDoc {
         serde_json::from_str(s).expect("valid pipeline JSON")
+    }
+
+    fn map_sql(doc: &PipelineDoc) -> String {
+        compile(doc)
+            .unwrap()
+            .stages
+            .iter()
+            .find(|s| s.node_id == "m")
+            .unwrap()
+            .sql
+            .clone()
+    }
+
+    #[test]
+    fn map_with_lookups_emits_join_chain() {
+        // tMap-style: main CSV + two lookup CSVs, joined, with expressions
+        // referencing each input and a filter referencing a lookup.
+        let doc = pipeline_from_json(
+            r#"{
+              "nodes": [
+                {"id":"o","position":{"x":0,"y":0},"data":{"label":"orders","componentId":"src.csv","properties":{"path":"/tmp/o.csv","hasHeader":true}}},
+                {"id":"c","position":{"x":0,"y":0},"data":{"label":"cust","componentId":"src.csv","properties":{"path":"/tmp/c.csv","hasHeader":true}}},
+                {"id":"r","position":{"x":0,"y":0},"data":{"label":"region","componentId":"src.csv","properties":{"path":"/tmp/r.csv","hasHeader":true}}},
+                {"id":"m","position":{"x":0,"y":0},"data":{"label":"Map","componentId":"xf.map","properties":{
+                  "lookups":[
+                    {"port":"lookup_1","leftKey":"customer_id","rightKey":"cust_id","joinType":"left"},
+                    {"port":"lookup_2","leftKey":"region_code","rightKey":"code","joinType":"inner"}
+                  ],
+                  "expressions":[
+                    {"key":"order_id","value":"main.id"},
+                    {"key":"customer_name","value":"lookup_1.name"},
+                    {"key":"region_name","value":"lookup_2.label"},
+                    {"key":"net","value":"main.amount * 1.08"}
+                  ],
+                  "filter":"lookup_2.active = true"
+                }}},
+                {"id":"k","position":{"x":0,"y":0},"data":{"label":"out","componentId":"snk.csv","properties":{"path":"/tmp/out.csv","hasHeader":true}}}
+              ],
+              "edges":[
+                {"id":"e1","source":"o","target":"m","data":{"connectionType":"main"}},
+                {"id":"e2","source":"c","target":"m","targetHandle":"lookup_1","data":{"connectionType":"lookup"}},
+                {"id":"e3","source":"r","target":"m","targetHandle":"lookup_2","data":{"connectionType":"lookup"}},
+                {"id":"e4","source":"m","target":"k","data":{"connectionType":"main"}}
+              ]
+            }"#,
+        );
+        let sql = map_sql(&doc);
+        assert!(sql.contains("LEFT JOIN \"c\" ON \"o\".\"customer_id\" = \"c\".\"cust_id\""), "left join: {}", sql);
+        assert!(sql.contains("INNER JOIN \"r\" ON \"o\".\"region_code\" = \"r\".\"code\""), "inner join: {}", sql);
+        assert!(sql.contains("\"o\".\"id\" AS \"order_id\""), "main expr: {}", sql);
+        assert!(sql.contains("\"c\".\"name\" AS \"customer_name\""), "lookup_1 expr: {}", sql);
+        assert!(sql.contains("\"o\".\"amount\" * 1.08 AS \"net\""), "arithmetic expr: {}", sql);
+        assert!(sql.contains("WHERE \"r\".\"active\" = true"), "filter qualified: {}", sql);
+    }
+
+    #[test]
+    fn map_without_lookups_is_unchanged() {
+        // No lookups + no lookup refs: behaves like the original mapper.
+        let doc = pipeline_from_json(
+            r#"{
+              "nodes": [
+                {"id":"o","position":{"x":0,"y":0},"data":{"label":"orders","componentId":"src.csv","properties":{"path":"/tmp/o.csv","hasHeader":true}}},
+                {"id":"m","position":{"x":0,"y":0},"data":{"label":"Map","componentId":"xf.map","properties":{
+                  "expressions":[{"key":"net","value":"main.amount * 1.08"}]}}},
+                {"id":"k","position":{"x":0,"y":0},"data":{"label":"out","componentId":"snk.csv","properties":{"path":"/tmp/out.csv","hasHeader":true}}}
+              ],
+              "edges":[
+                {"id":"e1","source":"o","target":"m","data":{"connectionType":"main"}},
+                {"id":"e2","source":"m","target":"k","data":{"connectionType":"main"}}
+              ]
+            }"#,
+        );
+        let sql = map_sql(&doc);
+        assert!(sql.contains("amount * 1.08 AS \"net\""), "strip-prefix path: {}", sql);
+        assert!(!sql.contains("JOIN"), "no join when no lookups: {}", sql);
+    }
+
+    #[test]
+    fn map_unconfigured_lookup_ref_errors() {
+        // Referencing lookup_1 without a lookups[] entry for it must error
+        // clearly, not emit broken SQL.
+        let doc = pipeline_from_json(
+            r#"{
+              "nodes": [
+                {"id":"o","position":{"x":0,"y":0},"data":{"label":"orders","componentId":"src.csv","properties":{"path":"/tmp/o.csv","hasHeader":true}}},
+                {"id":"m","position":{"x":0,"y":0},"data":{"label":"Map","componentId":"xf.map","properties":{
+                  "expressions":[{"key":"x","value":"lookup_1.name"}]}}},
+                {"id":"k","position":{"x":0,"y":0},"data":{"label":"out","componentId":"snk.csv","properties":{"path":"/tmp/out.csv","hasHeader":true}}}
+              ],
+              "edges":[
+                {"id":"e1","source":"o","target":"m","data":{"connectionType":"main"}},
+                {"id":"e2","source":"m","target":"k","data":{"connectionType":"main"}}
+              ]
+            }"#,
+        );
+        let err = compile(&doc).unwrap_err().to_string();
+        assert!(err.contains("lookup_1") && err.contains("lookups"), "clear error: {}", err);
+    }
+
+    #[test]
+    fn map_string_literal_with_dot_prefix_not_corrupted() {
+        // A string literal containing 'main.' / 'lookup_1.' must be left
+        // untouched by qualification (the qualifier is string-aware).
+        let aliases: std::collections::BTreeMap<String, String> = [
+            ("main".to_string(), "\"o\"".to_string()),
+            ("lookup_1".to_string(), "\"c\"".to_string()),
+        ]
+        .into_iter()
+        .collect();
+        assert_eq!(
+            qualify_port_refs("main.id || 'see lookup_1.x or main.y'", &aliases),
+            "\"o\".\"id\" || 'see lookup_1.x or main.y'"
+        );
+        // Escaped quotes inside the literal don't end it early.
+        assert_eq!(
+            qualify_port_refs("'it''s main.x' || main.id", &aliases),
+            "'it''s main.x' || \"o\".\"id\""
+        );
     }
 
     #[test]
