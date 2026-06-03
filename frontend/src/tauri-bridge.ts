@@ -441,3 +441,32 @@ export async function scheduleRunNow(id: string): Promise<RunResult | null> {
     if (!isTauri()) return null;
     return await invoke<RunResult>('schedule_run_now', { id });
 }
+
+// ---- App update check --------------------------------------------------
+
+export type UpdateInfo = {
+    update_available: boolean;
+    current_build: string;
+    latest_tag: string | null;
+    latest_date: string | null;
+    asset_name: string | null;
+    release_url: string | null;
+    download_url: string | null;
+    error: string | null;
+};
+
+/**
+ * Ask the backend whether a newer Duckle build is available on GitHub
+ * (compares the running binary's build time to the latest release asset for
+ * this OS). Returns null in browser mode or on any failure, so the banner
+ * simply stays hidden when offline.
+ */
+export async function checkForUpdate(): Promise<UpdateInfo | null> {
+    if (!isTauri()) return null;
+    try {
+        return await invoke<UpdateInfo>('check_for_update');
+    } catch (err) {
+        console.warn('checkForUpdate failed', err);
+        return null;
+    }
+}

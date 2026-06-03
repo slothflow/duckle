@@ -15,6 +15,7 @@ import type { ConnectionType } from './canvas/connection-types';
 import { Braces, FolderOpen, GitBranch, Moon, Sparkles, Sun } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import LanguageSelector from './i18n/LanguageSelector';
+import { UpdateBanner } from './UpdateBanner';
 import EditorTabs from './workflow-ui/EditorTabs';
 import EditorHeader, { type Job } from './workflow-ui/EditorHeader';
 import EngineSelector, { type EngineId } from './workflow-ui/EngineSelector';
@@ -1429,6 +1430,7 @@ export default function App() {
     return (
         <RunStatusContext.Provider value={runResult?.nodes ?? {}}>
         <div className="app">
+            <UpdateBanner />
             <header
                 className="topbar"
                 data-tauri-drag-region

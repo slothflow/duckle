@@ -6878,3 +6878,51 @@ html[dir='rtl'] .topbar-lang {
 .run-row-idle {
     color: var(--text-4);
 }
+
+/* App update-available banner (top of the window; see UpdateBanner.tsx). */
+.update-banner {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 14px;
+    background: linear-gradient(90deg, #1b6e3c, #2e8b57);
+    color: #fff;
+    font-size: 13px;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.2);
+    flex: 0 0 auto;
+}
+.update-banner-icon {
+    font-size: 14px;
+}
+.update-banner-text {
+    flex: 1 1 auto;
+}
+.update-banner-cta {
+    background: rgba(255, 255, 255, 0.18);
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    border-radius: 6px;
+    padding: 4px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+}
+.update-banner-cta:hover {
+    background: rgba(255, 255, 255, 0.28);
+}
+.update-banner-cta:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+.update-banner-dismiss {
+    background: transparent;
+    color: rgba(255, 255, 255, 0.85);
+    border: none;
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 4px;
+}
+.update-banner-dismiss:hover {
+    color: #fff;
+}

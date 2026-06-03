@@ -1980,6 +1980,7 @@ dependencies = [
 name = "duckle-desktop"
 version = "0.0.1"
 dependencies = [
+ "chrono",
  "duckle-connectors",
  "duckle-duckdb-engine",
  "duckle-metadata",

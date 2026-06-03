@@ -22,6 +22,7 @@ use tracing_subscriber::EnvFilter;
 mod ci_status;
 mod engine_manager;
 mod llama_chat;
+mod update_check;
 mod workspace_git;
 use engine_manager::{EngineStatus, InstallProgress};
 use llama_chat::{ChatEvent, ChatMessage};
@@ -118,7 +119,8 @@ pub fn run() {
             workspace_git_remote_set,
             workspace_git_save_pat,
             workspace_git_clear_pat,
-            workspace_ci_status
+            workspace_ci_status,
+            check_for_update
         ])
         .run(tauri::generate_context!())
         .expect("error while running duckle");
@@ -504,4 +506,14 @@ async fn workspace_ci_status(workspace_path: String) -> Result<ci_status::CiStat
     tokio::task::spawn_blocking(move || ci_status::poll(&p))
         .await
         .map_err(|e| e.to_string())?
+}
+
+/// Check Duckle's GitHub releases for a build newer than this one. Returns a
+/// quiet, non-fatal result (offline -> error field set, update_available
+/// false) so the frontend can show an upgrade banner without ever blocking.
+#[tauri::command]
+async fn check_for_update() -> Result<update_check::UpdateInfo, String> {
+    tokio::task::spawn_blocking(update_check::check)
+        .await
+        .map_err(|e| e.to_string())
 }
