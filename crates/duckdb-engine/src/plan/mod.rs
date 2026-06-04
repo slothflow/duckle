@@ -764,6 +764,7 @@ fn build_stage(
                 .and_then(|v| v.as_u64())
                 .filter(|n| *n > 0 && *n <= 50) // Databricks max is 50s
                 .unwrap_or(30),
+            upsert_keys: upsert_keys_from(&props),
         });
         (String::new(), StageKind::Sink, Some(from_view.to_string()))
     } else if component_id == "snk.oracle" {

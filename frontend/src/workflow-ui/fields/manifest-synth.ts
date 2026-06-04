@@ -1209,6 +1209,7 @@ function synthWarehouseSink(comp: ComponentDef): ComponentManifest {
                         defaultValue: 30,
                         description: 'How long to wait for each statement to complete. After this the statement continues async server-side; the engine treats it as success.',
                     },
+                    ...upsertModeFields(),
                 ],
             },
         ], 'upstream');

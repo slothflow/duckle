@@ -5771,6 +5771,28 @@ impl DuckdbEngine {
             .map(|c| db_quote_ident(c))
             .collect::<Vec<_>>()
             .join(", ");
+        // Upsert (MERGE) clauses when key columns are configured. Databricks
+        // (Spark SQL) accepts a subquery source and qualified UPDATE SET.
+        let is_upsert = !spec.upsert_keys.is_empty();
+        let on_clause = spec
+            .upsert_keys
+            .iter()
+            .map(|k| format!("t.{q} = s.{q}", q = db_quote_ident(k)))
+            .collect::<Vec<_>>()
+            .join(" AND ");
+        let dk_key_set: std::collections::HashSet<&str> =
+            spec.upsert_keys.iter().map(|s| s.as_str()).collect();
+        let update_set = cols
+            .iter()
+            .filter(|c| !dk_key_set.contains(c.as_str()))
+            .map(|c| format!("t.{q} = s.{q}", q = db_quote_ident(c)))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let insert_vals = cols
+            .iter()
+            .map(|c| format!("s.{}", db_quote_ident(c)))
+            .collect::<Vec<_>>()
+            .join(", ");
         let url = spec.endpoint.clone().unwrap_or_else(|| {
             format!("https://{}/api/2.0/sql/statements/", spec.workspace)
         });
@@ -5793,12 +5815,47 @@ impl DuckdbEngine {
                     format!("({})", vals.join(", "))
                 })
                 .collect();
-            let stmt = format!(
-                "INSERT INTO {} ({}) VALUES {}",
-                qualified,
-                cols_list,
-                values.join(", ")
-            );
+            let stmt = if is_upsert {
+                let src_selects: Vec<String> = chunk
+                    .iter()
+                    .map(|row| {
+                        let obj = row.as_object();
+                        let items: Vec<String> = cols
+                            .iter()
+                            .map(|c| {
+                                let v = obj.and_then(|o| o.get(c)).unwrap_or(&JsonValue::Null);
+                                format!(
+                                    "{} AS {}",
+                                    sql_literal(v, None, Dialect::JsonNative),
+                                    db_quote_ident(c)
+                                )
+                            })
+                            .collect();
+                        format!("SELECT {}", items.join(", "))
+                    })
+                    .collect();
+                let matched = if update_set.is_empty() {
+                    String::new()
+                } else {
+                    format!(" WHEN MATCHED THEN UPDATE SET {}", update_set)
+                };
+                format!(
+                    "MERGE INTO {tgt} t USING ({src}) s ON {on}{matched} WHEN NOT MATCHED THEN INSERT ({cols}) VALUES ({ins})",
+                    tgt = qualified,
+                    src = src_selects.join(" UNION ALL "),
+                    cols = cols_list,
+                    on = on_clause,
+                    matched = matched,
+                    ins = insert_vals,
+                )
+            } else {
+                format!(
+                    "INSERT INTO {} ({}) VALUES {}",
+                    qualified,
+                    cols_list,
+                    values.join(", ")
+                )
+            };
             let mut body_obj = serde_json::Map::new();
             body_obj.insert("statement".into(), JsonValue::String(stmt));
             body_obj.insert(

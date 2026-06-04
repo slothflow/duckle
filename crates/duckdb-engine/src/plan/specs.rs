@@ -995,6 +995,8 @@ pub struct DatabricksSinkSpec {
     pub table: String,
     pub batch_size: usize,
     pub wait_timeout_seconds: u64,
+    /// Non-empty in "upsert" write mode: the key columns to MERGE on.
+    pub upsert_keys: Vec<String>,
 }
 
 /// snk.webhook / snk.rest / vendor HTTP sinks: one HTTP POST/PUT
