@@ -179,6 +179,28 @@ The component palette ships **313 nodes** so the roadmap is visible in the produ
   <sub>Duckie AI Assistant: describe the pipeline, get a one-click insert.</sub>
 </p>
 
+### What's new in v0.2
+
+<p align="center">
+  <img src="docs/assets/real-life-screenshot/mega-pipeline-join.png" alt="A multi-source pipeline joining a CSV, a Parquet file, a DuckDB table, and a SQLite table through the visual Map node" width="100%"/>
+  <br/>
+  <sub>Visual <b>Map</b>: join a main input to multiple lookups (CSV + Parquet + DuckDB + SQLite here) with per-output expressions, no SQL.</sub>
+</p>
+
+<p align="center">
+  <img src="docs/assets/real-life-screenshot/mega-pipeline-parallelize.png" alt="A monolithic pipeline fanning out aggregate, window, and upsert branches concurrently through Parallelize" width="100%"/>
+  <br/>
+  <sub><b>Parallelize</b>: independent downstream branches (aggregates, windows, upserts) run concurrently; concurrency auto-detects from CPU cores.</sub>
+</p>
+
+<p align="center">
+  <img src="docs/assets/real-life-screenshot/cdc-ducklake.png" alt="A DuckLake CDC change-feed pipeline mirroring changes into a DuckDB table with upsert and delete propagation" width="49%"/>
+  <img src="docs/assets/real-life-screenshot/incremental-load.png" alt="A watermark incremental load reading 5 million rows and appending only new rows" width="49%"/>
+</p>
+<p align="center">
+  <sub>Left: <b>DuckLake CDC</b> change-feed mirrored via <b>Upsert + delete propagation</b>. Right: <b>watermark incremental load</b> over 5M rows, advancing state only on a fully successful run.</sub>
+</p>
+
 ---
 
 ## Capabilities
@@ -376,7 +398,7 @@ When the installer downloads the DuckDB CLI it also pre-fetches the extensions D
 
 ## Download / Install
 
-Pick the binary for your OS from the [latest release](https://github.com/SouravRoy-ETL/duckle/releases/tag/v0.1.0-hotfix2):
+Pick the binary for your OS from the [latest release](https://github.com/SouravRoy-ETL/duckle/releases/tag/v0.2.0):
 
 | OS | Asset | How to run |
 |---|---|---|
@@ -948,9 +970,19 @@ See [`.github/workflows/`](.github/workflows/) and [`.gitlab-ci.yml`](.gitlab-ci
 
 ### Releasing a new version
 
+Nothing regenerates this README, the hero / flow SVGs, or the download
+links automatically - they are hand-maintained, so they drift unless each
+release updates them. Treat the README as a release artifact: walk this
+checklist every time before tagging.
+
 ```bash
+# 0. Update the README in the SAME commit as the version bump:
+#    - bump every vX.Y.Z reference (the Download / Install link, badges)
+#    - refresh capability tables for any new sources/transforms/sinks
+#    - add/replace screenshots in docs/assets for shipped features
+#    - re-check the hero/flow SVG wording if positioning changed
 # 1. Bump version in apps/desktop/tauri.conf.json
-# 2. Commit
+# 2. Commit (README + version together)
 git commit -am "Release: bump to vX.Y.Z"
 # 3. Tag + push
 git tag vX.Y.Z

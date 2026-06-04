@@ -4,3 +4,4 @@ font-bold.ttf
 
 # Per-scene intermediates (regenerable by build.sh)
 scenes/
+scenes-v02/
