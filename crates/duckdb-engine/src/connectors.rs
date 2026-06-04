@@ -254,10 +254,13 @@ impl DuckdbEngine {
             .join(" AND ");
         let sf_key_set: std::collections::HashSet<&str> =
             spec.upsert_keys.iter().map(|s| s.as_str()).collect();
+        // Target columns in MERGE ... UPDATE SET are unqualified (Snowflake
+        // and the emulator reject a `t.` prefix on the SET target); the source
+        // side keeps its `s.` alias.
         let update_set = cols
             .iter()
             .filter(|c| !sf_key_set.contains(c.as_str()))
-            .map(|c| format!("t.{q} = s.{q}", q = sf_quote_ident(c)))
+            .map(|c| format!("{q} = s.{q}", q = sf_quote_ident(c)))
             .collect::<Vec<_>>()
             .join(", ");
         let insert_vals = cols
@@ -275,6 +278,75 @@ impl DuckdbEngine {
         // is 1 hour; PAT is the token verbatim. Either way it gets
         // reused across every chunk's POST.
         let auth_header = build_snowflake_auth_header(&spec.account, &spec.auth)?;
+        let is_jwt = matches!(spec.auth, SnowflakeAuth::Jwt { .. });
+        // POST one statement, failing on HTTP errors AND body-level SQL errors
+        // (the SQL API / emulator can return HTTP 200 with an error payload, so
+        // checking only the status code would silently drop data).
+        let post_stmt = |stmt: String| -> Result<(), EngineError> {
+            let mut body_obj = serde_json::Map::new();
+            body_obj.insert("statement".into(), JsonValue::String(stmt));
+            body_obj.insert("timeout".into(), JsonValue::Number(60.into()));
+            body_obj.insert("database".into(), JsonValue::String(spec.database.clone()));
+            body_obj.insert("schema".into(), JsonValue::String(schema_name.into()));
+            if let Some(wh) = &spec.warehouse {
+                body_obj.insert("warehouse".into(), JsonValue::String(wh.clone()));
+            }
+            if let Some(role) = &spec.role {
+                body_obj.insert("role".into(), JsonValue::String(role.clone()));
+            }
+            let body = serde_json::to_string(&JsonValue::Object(body_obj))
+                .unwrap_or_else(|_| "{}".into());
+            let mut req = ureq::post(&url)
+                .set("Authorization", &auth_header)
+                .set("Content-Type", "application/json")
+                .set("Accept", "application/json");
+            if is_jwt {
+                req = req.set("X-Snowflake-Authorization-Token-Type", "KEYPAIR_JWT");
+            }
+            match req.send_string(&body) {
+                Ok(resp) => {
+                    let txt = resp.into_string().unwrap_or_default();
+                    if let Some(err) = snowflake_body_error(&txt) {
+                        return Err(EngineError::Query(format!(
+                            "Snowflake statement failed: {}",
+                            err
+                        )));
+                    }
+                    Ok(())
+                }
+                Err(ureq::Error::Status(code, response)) => {
+                    let b = response.into_string().unwrap_or_default();
+                    Err(EngineError::Query(format!(
+                        "Snowflake HTTP {} from {}: {}",
+                        code,
+                        url,
+                        b.chars().take(300).collect::<String>()
+                    )))
+                }
+                Err(e) => Err(EngineError::Query(format!(
+                    "Snowflake HTTP transport to {}: {}",
+                    url, e
+                ))),
+            }
+        };
+
+        // Auto-create the target if absent (consistent with the SQL Server /
+        // Oracle sinks), inferring types from the upstream view. A no-op when
+        // the table already exists.
+        let col_types: std::collections::HashMap<String, String> =
+            describe_columns(self, db, &spec.from_view).into_iter().collect();
+        let col_defs = cols
+            .iter()
+            .map(|c| {
+                let ty = duckdb_type_to_snowflake(
+                    col_types.get(c).map(|s| s.as_str()).unwrap_or("VARCHAR"),
+                );
+                format!("{} {}", sf_quote_ident(c), ty)
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+        post_stmt(format!("CREATE TABLE IF NOT EXISTS {} ({})", qualified, col_defs))?;
+
         let mut total_inserted = 0_usize;
         for chunk in rows.chunks(spec.batch_size) {
             self.check_cancelled()?;
@@ -300,10 +372,31 @@ impl DuckdbEngine {
                 } else {
                     format!(" WHEN MATCHED THEN UPDATE SET {}", update_set)
                 };
+                // Source as `SELECT lit AS "col", ... UNION ALL ...`: portable
+                // across Snowflake and the DuckDB-backed emulator (whose MERGE
+                // parser doesn't accept a VALUES table source).
+                let src_selects: Vec<String> = chunk
+                    .iter()
+                    .map(|row| {
+                        let obj = row.as_object();
+                        let items: Vec<String> = cols
+                            .iter()
+                            .map(|c| {
+                                let v = obj.and_then(|o| o.get(c)).unwrap_or(&JsonValue::Null);
+                                format!(
+                                    "{} AS {}",
+                                    sql_literal(v, None, Dialect::JsonNative),
+                                    sf_quote_ident(c)
+                                )
+                            })
+                            .collect();
+                        format!("SELECT {}", items.join(", "))
+                    })
+                    .collect();
                 format!(
-                    "MERGE INTO {tgt} t USING (SELECT * FROM (VALUES {vals}) AS v ({cols})) s ON {on}{matched} WHEN NOT MATCHED THEN INSERT ({cols}) VALUES ({ins})",
+                    "MERGE INTO {tgt} t USING ({src}) s ON {on}{matched} WHEN NOT MATCHED THEN INSERT ({cols}) VALUES ({ins})",
                     tgt = qualified,
-                    vals = values.join(", "),
+                    src = src_selects.join(" UNION ALL "),
                     cols = cols_list,
                     on = on_clause,
                     matched = matched,
@@ -317,47 +410,8 @@ impl DuckdbEngine {
                     values.join(", ")
                 )
             };
-            let mut body_obj = serde_json::Map::new();
-            body_obj.insert("statement".into(), JsonValue::String(stmt));
-            body_obj.insert("timeout".into(), JsonValue::Number(60.into()));
-            body_obj.insert("database".into(), JsonValue::String(spec.database.clone()));
-            body_obj.insert("schema".into(), JsonValue::String(schema_name.into()));
-            if let Some(wh) = &spec.warehouse {
-                body_obj.insert("warehouse".into(), JsonValue::String(wh.clone()));
-            }
-            if let Some(role) = &spec.role {
-                body_obj.insert("role".into(), JsonValue::String(role.clone()));
-            }
-            let body = serde_json::to_string(&JsonValue::Object(body_obj))
-                .unwrap_or_else(|_| "{}".into());
-            let mut req = ureq::post(&url)
-                .set("Authorization", &auth_header)
-                .set("Content-Type", "application/json")
-                .set("Accept", "application/json");
-            // Snowflake's JWT auth needs this header so the server
-            // routes the bearer through the keypair JWT validator
-            // instead of the OAuth / PAT one.
-            if matches!(spec.auth, SnowflakeAuth::Jwt { .. }) {
-                req = req.set("X-Snowflake-Authorization-Token-Type", "KEYPAIR_JWT");
-            }
-            match req.send_string(&body) {
-                Ok(_) => total_inserted += chunk.len(),
-                Err(ureq::Error::Status(code, response)) => {
-                    let body = response.into_string().unwrap_or_default();
-                    return Err(EngineError::Query(format!(
-                        "Snowflake HTTP {} from {}: {}",
-                        code,
-                        url,
-                        body.chars().take(300).collect::<String>()
-                    )));
-                }
-                Err(e) => {
-                    return Err(EngineError::Query(format!(
-                        "Snowflake HTTP transport to {}: {}",
-                        url, e
-                    )));
-                }
-            }
+            post_stmt(stmt)?;
+            total_inserted += chunk.len();
         }
         Ok(format!(
             "snowflake: {} {} rows into {}",
@@ -5841,6 +5895,21 @@ fn sanitize_path_segment(name: &str) -> String {
         "pipeline".to_string()
     } else {
         cleaned.to_string()
+    }
+}
+
+/// The Snowflake SQL API (and the local emulator) can return HTTP 200 with a
+/// SQL error in the body (a `message` plus a non-success `sqlState`). Detect
+/// that so a failed statement fails the run instead of silently succeeding.
+/// Returns Some(error) when the body indicates a SQL error, None on success.
+fn snowflake_body_error(body: &str) -> Option<String> {
+    let v: serde_json::Value = serde_json::from_str(body).ok()?;
+    let sql_state = v.get("sqlState").and_then(|s| s.as_str()).unwrap_or("");
+    let msg = v.get("message").and_then(|m| m.as_str()).unwrap_or("");
+    if !msg.is_empty() && !sql_state.is_empty() && sql_state != "00000" {
+        Some(format!("{} (sqlState {})", msg.chars().take(300).collect::<String>(), sql_state))
+    } else {
+        None
     }
 }
 

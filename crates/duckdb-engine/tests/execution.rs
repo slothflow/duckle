@@ -1587,6 +1587,16 @@ fn mssql_env() -> Option<(String, u64, String, String, String)> {
     Some((host, port, db, user, pass))
 }
 
+// Unique-per-run table suffix so live upsert tests start from a clean table
+// even though driver-sink "overwrite" currently appends (it doesn't truncate)
+// and the target DB persists across `cargo test` invocations.
+fn uniq_suffix() -> u128 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos()
+}
+
 fn oracle_env() -> Option<(String, String, String)> {
     let connect = std::env::var("DUCKLE_ORACLE_CONNECT").ok()?;
     let user = std::env::var("DUCKLE_ORACLE_USER").unwrap_or_else(|_| "system".into());
@@ -1677,7 +1687,7 @@ fn sqlserver_upsert_merges_and_inserts() {
     let seed = write_file(tmp.path(), "seed.csv", "id,name\n1,alice\n2,bob\n3,carol\n");
     let upd = write_file(tmp.path(), "upd.csv", "id,name\n2,BOB\n4,dave\n");
     let out = out_path(tmp.path(), "out.csv");
-    let table = format!("duckle_upsert_{}", std::process::id());
+    let table = format!("duckle_upsert_{}", uniq_suffix());
     let snk = |path: &str, mode: &str| {
         json!([
             node("s", "src.csv", json!({ "path": path, "hasHeader": true })),
@@ -1721,7 +1731,7 @@ fn oracle_upsert_merges_and_inserts() {
     let seed = write_file(tmp.path(), "seed.csv", "id,name\n1,alice\n2,bob\n3,carol\n");
     let upd = write_file(tmp.path(), "upd.csv", "id,name\n2,BOB\n4,dave\n");
     let out = out_path(tmp.path(), "out.csv");
-    let table = format!("DUCKLE_UPSERT_{}", std::process::id());
+    let table = format!("DUCKLE_UPSERT_{}", uniq_suffix());
     let snk = |path: &str, mode: &str| {
         json!([
             node("s", "src.csv", json!({ "path": path, "hasHeader": true })),
@@ -1766,13 +1776,13 @@ fn snowflake_upsert_merges_and_inserts() {
     let seed = write_file(tmp.path(), "seed.csv", "id,name\n1,alice\n2,bob\n3,carol\n");
     let upd = write_file(tmp.path(), "upd.csv", "id,name\n2,BOB\n4,dave\n");
     let out = out_path(tmp.path(), "out.csv");
-    let table = format!("DUCKLE_UPSERT_{}", std::process::id());
+    let table = format!("DUCKLE_UPSERT_{}", uniq_suffix());
     let snk = |path: &str, mode: &str| {
         json!([
             node("s", "src.csv", json!({ "path": path, "hasHeader": true })),
             node("w", "snk.snowflake", json!({
                 "account": "local", "endpoint": endpoint, "authType": "pat", "pat": "test",
-                "database": "TEST_DB", "schema": "PUBLIC", "tableName": table,
+                "database": "memory", "schema": "main", "tableName": table,
                 "mode": mode, "conflictColumns": ["id"]
             })),
         ])
@@ -1785,7 +1795,7 @@ fn snowflake_upsert_merges_and_inserts() {
         json!([
             node("r", "src.snowflake", json!({
                 "account": "local", "endpoint": endpoint, "authType": "pat", "pat": "test",
-                "query": format!("SELECT \"id\", \"name\" FROM TEST_DB.PUBLIC.{}", table)
+                "query": format!("SELECT \"id\", \"name\" FROM \"memory\".\"main\".\"{}\"", table)
             })),
             node("k", "snk.csv", json!({ "path": out, "hasHeader": true })),
         ]),
@@ -2196,7 +2206,7 @@ fn pg_sink_upsert_updates_and_inserts() {
         }
     };
     let tmp = tempfile::tempdir().unwrap();
-    let table = format!("duckle_upsert_{}", std::process::id());
+    let table = format!("duckle_upsert_{}", uniq_suffix());
 
     // Seed: overwrite with 3 rows including a PRIMARY KEY on id.
     // (build_relational_sink in overwrite mode does CREATE TABLE AS,

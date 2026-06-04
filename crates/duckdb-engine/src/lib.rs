@@ -2512,6 +2512,33 @@ fn duckdb_type_to_oracle(t: &str) -> String {
     .to_string()
 }
 
+/// Map a DuckDB column type to a Snowflake type for auto-creating a sink
+/// table. Uses Snowflake type SYNONYMS (BIGINT/DECIMAL/DOUBLE/VARCHAR/...)
+/// that Snowflake accepts as aliases for NUMBER/FLOAT/etc. - these are also
+/// valid DuckDB type names, so the same DDL works against real Snowflake and
+/// the DuckDB-backed local emulator used for tests.
+fn duckdb_type_to_snowflake(t: &str) -> String {
+    let up = t.trim().to_ascii_uppercase();
+    if up.starts_with("DECIMAL") || up.starts_with("NUMERIC") {
+        // Snowflake accepts DECIMAL(p,s) as a synonym for NUMBER(p,s).
+        return up.replacen("NUMERIC", "DECIMAL", 1);
+    }
+    match up.as_str() {
+        "BOOLEAN" | "BOOL" => "BOOLEAN",
+        "TINYINT" | "UTINYINT" | "SMALLINT" | "USMALLINT" | "INT2" | "INTEGER" | "INT"
+        | "INT4" | "UINTEGER" | "BIGINT" | "INT8" | "UBIGINT" | "HUGEINT" | "UHUGEINT" => {
+            "BIGINT"
+        }
+        "REAL" | "FLOAT" | "FLOAT4" | "DOUBLE" | "FLOAT8" => "DOUBLE",
+        "DATE" => "DATE",
+        "TIME" => "TIME",
+        "TIMESTAMP" | "DATETIME" | "TIMESTAMP_NS" | "TIMESTAMP_MS" | "TIMESTAMP_S" => "TIMESTAMP",
+        "TIMESTAMP WITH TIME ZONE" | "TIMESTAMPTZ" => "TIMESTAMP_TZ",
+        _ => "VARCHAR",
+    }
+    .to_string()
+}
+
 /// (name, DuckDB type) pairs for a view/table, via DuckDB DESCRIBE. Used
 /// by driver sinks to auto-create a target table with sensible types.
 fn describe_columns(engine: &DuckdbEngine, db: &Path, view: &str) -> Vec<(String, String)> {
