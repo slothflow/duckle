@@ -1,52 +1,45 @@
-# Execution Engines
+# Visual Execution Controls
 
-Duckle features a multi-engine architecture. Visual pipeline graphs compile into an engine-agnostic logical representation, which can then be dispatched to different execution engines.
-
----
-
-## 1. DuckDB Engine (`duckle-duckdb-engine`)
-
-The default, production-ready execution engine compiles visual pipeline graphs into complex, nested SQL scripts and runs them natively through the embedded **DuckDB CLI**.
-
-### Core Attributes
-* **DuckDB Version**: Tracks stable release **v1.5.3**.
-* **SQL Compilation**: Rather than running slow row-by-row lookups, the compiler maps visual nodes to nested subqueries and joins. Relational operations (aggregates, joins, window queries) achieve native execution speeds.
-* **Concurrency**: Duckle automatically parses separate parallel branches on your canvas (such as a single source fanning out to multiple files) and runs them concurrently, scaling database workers to match local CPU core availability.
-* **Mid-Run Cancellations**: A cancellation command cleanly kills the underlying DuckDB subprocess, immediately releasing resources without leaving orphaned database files.
-
-### Extension Pre-Fetching
-To ensure offline compatibility, the first-launch setup pre-downloads all extension libraries used by Duckle's connectors:
-* `httpfs` (S3 / GCS reads)
-* `azure` (Azure Blob Storage connector)
-* `sqlite` & `postgres` & `mysql` (Relational attachment secrets)
-* `excel` (Spreadsheet importer)
-* `iceberg` & `delta` & `ducklake` (Lakehouse structures)
-* `vss` (Vector Similarity Search)
-* `fts` (Full-Text BM25 Search)
-* *Note: The `spatial` extension (~50 MB GDAL bundle) is lazy-loaded on the first drag-and-drop of a geospatial node to keep the initial installer package compact.*
+Duckle lets you manage execution engines, monitor pipeline performance, and audit data lineage directly from the user interface.
 
 ---
 
-## 2. SlothDB Adapter (`duckle-slothdb-engine`)
+## 1. Running and Controlling Pipelines
 
-Duckle includes an adapter for **SlothDB**, an alternative embedded analytical database engine.
+The top toolbar contains your primary execution controls:
 
-* **Upstream**: [SouravRoy-ETL/slothdb](https://github.com/SouravRoy-ETL/slothdb).
-* **Role**: Configured per pipeline when a lightweight alternative to DuckDB is needed.
-* **Setup**: Downloaded via the engine manager panel inside the desktop application.
+* **Engine Selector Dropdown**: Located next to the Run button. Switch between the default **DuckDB** execution engine and the optional **SlothDB** engine.
+* **Run Button (Green Play Icon)**: Compiles the visual canvas on your screen and starts execution.
+* **Stop Button (Red Pause/Square Icon)**: Immediately interrupts execution. Click this to cancel long runs; the application stops active processes and releases memory.
 
 ---
 
-## 3. Future Engine Architectures
+## 2. Real-Time Canvas Feedback
 
-Duckle's workspace code files contain placeholders and early FFI integrations for two upcoming execution environments:
+When you click **Run**, the visual canvas provides live feedback:
 
-### Stream Engine (`duckle-stream-engine`)
-* **Role**: Designed to process infinite, event-driven message feeds.
-* **Model**: Implements bounded, backpressure-aware operator pipelines.
-* **Integrations**: Designed to consume directly from streaming brokers like Apache Kafka, Apache Pulsar, and NATS JetStream, transferring data in unified Arrow schemas.
+* **Node Status Colors**:
+  * **Spinning Green Border**: The node is currently compiling or running.
+  * **Solid Green Border**: The node completed successfully.
+  * **Red Border**: The node encountered an error. Click the node and open the **Console Tab** in the Bottom Panel to read the error logs.
+* **Live Counters**: Row count badges display under connection edges, streaming the number of records moving from node to node.
 
-### Transform Engine (`duckle-transform-engine`)
-* **Role**: In-process Rust execution runner.
-* **Model**: Composes Arrow-native vectorized operators.
-* **Benefit**: Bypasses compilation to SQL dialects, running pure in-process transformations on tabular `RecordBatch` streams.
+---
+
+## 3. The Bottom Panel Tabs
+
+Select any node on the canvas to inspect its state using the **Bottom Panel**:
+
+* **Preview Tab**: Displays a spreadsheet-like data grid showing a sample of the rows output by that node.
+* **Plan Tab**: Shows the exact, compile-time SQL script Duckle built from your visual layout. You can copy this script to execute it directly inside other database tools.
+* **Output Tab**: Shows a timeline checklist of the run, listing start times, completion checks, and elapsed duration for each stage.
+* **Console Tab**: Displays system warnings, runtime errors, and output logs.
+
+---
+
+## 4. Offline Extension Downloads
+
+Duckle pre-fetches database components on startup so that your visual connectors can execute pipelines without an active internet connection.
+
+* **Pre-Loaded Pack**: Support for S3 buckets, PostgreSQL/MySQL connectors, Excel sheets, and JSON formats is downloaded during the initial setup.
+* **Geospatial Nodes**: Dragging a Spatial/Geography node onto the canvas automatically downloads geospatial extension modules in the background, keeping the initial installation bundle small.

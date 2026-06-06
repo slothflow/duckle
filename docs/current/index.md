@@ -1,56 +1,60 @@
-# Duckle Documentation (Current)
+# Duckle User Guide
 
-Welcome to the official documentation for **Duckle**, the local-first desktop ETL / ELT studio with a built-in local AI assistant.
+Welcome to the **Duckle User Guide**! Duckle is an open-source, local-first desktop ETL / ELT studio. It features an intuitive drag-and-drop canvas, a comprehensive properties panel, real-time data previews, and a built-in AI assistant (**Duckie**) that runs entirely on your local machine.
 
-Duckle compiles visual data pipelines into SQL queries and executes them with native speed using embedded, columnar analytical engines. Featuring over 290+ connectors, 120+ transforms, a built-in scheduler, and a sandboxed AI assistant running entirely on your CPU, Duckle packs a complete ETL suite into a small desktop binary.
+Using Duckle, you can construct visual pipelines to extract, clean, transform, validate, and load data without writing complex SQL scripts or code. Every visual node you place is translated into highly optimized queries behind the scenes, giving you full visibility and speed.
 
 ---
 
-## Navigation & Structure
+## Documentation Navigation
 
-This documentation is structured into the following sections, designed to take you from initial setup to a complete understanding of Duckle's internals:
+This guide is organized into the following sections to help you get the most out of the Duckle application:
 
 ### 1. [Installation & Setup](installation.md)
-* Learn how to download and install Duckle on **Windows, macOS, and Linux**.
-* Understand the guided first-launch setup of the DuckDB execution engine and the optional Duckie AI assistant.
-* Explore the file structure of a Duckle workspace.
+* How to download and run the Duckle application on **Windows, macOS, and Linux**.
+* Running the **Guided Startup Setup** to download database and local AI engines.
+* Understanding your **Workspace Folder** structure on disk.
 
 ### 2. [Getting Started Guide](getting-started.md)
-* Step-by-step walkthrough to build and execute your first data pipeline (e.g., CSV to Parquet).
-* How to use the **Duckie AI Assistant** to generate pipelines from natural language prompts.
-* Learn about live previews, generated SQL plans, environment context variables, and saved credentials.
+* Learn how to navigate the **Canvas Interface** and use the **Component Palette**.
+* Build your first data pipeline: connecting a CSV file to a Parquet output.
+* Open the **Duckie AI Sidebar** to build and update pipelines in plain English.
+* Run your pipeline and inspect results in the **Bottom Panel (Previews & SQL Plans)**.
 
-### 3. [Connectors & Sources / Sinks](connectors.md)
-* Overview of the **290+ connectors** available at install time.
-* Learn how the `SchemaInspector` trait works behind the scenes.
-* Deep dive into the **CSV Connector** configuration, format options, and auto-detection mechanism.
+### 3. [Connectors: Sources & Sinks](connectors.md)
+* Dragging and dropping source and sink nodes from the Palette.
+* Using the **Properties Panel** to map paths, databases, and variables.
+* Deep dive into setting up the **CSV/TSV node**, automatic schema scanning, and custom quote/delimiter inputs.
+* Summary of available visual connectors for files, databases, object stores, cloud warehouses, and vector databases.
 
 ### 4. [Transforms & Data Quality](transforms.md)
-* Detailed catalog of the **120+ transformations** (Fields, Rows, Aggregates, Joins, Windowing, Shape/Pivot, CDC/SCD, and AI/Search).
-* How to enforce data quality using visual validators (Not-Null, Range, Uniqueness) and the **Reject Port** flow.
-* Writing custom User Defined Functions (UDFs) in JavaScript, WebAssembly, and SQL.
+* Overview of visual transformation blocks (manipulating columns, filtering rows, aggregating data, and performing lookups).
+* Joining tables visually using the interactive **Map Node Editor**.
+* Taming messy data with **QA Validators** and routing invalid records to a dedicated **Reject Port**.
+* Writing custom scripts directly within **JavaScript, WebAssembly, and SQL UDF nodes** in the properties panel.
 
-### 5. [Execution Engines](engines.md)
-* An overview of Duckle's multi-engine adapter design.
-* Understanding the default **DuckDB Engine** (query compiler & thread-pool execution).
-* The experimental **SlothDB Engine** adapter.
-* Future directions: Native Stream and Transform engines.
+### 5. [Execution Controls](engines.md)
+* Running pipelines using the **Run** and **Stop** controls.
+* Switching between execution backends (DuckDB and SlothDB) in the header.
+* How the application pre-installs database extensions so you can work completely offline.
 
-### 6. [Scheduler & Triggers](scheduler.md)
-* How to schedule pipeline runs using **Cron**, **Interval**, and **File-Watch** triggers.
-* Understand schedule persistence (`schedules.json`) and run bookkeeping.
-* Running headless pipelines using the Duckle Command Line Interface (CLI).
+### 6. [Scheduler & Automation](scheduler.md)
+* Opening the **Schedule Editor Modal** to trigger pipelines automatically.
+* Creating schedules based on **Cron expressions**, **time intervals**, or **File-Watch folders**.
+* Tracking execution history, duration, and error reports within the scheduler list.
+* Executing saved pipelines headlessly via standard terminal command lines.
 
-### 7. [Architecture & Internals](architecture.md)
-* Deep dive into the visual DAG editor, Tauri-based IPC bridge, and Shared App State.
-* Understanding the logical plan optimization layer of the workflow engine.
-* Structure of the `metadata` and `plugin-sdk` contract crates.
+### 7. [Desktop Shell & Workspace Git Flow](architecture.md)
+* Working with multiple workspace folders.
+* Using the built-in **Git Panel** to stage, commit, branch, and push your visual pipeline files.
+* Securely managing encrypted connection passwords.
+* Interacting with the local AI assistant process panel.
 
 ---
 
-## Core Philosophy
+## Core Visual Concepts
 
-Duckle is built on three main pillars:
-1. **Visual but Transparent**: No black-box configurations. Every visual block compiles down to clean, readable SQL queries that you can preview and verify at any point.
-2. **Local-First & Private**: Telemetry-free by design. Workspaces are directories on your local disk containing plain JSON and Markdown files. Git-friendly, branch-friendly, and audit-ready.
-3. **Batteries Included**: Includes all connectors and engines out-of-the-box in a ~30 MB desktop app.
+When using Duckle, you will primarily work with three visual structures:
+* **The Canvas**: A large interactive board where you design pipelines by drawing connector lines between handles on nodes.
+* **Nodes (Components)**: Visual blocks representing a source (e.g. CSV), a transformation (e.g. Filter), a QA validator, or a target destination (e.g. database table).
+* **Ports & Edges**: Connective pins on nodes. Circles on the left are inputs; circles on the right are outputs. Connector lines (edges) carry the data flow.

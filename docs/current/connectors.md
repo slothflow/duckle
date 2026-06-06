@@ -1,90 +1,70 @@
-# Connectors & Sources / Sinks
+# Connectors: Sources & Sinks
 
-Duckle separates connector metadata and schema inspection from actual execution. Connectors declare their properties and schemas to the visual planner, while execution engines compile those properties into physical read/write operations (e.g., SQL commands in DuckDB).
-
----
-
-## 1. The Connector Contracts (`plugin-sdk`)
-
-All connectors implement the core contracts defined in the `duckle-plugin-sdk` crate. The desktop shell queries these traits to inspect schemas and construct previews without loading entire datasets.
-
-```rust
-#[async_trait]
-pub trait SchemaInspector: Send + Sync {
-    /// Stable identifier matching the palette `componentId` (e.g. `"src.csv"`).
-    fn component_id(&self) -> &str;
-
-    /// Read config JSON, infer schema columns, and pull preview sample rows.
-    async fn inspect(&self, config: JsonValue) -> Result<Inspection, InspectError>;
-}
-
-#[async_trait]
-pub trait Connector: SchemaInspector {
-    fn kind(&self) -> ConnectorKind;
-}
-
-pub enum ConnectorKind {
-    Source,
-    Sink,
-}
-```
+Duckle provides over 290+ visual connectors to read data from (Sources) and write data to (Sinks) files, databases, object storage, cloud warehouses, and API streams.
 
 ---
 
-## 2. Deep Dive: CSV Source Connector (`src.csv`)
+## 1. Visual Properties Panel
 
-The CSV/TSV source connector is implemented natively in Rust (`crates/connectors/src/csv.rs`). 
+Every connector node you drop onto the canvas has a custom configuration form inside the **Properties Panel** on the right side of the screen.
 
-### Core Features
-* **Stateless Inspection**: One singleton `CsvConnector` handles all CSV/TSV node schema checks asynchronously.
-* **Non-blocking Execution**: Sync parsing runs inside a `tokio::task::spawn_blocking` pool to prevent locking the main async runtime loop when handling large files.
-* **Cap on Memory**: Inspection limits reads to `8 MB` (`MAX_INSPECT_BYTES`). Even on a 50 GB CSV, Duckle only reads enough to extract headers and preview rows, completing in milliseconds.
-* **Encoding Support**: Decodes bytes using `encoding_rs`, providing built-in support for `UTF-8`, `UTF-16`, `Latin-1`, `Windows-1252`, and more.
-
-### Configuration Properties
-When dragging a CSV source, the properties panel maps to the following Rust options:
-
-| Property | JSON Key | Default | Description |
-| :--- | :--- | :--- | :--- |
-| **Path** | `path` | *Required* | Absolute path to the local CSV/TSV file. |
-| **Has Header** | `hasHeader` | `true` | If false, columns are automatically named `col_1`, `col_2`, etc. |
-| **Delimiter** | `delimiter` | `,` | Separator byte. Supports literal escapes like `\t` for tabs. |
-| **Quote Char** | `quoteChar` | `"` | Enclosure character. Leaving blank disables quoting. |
-| **Encoding** | `encoding` | `utf-8` | Target text decoder format. |
-| **Skip Lines** | `skipLines` | `0` | Skips header preambles (e.g., generated comment headers). |
-| **Sample Rows** | `sampleRows` | `200` | Number of rows scanned to infer schema and types. |
-| **Null Value** | `nullValue` | `None` | Case-insensitive token recognized as `NULL` (e.g., `NA`, `N/A`, `NaN`). |
-
-### Type Inference Rules
-The CSV inspector infers column data types by running sample rows against validators in order of specificity:
-1. **Timestamp**: Matches `YYYY-MM-DD HH:MM[:SS][.fff][Z|+-HH:MM]`.
-2. **Date**: Matches standard ISO `YYYY-MM-DD` structures.
-3. **Int64**: Successfully parses to a 64-bit integer.
-4. **Float64**: Parses to a finite real number (NaN and infinities are rejected to maintain JSON-safety).
-5. **Bool**: Matches named boolean tokens like `true`/`false` or `yes`/`no` (ambiguous `0`/`1` values stay numeric to avoid mis-typing flags).
-6. **String**: Fallback type if any row contains a non-null incompatible value.
+* **Text Fields & Browsers**: Click the folder icon next to file paths to select local files.
+* **Toggles & Dropdowns**: Switch write modes (overwrite, append, upsert) or file compression formats (ZSTD, GZIP).
+* **Connections Dropdown**: Instead of entering passwords or API keys directly into a node, select a pre-saved credential profile.
 
 ---
 
-## 3. Other Available Connectors
+## 2. Using the Connection Manager
 
-Duckle supports over 290+ connectors. For relational databases, warehouses, and object stores, the planner collects metadata properties and translates them into appropriate SQL statements executed via DuckDB extensions.
+To avoid entering sensitive passwords or credentials repeatedly, manage them centrally:
 
-### Files
-* **Supported Formats**: CSV/TSV, Parquet, JSON/JSONL, Excel (.xlsx), YAML, TOML, XML (path-based parsing), Fixed-Width, and Apache Avro.
-* **Geospatial Files**: GeoJSON, Shapefile, GeoPackage, KML, GPX, and GML via DuckDB's `spatial` extension.
+1. Click the **Key icon** in the top toolbar to open the **Connection Manager Modal**.
+2. Click **"New Connection"** and choose a template (e.g., *PostgreSQL*, *AWS S3*, *Snowflake*).
+3. Type in your host details, usernames, and passwords.
+4. Click **"Save"**. Duckle automatically encrypts your passwords before writing them to your workspace folder.
+5. In your canvas, select a node (e.g., a *PostgreSQL Sink*), click the **Connection** dropdown in the Properties Panel, and select your saved connection.
+
+---
+
+## 3. CSV/TSV Node Configuration
+
+The CSV source node is the most common starting block for visual pipelines. Selecting the CSV node displays these configuration settings:
+
+| GUI Input | Property Field | Purpose |
+| :--- | :--- | :--- |
+| **Path** | `path` | File location on disk. Supports context variables (e.g., `${MY_DATA_DIR}/orders.csv`). |
+| **Has Header** | `hasHeader` | Check this box if the first line holds column names. Unchecking it assigns names like `col_1`, `col_2` automatically. |
+| **Delimiter** | `delimiter` | The text separator. Common values are `,` (CSV), `;`, or `\t` (for tab-separated TSV files). |
+| **Quote Char** | `quoteChar` | The text boundaries character (usually `"`). Leave empty to disable quote formatting. |
+| **Encoding** | `encoding` | Choose the file's encoding standard (e.g., UTF-8, Latin-1, or Windows-1252). |
+| **Skip Lines** | `skipLines` | Enter a number of lines to ignore at the top of the file before reading headers (useful for report logs). |
+| **Null Value** | `nullValue` | Define text strings that represent missing values (such as `NA`, `N/A`, or `NULL`). |
+
+* **"Autodetect schema" Button**: Click this button after setting your file path. The node reads a sample of the file, infers columns, and populates the **Schema** tab.
+* **Visual Lineage**: Click the **Preview** tab in the bottom panel to inspect rows, ensuring column formatting matches your expectations.
+
+---
+
+## 4. Visual Connector Catalog
+
+Connectors are grouped into folders inside the Left Sidebar Palette:
+
+### File Types
+* **Delimited & Structured**: CSV, TSV, Parquet, JSON, JSONL / NDJSON, Excel (.xlsx), YAML, TOML, XML, Fixed-Width, and Apache Avro.
+* **Geospatial files**: GeoJSON, Shapefile, GeoPackage, KML, GPX, and GML.
 
 ### Databases & Warehouses
-* **Relational DBs**: PostgreSQL, MySQL, MariaDB, CockroachDB, SQL Server, Oracle, and ClickHouse.
-* **Lakehouses**: Apache Iceberg, Delta Lake, and DuckLake.
-* **Cloud Warehouses**: MotherDuck, Snowflake (SQL API), BigQuery, Redshift, and Databricks.
+* **Databases**: PostgreSQL, MySQL, MariaDB, CockroachDB, SQL Server, Oracle, and ClickHouse.
+* **Lakehouse tables**: Apache Iceberg, Delta Lake, and DuckLake.
+* **Cloud warehouses**: MotherDuck, Snowflake, BigQuery, Redshift, and Databricks.
 
-### Object & Cloud Storage
-* Amazon S3, Google Cloud Storage, Azure Blob Storage, Cloudflare R2, Backblaze B2, MinIO, and local/HTTP directories.
+### Object Storage & Web
+* **Cloud Storage**: Amazon S3, Google Cloud Storage, Azure Blob, HTTP(S), MinIO, Cloudflare R2, and Backblaze B2.
+* **FTP & Webhooks**: FTP/FTPS, IMAP (mailboxes), and Webhook Listeners (binds a local port to accept incoming JSON payloads).
 
 ### Streaming & NoSQL
-* **Event Streams**: Kafka, Redpanda, NATS JetStream, GCP Pub/Sub, RabbitMQ, and AWS Kinesis.
-* **Document/Key-Value**: MongoDB, Redis, Cassandra/ScyllaDB, Elasticsearch, and DynamoDB.
+* **Streaming**: Apache Kafka, Redpanda, NATS JetStream, GCP Pub/Sub, RabbitMQ, and AWS Kinesis.
+* **NoSQL**: MongoDB, Redis, Cassandra, Elasticsearch, and DynamoDB.
 
-### Vector Databases & Sinks
+### Vector Databases
 * pgvector, Pinecone, Qdrant, Weaviate, Milvus, Chroma, and LanceDB.

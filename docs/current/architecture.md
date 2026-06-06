@@ -1,83 +1,59 @@
-# Architecture & Internals
+# Desktop Shell & Workspace Git Flow
 
-Duckle is a multi-tier visual ETL platform designed around a local-first, privacy-respecting runtime. 
-
----
-
-## 1. High-Level Architecture
-
-The system consists of a TypeScript visual editor front-end, a Tauri-based desktop shell, and modular Rust crates that handle workspace directories, orchestration, compilation, and execution.
-
-```text
-  ┌──────────────────────────────────────────────────────────┐
-  │                 React 19 / TS Front-End                  │
-  │     (Canvas editor, Palette, properties forms, Chat)     │
-  └───────────────┬──────────────────────────────▲───────────┘
-                  │ Tauri IPC Invoke             │ Event Stream
-  ┌───────────────▼──────────────────────────────┴───────────┐
-  │                  Tauri Desktop Shell                     │
-  │   (Workspace manager, Git integrations, process manager)  │
-  └───────────────┬──────────────────────────────────────────┘
-                  │ Inter-Crate FFI / Logic
-  ┌───────────────▼──────────────────────────────────────────┐
-  │                   Workflow Engine                        │
-  │     (DAG Validation, Schema Propagation, Optimizer)      │
-  └───────────────┬──────────────────────────────────────────┘
-                  │ Logical Plan AST
-  ┌───────────────▼──────────────────────────────────────────┐
-  │                  Execution Engines                       │
-  │  (DuckDB compiler, SlothDB adapter, future executors)    │
-  └──────────────────────────────────────────────────────────┘
-```
+Duckle is a local-first desktop application that integrates a visual editor, local process managers, and a built-in Git client to simplify pipeline version control.
 
 ---
 
-## 2. Crate Architecture
+## 1. Local-First Application Design
 
-The backend code is divided into highly focused, decoupled Rust crates in a workspace:
-
-### `apps/desktop` (Desktop Shell)
-* **Role**: The main application runner. Binds the Tauri interface and acts as the bridge between frontend user actions and background threads.
-* **Key Modules**:
-  * `workspace_git.rs`: Standardizes command executions against local CLI `git` directories (stage, commit, push, pull, branch creation).
-  * `engine_manager.rs`: Manages binary installations and updates for DuckDB and SlothDB.
-  * `llama_chat.rs`: Manages the lifecycle of the local Qwen-Coder chat assistant, spawning a local `llama-server` subprocess.
-  * `ci_status.rs`: Polls branch pipeline statuses using GitHub and GitLab APIs.
-
-### `crates/workflow-engine` (Validation & Optimization)
-* **Role**: Processes the visually declared node network.
-* **Responsibilities**:
-  * Runs cycle-detection validation on the directed graph (DAG).
-  * Propagates schema configurations across connecting edges (e.g. mapping source formats to matching sink schemas).
-  * Applies query optimization passes (such as filter pushdown).
-  * Compiles the graph into the AST representation defined by `duckle-execution-core`.
-
-### `crates/execution-core` (Logical Contracts)
-* **Role**: Defines the engine-agnostic logical structure of pipelines.
-* **Responsibilities**:
-  * Defines intermediate execution plan models (tables, filters, projections, joins).
-  * Establishes the engine traits that target runtimes (like DuckDB and SlothDB) implement.
-
-### `crates/metadata` (Serializations & Schemes)
-* **Role**: Holds the authoritative struct definitions for workspaces.
-* **Structures**:
-  * `PipelineNode`, `PipelineEdge`, `Position`, `EdgeData`, `NodeData`, and `Pipeline`.
-  * `DataType`: Enumerates the primitive data types (String, Int32, Int64, Float32, Float64, Bool, Date, Timestamp, Time, Decimal, Json, Binary).
-  * *Note: All models round-trip cleanly with the TypeScript interfaces of the frontend visual workspace.*
-
-### `crates/plugin-sdk` (Connector Interface)
-* **Role**: Establishes standard traits to build extensions.
-* **Structures**:
-  * Declares `SchemaInspector` and `Connector` traits.
-  * Declares `Inspection` results (columns and preview row lists).
+Duckle runs locally on your workstation:
+* **The Desktop Shell**: Visual controls are built in React, running inside a Tauri container that interfaces with local databases, file systems, and background processes.
+* **Security & Privacy**: No data is sent to external cloud APIs unless you configure a network connector. Your pipeline configuration files, log reports, and credentials remain isolated on your local hard drive.
 
 ---
 
-## 3. Local AI Subprocess: Duckie
+## 2. Visual Workspace Organization
 
-The Duckie assistant runs completely locally. When a user activates the AI assistant:
-1. The `llama_chat.rs` controller checks the `%APPDATA%/io.duckle.app/engines/` directory for the `llama-server` and model weight binaries.
-2. It spawns a sandboxed `llama-server` child process bound to `127.0.0.1`.
-3. The process runs Qwen 2.5 Coder 1.5B GGUF.
-4. Chat prompts are streamed from the server to the frontend via server-sent events.
-5. If the model outputs a pipeline JSON object, the frontend intercepts the markdown formatting, parses it, and places the corresponding visual graph onto the canvas.
+All your work is stored inside a selected **Workspace Folder** on your local machine.
+
+* **Editing Files**: Pipelines are saved as standard JSON canvas documents under `<workspace>/pipelines/`. You can copy, rename, or share these files through your operating system's file manager just like normal files.
+* **Workspace Settings**: Active triggers and scheduling queues are kept in a single `<workspace>/schedules.json` file.
+* **Credential Encryption**: Saved connection configurations are written to `<workspace>/connections/`. Sensitive values (such as passwords and database access tokens) are encrypted with a unique key located in `<workspace>/.duckle/keys/`.
+
+> [!WARNING]
+> Keep your workspace secure by preventing `.duckle/keys/` from being shared or checked into public repositories.
+
+---
+
+## 3. Local AI Subprocess Model (Duckie)
+
+The **Duckie AI Assistant** is designed to keep your pipeline instructions private.
+
+* **Local Inference**: Duckie starts a local server subprocess on `127.0.0.1`.
+* **Sidebar Integration**: The Sparks toolbar icon slides open a dedicated chat panel. It displays a status badge indicating whether the local assistant is **Online** (green) or **Offline** (gray).
+* **Canvas Insertion**: When the local assistant outputs a pipeline layout, clicking the **"Insert into canvas"** button renders the nodes and wires them automatically.
+
+---
+
+## 4. Built-in Git Client Panel
+
+Duckle features a visual Git client, allowing you to manage branches, track modifications, and commit changes without using the command-line terminal.
+
+### Opening the Git Client
+Click the **Git / Branch icon** in the top toolbar to slide open the **Git Panel** on the right side of the screen.
+
+### Key Features
+* **Branch Manager**:
+  * View your active branch name.
+  * Switch branches by selecting one from the dropdown list.
+  * Create new branches by clicking **"New Branch"** and typing a name.
+* **Tracking Changes**:
+  * Displays a list of files that have been modified, deleted, or newly created in your workspace.
+  * Click file names to stage changes.
+* **Staging and Committing**:
+  * Type a commit message into the text box and click **"Stage All & Commit"** to save your pipeline changes.
+* **Push and Pull**:
+  * Click **"Pull"** to download changes from your remote repository (e.g., GitHub or GitLab).
+  * Click **"Push"** to upload your committed changes.
+* **Secure Token Prompts**: If your remote repository requires authentication, Duckle prompts for a Personal Access Token (PAT), saving it encrypted under `.duckle/secrets/` (which is automatically excluded from version control).
+* **CI Build Badge**: Once you push modifications, the top toolbar displays a live status badge (green check mark for successful builds, red for failures, and yellow for builds in progress) directly mapping your remote GitHub Actions or GitLab CI workflows.

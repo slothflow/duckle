@@ -1,102 +1,56 @@
-# Installation & Guided Setup
+# Installation & App Setup
 
-Duckle is compiled as a lightweight, self-contained desktop binary (~24–30 MB depending on the platform). Because it follows a local-first philosophy, it does not include database engines or heavy AI weights inside the initial bundle. Instead, it downloads them into your local application data directory on the first launch.
-
----
-
-## 1. Downloading the Desktop Binary
-
-Pick the binary matching your operating system from the latest release page:
-
-| Operating System | Asset Name | Run Instructions | Notes |
-| :--- | :--- | :--- | :--- |
-| **Windows** | `Duckle-windows-x64.exe` | Double-click the installer. | Unsigned binary: Windows SmartScreen will prompt; click **"More info"** -> **"Run anyway"**. |
-| **macOS** (Apple Silicon) | `Duckle-macos-arm64` | `chmod +x Duckle-macos-arm64 && ./Duckle-macos-arm64` | Right-click the app icon -> **"Open"** to register a Gatekeeper bypass. |
-| **Linux** (x86_64) | `Duckle-linux-x64` | `chmod +x Duckle-linux-x64 && ./Duckle-linux-x64` | Requires WebKitGTK 4.1 (`libwebkit2gtk-4.1-0` on Debian/Ubuntu). |
+Duckle is a lightweight desktop app that runs entirely on your local machine. Because it does not run in the cloud, there are no remote servers to configure, and all your work remains completely secure.
 
 ---
 
-## 2. First-Launch Guided Setup
+## 1. Running the Desktop Application
 
-When you open Duckle for the first time, you will be prompted with a setup modal to install execution engines:
+Download the application package for your operating system:
 
-1. **DuckDB CLI (Required)**
+* **Windows**: Run the `Duckle-windows-x64.exe` setup helper. 
+  * *Unsigned App Warning*: Windows SmartScreen may block launch. Click **"More info"** and then select **"Run anyway"**.
+* **macOS**: Extract and open `Duckle-macos-arm64` (for Apple Silicon) or the Intel version.
+  * *Gatekeeper Bypass*: Right-click the app icon in Finder and select **"Open"** to bypass security alerts.
+* **Linux**: Ensure WebKitGTK (`libwebkit2gtk-4.1-0`) is installed on your package manager, then run `chmod +x Duckle-linux-x64 && ./Duckle-linux-x64`.
+
+---
+
+## 2. Guided Startup Setup Modal
+
+The first time you open Duckle, the **Engine Setup Modal** will appear to help download the necessary engine tools:
+
+![Engine Setup Modal](file:///d:/Repos/GitHub/SouravRoy-ETL/duckle/docs/assets/hero.svg)
+
+1. **DuckDB Database Engine (Required)**
+   * **Visual Action**: Click the **Install** button.
+   * **Role**: Powers all the SQL compilations, database attachments, schema reads, and file execution processes.
    * **Size**: ~30 MB (plus extension libraries).
-   * **Role**: Powers the SQL compilation, schema inference, local database tables, and cloud connectors (`httpfs` for S3/GCS).
-   * **Setup Time**: ~30 seconds.
+   * **Estimated Time**: ~30 seconds.
 2. **Duckie AI Assistant (Optional)**
+   * **Visual Action**: Click the **Install** button.
+   * **Role**: Downloads the **Qwen 2.5 Coder 1.5B** local AI model weights and its runner. This activates the chat window sidebar for offline pipeline generation.
    * **Size**: ~1.1 GB.
-   * **Role**: Downloads the **Qwen 2.5 Coder 1.5B** GGUF model and a compiled **llama-server** binary. This lets you generate pipelines using plain English without external APIs.
-   * **Setup Time**: 5–10 minutes depending on internet connection speed.
-
-### Installation Directory
-Both engines are saved locally under your platform's app-data directory:
-* **Windows**: `%APPDATA%\io.duckle.app\engines\`
-* **macOS**: `~/Library/Application Support/io.duckle.app/engines/`
-* **Linux**: `~/.config/io.duckle.app/engines/`
+   * **Estimated Time**: 5–10 minutes depending on your internet connection.
 
 > [!TIP]
-> If you need to force a fresh install of the engines, simply close the app, delete the `engines/` directory, and restart Duckle.
+> If you ever need to redownload these engines or reset their installation status, close Duckle, navigate to your platform's configuration folder (Windows: `%APPDATA%\io.duckle.app\engines\`), delete the contents, and launch the application again.
 
 ---
 
-## 3. Selecting a Workspace
+## 3. Selecting a Workspace Folder
 
-After engine setup, Duckle will ask you to select or create a **Workspace Folder** on your local drive. 
+After setting up the engines, the **Workspace Picker Modal** will ask you to select a folder on your local drive. 
 
-A workspace in Duckle is just a plain folder on your machine. Everything you build is stored in a clean, human-readable file structure:
+* Click **"Browse / Select Folder"** to open your operating system's native folder dialog.
+* Select an empty directory or choose an existing Duckle workspace.
 
-```text
-my-workspace/
-├── pipelines/
-│   ├── orders_etl.pipeline.json     # Node graph layout & properties
-│   └── nightly_load.pipeline.json
-├── connections/
-│   ├── prod-postgres.connection.json # Saved credentials (values encrypted)
-│   └── snowflake.connection.json
-├── contexts/
-│   ├── dev.context.json             # Variables for Dev environment
-│   └── prod.context.json
-├── routines/
-│   └── cleanse-addresses.sql        # Reusable SQL snippets
-├── documents/
-│   └── runbook.md                   # Markdown notes and run instructions
-├── schedules.json                   # Scheduled trigger configurations
-└── run-history/
-    └── orders_etl/
-        └── 2026-05-25T14-30-00.json # Detailed execution report & row counts
-```
-
-> [!IMPORTANT]
-> Because workspaces are plain directories, you can open them in any standard IDE (like VS Code), manage them under Git, track differences between commits, and push them to GitHub or GitLab.
-
----
-
-## 4. Building from Source
-
-If you want to build the Duckle desktop application yourself:
-
-### Prerequisites
-* **Rust compiler** (Stable toolchain) -> [rustup.rs](https://rustup.rs/)
-* **Node.js** (v18+) and **npm** -> [nodejs.org](https://nodejs.org/)
-* **cargo-tauri CLI**: `cargo install tauri-cli --version "^2"`
-* Platform-specific Webview library dependencies (WebView2 on Windows, WebKitGTK on Linux).
-
-### Steps
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/SouravRoy-ETL/duckle
-   cd duckle
-   ```
-2. Install frontend dependencies:
-   ```bash
-   npm --prefix frontend install
-   ```
-3. Run the development server (runs hot-reloading frontend inside Tauri):
-   ```bash
-   cargo tauri dev
-   ```
-4. Compile production releases:
-   ```bash
-   cargo tauri build
-   ```
+### What is inside the Workspace Folder?
+Your workspace is organized into simple, human-readable files that make version control easy:
+* **`pipelines/`**: Stores your canvas designs as JSON files. You can save, copy, or rename these in your operating system's file manager.
+* **`connections/`**: Holds saved logins and API keys. Sensitive properties are automatically encrypted with a workspace-specific key.
+* **`contexts/`**: Contains environment configurations (such as different file paths for Developer and Production modes).
+* **`routines/`**: Holds custom SQL files you can reference inside canvas nodes.
+* **`documents/`**: A folder for markdown notes that you can read inside the app.
+* **`schedules.json`**: Keeps track of active background timers.
+* **`run-history/`**: Stores visual execution reports, status metrics, and row count audits for every run.

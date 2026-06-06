@@ -1,77 +1,89 @@
-# Getting Started
+# Getting Started Guide
 
-This guide walks you through building your first visual pipeline, executing it, and using the built-in Duckie AI Assistant.
+This guide walks you through the visual layout of the Duckle application and helps you build, configure, and execute your first data pipeline using the drag-and-drop editor.
 
 ---
 
-## Tutorial: Build a CSV Cleanup Pipeline
+## 1. Visual Studio Layout
 
-We will build a simple pipeline that reads a CSV file containing order data, filters out orders that are not paid, and saves the output to a Parquet file.
+The Duckle user interface is divided into five main areas:
 
-### Step 1: Add and Configure a CSV Source
-1. Open the **Components** drawer on the left sidebar.
-2. Click **Sources** -> **Files** -> **CSV** and drag the node onto the canvas.
-3. Select the node to open the **Properties Panel** on the right.
-4. Set the **Path** properties to a CSV file (e.g., `samples/orders.csv`).
-5. Click the **Autodetect schema** button.
-   * Duckle will scan a sample of the file, infer column names/types, and update the **Schema** tab.
-   * The **Preview** tab will display the first few rows of the CSV.
+```text
+ ┌────────────────────────────────────────────────────────────────────────┐
+ │  Toolbar (Run, Stop, Git, Schedule, Context Dropdown, Language)        │
+ ├──────────────┬──────────────────────────────────────────┬──────────────┤
+ │ Left Sidebar │                                          │ Right Panel  │
+ │ Toggle       │                                          │              │
+ │              │             Visual Canvas                │  Properties  │
+ │ ├──────────┤ │             (Drag-and-Drop)              │   Form       │
+ │ │ Palette  │ │                                          │              │
+ │ │ / Tree   │ │                                          │   (Config)   │
+ │ └──────────┘ │                                          │              │
+ ├──────────────┴──────────────────────────────────────────┴──────────────┤
+ │  Bottom Panel (Preview data table, SQL Plans, Output Run logs)         │
+ └────────────────────────────────────────────────────────────────────────┘
+```
 
-### Step 2: Add a Filter Transform
-1. Open the **Components** drawer.
-2. Go to **Transforms** -> **Rows** -> **Filter** and drag it onto the canvas.
-3. Drag a line from the CSV source's `main` output port to the Filter's `main` input port.
-4. In the Filter node properties, set the **Predicate** to:
+* **Toolbar**: Top panel containing action buttons (**Run**, **Stop**, **Save**), and modal controls for scheduling, Git integrations, active Environment contexts, and language translation.
+* **Left Sidebar**: Toggles between the **Project Tree** (for managing workspace directories and files) and the **Component Palette** (your catalog of visual nodes).
+* **Visual Canvas**: The interactive board where you design pipelines by dragging nodes and drawing connecting lines.
+* **Right Panel (Properties)**: Shows configuration options, schema mappings, and validation fields for the currently selected node.
+* **Bottom Panel**: Interactive tabs showing data previews, SQL scripts, and run performance charts.
+
+---
+
+## 2. Tutorial: Building a CSV Cleanup Pipeline
+
+We will design a visual pipeline that loads a CSV orders log, filters out pending records, and writes the output directly to a Parquet file.
+
+### Step 1: Placing the Source Node
+1. Toggle the **Palette** tab on the Left Sidebar.
+2. Expand the **Sources** group, then drag a **CSV** icon onto the **Canvas**.
+3. Select the CSV node to open its configuration fields in the **Properties Panel**.
+4. In the properties field, click the **Browse** folder icon and select `samples/orders.csv`.
+5. Click the green **Autodetect schema** button. 
+   * The CSV node will scan the first few rows.
+   * Open the **Preview** tab in the **Bottom Panel** to verify that your data columns are displaying correctly.
+
+### Step 2: Placing the Filter Node
+1. In the Left Sidebar Palette, expand the **Transforms** section.
+2. Drag a **Filter** node onto the canvas, placing it to the right of the CSV node.
+3. Click and hold the circle (output port) on the right of the CSV node, drag a line to the circle (input port) on the left of the Filter node, and release the mouse.
+4. Select the Filter node. In the **Predicate** property text area, type:
    ```sql
    status = 'paid'
    ```
-   * *Note: The Filter node has two output ports: `pass` (rows matching your predicate) and `reject` (rows that failed the predicate).*
 
-### Step 3: Add a Parquet Sink
-1. Open the **Components** drawer.
-2. Go to **Sinks** -> **Files** -> **Parquet** and drag it onto the canvas.
-3. Wire the Filter's `pass` output port to the Parquet sink's input port.
-4. In the Parquet properties:
-   * **Path**: Set to `paid_orders.parquet`.
-   * **Write Mode**: Select `overwrite`.
-   * **Compression**: Choose `zstd`.
+### Step 3: Placing the Sink Node
+1. In the Left Sidebar Palette, expand the **Sinks** section.
+2. Drag a **Parquet** node onto the canvas, placing it to the right of the Filter node.
+3. Draw a connection line from the Filter's `pass` output port to the Parquet node's input port.
+4. Select the Parquet node, type `paid_orders.parquet` in the **Path** property field, and set the **Write Mode** dropdown option to `Overwrite`.
 
-### Step 4: Run and Inspect the Pipeline
-1. Click the **Run** button in the top toolbar.
-2. The nodes will light up green stage-by-stage. A live row counter will appear under each edge indicating data flow.
-3. Click any node after execution:
-   * **Plan Tab**: Shows the exact, compile-time SQL query Duckle generated for that node.
-   * **Preview Tab**: Shows a live tabular view of data at that step.
+### Step 4: Run the Pipeline
+1. Click the green **Run** button in the top toolbar.
+2. You will see the nodes light up green one-by-one as data executes. The number of rows processed will stream directly under the connection lines.
+3. To stop a pipeline execution mid-run, click the red **Stop** button in the toolbar.
+4. Click the Parquet node and look at the **Preview** tab in the **Bottom Panel** to see the resulting data.
 
 ---
 
-## Asking Duckie (AI Assistant)
+## 3. Working with Duckie (AI Assistant Sidebar)
 
-Instead of dragging and wiring nodes manually, you can describe your pipeline in plain English and let **Duckie** build it for you.
+You can build pipelines using natural language instead of drawing nodes manually:
 
-1. Click the **Sparkles** icon in the top-right corner of the toolbar to open the AI Sidebar.
-2. Type a natural language prompt, such as:
+1. Click the **Sparkles** icon in the top toolbar. The **Duckie AI Assistant** panel will open on the right side of the screen.
+2. In the chat input box, type:
    > "read orders.csv, filter where status is paid, and write to paid.parquet"
-3. Duckie will stream back a visual pipeline definition.
-4. Click the **Insert into canvas** button. The canvas will immediately populate with the configured nodes, positioned and wired automatically.
-
-*Duckie runs entirely locally on your CPU via `llama-server`. No telemetry or prompt content is sent to external networks.*
+3. Click the Send button. Duckie will generate and stream the pipeline structure.
+4. Click the **Insert into canvas** button at the bottom of Duckie's response. The canvas will immediately populate with the connected nodes.
 
 ---
 
-## Workspace Features
+## 4. Context Environments
 
-### Context Variables
-If you need to deploy pipelines across multiple environments (e.g., development, staging, production), use **Context Variables**.
+You can change environment properties globally using the **Context Dropdown** in the top toolbar:
 
-1. Create a context variable in your active context configuration (e.g., `S3_BUCKET = "my-dev-bucket"`).
-2. Switch any property input from **Manual** to **Context** mode.
-3. Pick your variable, or reference it directly in text inputs using `${S3_BUCKET}`.
-4. When you switch context from the topbar dropdown, all references automatically resolve to the new values at runtime.
-
-### Connection Manager
-Rather than hardcoding credentials (such as PostgreSQL passwords or AWS access keys) in node properties:
-1. Save credentials in the **Connection Manager** (accessed via the topbar key icon).
-2. The credentials are encrypted using a workspace-local key.
-3. Select the saved connection from the dropdown in a node properties panel.
-4. At run time, Duckle registers these as DuckDB `SECRET` structures, keeping pipeline JSON files completely safe to check into Git.
+1. Click the context selector in the toolbar (it defaults to `default`).
+2. Switch to another environment context (e.g. `prod` or `dev`).
+3. Any node properties referencing a context variable (such as entering `${DATA_DIR}/orders.csv` in a path field) will immediately update their runtime evaluation to point to the new folder location.
