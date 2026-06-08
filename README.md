@@ -47,6 +47,7 @@
 - [In-app Git (GitHub/GitLab)](#git-integration-github--gitlab)
 - [Workspace + Git flow](#workspace-and-git-flow)
 - [Schedules](#schedules-and-triggers)
+- [Server deployment](#server-deployment-build-pipeline)
 - [Connection management](#connection-management)
 - [Context variables](#context-variables)
 
@@ -666,13 +667,53 @@ Pipelines can run on cron, fixed interval, or file-watch triggers. Configure the
 
 Schedules persist to `workspace/schedules.json` and execute via the in-process scheduler crate. They survive app restarts but require Duckle to be running.
 
-For headless / always-on schedules, run the same pipeline from a system cron / systemd timer / Windows Scheduled Task that invokes:
+For headless / always-on schedules that run when Duckle is closed, build the pipeline into a standalone file and let the operating system's own scheduler run it - see [Server deployment](#server-deployment-build-pipeline) below.
+
+---
+
+## Server deployment (Build Pipeline)
+
+The in-app scheduler runs only while Duckle is open. To run a pipeline on a server with no desktop app, **Build Pipeline** turns it into ONE self-contained executable - the equivalent of a Talend "Build Job".
+
+Right-click a pipeline (in the project tree or on the canvas) and choose **Build Pipeline**. The output is a single file named after the pipeline (`orders_etl.exe` on Windows, `orders_etl` on macOS / Linux) that embeds everything it needs:
+
+- the headless execution engine,
+- the DuckDB CLI,
+- only the DuckDB extensions that pipeline's components actually use,
+- the resolved pipeline (context variables substituted, routines inlined),
+- its secrets (see below).
+
+On first run it self-extracts to a temp cache and uses its **own** embedded DuckDB, so the server needs nothing installed - no Duckle, no DuckDB. There is no folder to copy, no `run.sh`, and no separate runner download. A CSV-to-CSV pipeline builds to about 28 MB; only the extensions a pipeline uses are bundled, so the file stays lean.
 
 ```bash
-duckle run --workspace ~/data --pipeline orders_etl
+./orders_etl            # or orders_etl.exe on Windows
 ```
 
-(CLI run mode is a planned 1.0 feature - tracked in [docs/roadmap.md](docs/roadmap.md).)
+The process exits `0` on success and non-zero on failure, and writes the same NDJSON run logs under `logs/` (Splunk / Dynatrace friendly).
+
+**Build options**
+
+| Option | What it does |
+|---|---|
+| **Target OS** | The file is built for the OS you build on - build on Linux to deploy to a Linux server. Appending the payload makes the file unsigned, so do not codesign / Authenticode-sign it. |
+| **Context** | Pick a context at build time; its non-secret variables are baked into the pipeline. |
+| **Secrets: Environment** | Each secret becomes a `${ENV:KEY}` placeholder, so nothing sensitive is written into the file. The runner resolves real environment variables first, then a `secrets.env` (KEY=VALUE lines) placed next to the file. |
+| **Secrets: Passphrase** | Secrets are encrypted inside the file with AES-256-GCM, decrypted at run time from the `DUCKLE_BUNDLE_PASSPHRASE` environment variable. |
+
+**Schedule it** with whatever the server already has - point the OS scheduler straight at the file:
+
+```cron
+# Linux cron - run every day at 02:00
+0 2 * * * /opt/duckle/orders_etl >> /var/log/orders_etl.log 2>&1
+```
+
+On Windows use **Task Scheduler**; on macOS a **launchd** plist; on Linux a **systemd** timer. Full examples in [docs/current/scheduler.md](docs/current/scheduler.md).
+
+**Run against an existing workspace** - the same embedded headless runner can also execute a pipeline JSON directly, resolving context the way the app does:
+
+```bash
+duckle-runner --pipeline /path/to/pipeline.json [--workspace /path/to/workspace] [--duckdb /path/to/duckdb]
+```
 
 ---
 
@@ -884,7 +925,7 @@ Via Git, yes - check the workspace into a repo and use standard branch/PR flows.
 <details>
 <summary><b>Can I run pipelines headlessly / from CI?</b></summary>
 
-CLI run mode (`duckle run --workspace ~/data --pipeline orders_etl`) is on the 1.0 roadmap. Today you can run pipelines via the desktop app on a schedule, or by importing the engine crate (`duckle-duckdb-engine`) into your own Rust binary.
+Yes. **Build Pipeline** (right-click a pipeline) produces a single self-contained executable that runs anywhere with nothing installed - drop it on a server or CI runner and execute it, or schedule it with cron / systemd / Task Scheduler. The embedded `duckle-runner` can also run a workspace pipeline JSON directly (`duckle-runner --pipeline pipeline.json`). See [Server deployment](#server-deployment-build-pipeline). You can also import the engine crate (`duckle-duckdb-engine`) into your own Rust binary.
 
 </details>
 
