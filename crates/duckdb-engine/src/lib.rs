@@ -2130,13 +2130,39 @@ fn sf_quote_ident(s: &str) -> String {
     format!("\"{}\"", s.replace('"', "\"\""))
 }
 
+/// The account identifier Snowflake expects inside a key-pair JWT's `iss` /
+/// `sub` claims. The REST URL uses the full account (with region / cloud /
+/// `privatelink`), but the JWT must use ONLY the account locator: strip
+/// everything from the first `.` onward, or for `.global` replication accounts
+/// from the first `-` onward. Mirrors Snowflake's official
+/// sql-api-generate-jwt generator. Result is uppercased.
+///
+/// Without this, a regional / PrivateLink account like `xy12345.us-east-1`
+/// (or `xy12345.us-east-1.privatelink`) yields `iss = "XY12345.US-EAST-1.USER..."`,
+/// which Snowflake rejects with 390144 "JWT token is invalid" (GitHub #22).
+fn snowflake_jwt_account(account: &str) -> String {
+    let acct = if account.contains(".global") {
+        match account.find('-') {
+            Some(i) if i > 0 => &account[..i],
+            _ => account,
+        }
+    } else {
+        match account.find('.') {
+            Some(i) if i > 0 => &account[..i],
+            _ => account,
+        }
+    };
+    acct.to_uppercase()
+}
+
 /// Build the Authorization header value for a Snowflake request.
 /// PAT: just "Bearer <token>". JWT: read the PEM private key,
 /// compute the public-key fingerprint Snowflake wants
 /// (SHA256:<base64(SHA-256 of SubjectPublicKeyInfo DER)>), build the
 /// claims (iss = "ACCOUNT.USER.SHA256:fp", sub = "ACCOUNT.USER",
 /// iat = now, exp = now + 3600), sign RS256, and prefix with
-/// "Bearer ". Snowflake also wants the X-Snowflake-Authorization-
+/// "Bearer ". ACCOUNT here is the locator-only form (see
+/// snowflake_jwt_account). Snowflake also wants the X-Snowflake-Authorization-
 /// Token-Type: KEYPAIR_JWT header for JWT requests, set at the
 /// dispatch point.
 fn build_snowflake_auth_header(
@@ -2159,7 +2185,7 @@ fn build_snowflake_auth_header(
                 .map_err(|e| EngineError::Config(format!("snowflake jwt: DER encode: {}", e)))?;
             let fp = Sha256::digest(der.as_bytes());
             let fp_b64 = base64::engine::general_purpose::STANDARD.encode(fp);
-            let account_upper = account.to_uppercase();
+            let account_upper = snowflake_jwt_account(account);
             let user_upper = user.to_uppercase();
             let qualified_user = format!("{}.{}", account_upper, user_upper);
             let iss = format!("{}.SHA256:{}", qualified_user, fp_b64);
@@ -2373,6 +2399,27 @@ fn cql_value_to_json(v: &scylla::frame::response::result::CqlValue) -> JsonValue
             }
             JsonValue::Object(obj)
         }
+    }
+}
+
+#[cfg(test)]
+mod snowflake_jwt_tests {
+    use super::snowflake_jwt_account;
+
+    #[test]
+    fn strips_region_and_privatelink_for_jwt() {
+        // Plain locator stays as-is (uppercased).
+        assert_eq!(snowflake_jwt_account("xy12345"), "XY12345");
+        // Region is dropped (Snowflake JWT wants the locator only).
+        assert_eq!(snowflake_jwt_account("xy12345.us-east-1"), "XY12345");
+        // Cloud platform suffix is dropped too.
+        assert_eq!(snowflake_jwt_account("xy12345.us-east-1.aws"), "XY12345");
+        // PrivateLink (GitHub #22): everything after the first '.' is dropped.
+        assert_eq!(snowflake_jwt_account("xy12345.us-east-1.privatelink"), "XY12345");
+        // org-account form (no dot) is kept whole.
+        assert_eq!(snowflake_jwt_account("myorg-acct1"), "MYORG-ACCT1");
+        // `.global` replication accounts strip at the first '-' instead.
+        assert_eq!(snowflake_jwt_account("xy12345-9999.global"), "XY12345");
     }
 }
 

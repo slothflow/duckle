@@ -4412,6 +4412,114 @@ fn snk_snowflake_jwt_auth_signs_request() {
 }
 
 #[test]
+fn snk_snowflake_jwt_uses_account_locator_for_privatelink() {
+    // Regression for GitHub #22: a regional / PrivateLink account
+    // ("xy12345.us-east-1.privatelink") must yield a JWT whose iss/sub use the
+    // account LOCATOR only ("XY12345.MY_USER"), not the full host. Before the
+    // fix the iss was "XY12345.US-EAST-1.PRIVATELINK.MY_USER.SHA256:..." and
+    // Snowflake rejected it with 390144 "JWT token is invalid".
+    //
+    // The `endpoint` override decouples the request URL from the account, so
+    // this isolates exactly what the account value controls: the JWT claims.
+    // We capture the real request and decode the JWT actually sent on the wire.
+    use base64::Engine as _;
+    use rand::rngs::OsRng;
+    use rsa::pkcs8::{EncodePrivateKey, LineEnding};
+    use rsa::RsaPrivateKey;
+    use std::io::{Read, Write};
+    use std::net::TcpListener;
+    use std::sync::mpsc;
+    use std::time::Duration;
+
+    let engine = engine_or_skip!();
+    let mut rng = OsRng;
+    let private_key = RsaPrivateKey::new(&mut rng, 2048).expect("rsa keygen");
+    let pem = private_key
+        .to_pkcs8_pem(LineEnding::LF)
+        .expect("serialize pem")
+        .to_string();
+
+    let (tx, rx) = mpsc::channel::<Vec<u8>>();
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+    let port = listener.local_addr().unwrap().port();
+
+    let handle = std::thread::spawn(move || {
+        for stream in listener.incoming().take(2) {
+            let mut stream = match stream { Ok(s) => s, Err(_) => break };
+            stream.set_read_timeout(Some(Duration::from_millis(250))).ok();
+            stream.set_nodelay(true).ok();
+            let mut buf = Vec::with_capacity(16384);
+            let mut chunk = [0u8; 4096];
+            for _ in 0..20 {
+                match stream.read(&mut chunk) {
+                    Ok(0) => break,
+                    Ok(n) => buf.extend_from_slice(&chunk[..n]),
+                    Err(_) => break,
+                }
+            }
+            let _ = tx.send(buf);
+            let body = b"{\"status\":\"ok\"}";
+            let resp = format!(
+                "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                body.len()
+            );
+            let _ = stream.write_all(resp.as_bytes());
+            let _ = stream.write_all(body);
+            let _ = stream.flush();
+            let _ = stream.shutdown(std::net::Shutdown::Write);
+            std::thread::sleep(Duration::from_millis(100));
+        }
+    });
+
+    let tmp = tempfile::tempdir().unwrap();
+    let csv = write_file(tmp.path(), "in.csv", "id,name\n1,alice\n");
+    let endpoint = format!("http://127.0.0.1:{}/api/v2/statements", port);
+    let r = engine.execute_pipeline(&doc(
+        json!([
+            node("s", "src.csv", json!({ "path": csv, "hasHeader": true })),
+            node("sf", "snk.snowflake", json!({
+                "account": "xy12345.us-east-1.privatelink",
+                "endpoint": endpoint,
+                "authType": "jwt",
+                "user": "my_user",
+                "privateKeyPem": pem,
+                "database": "MYDB",
+                "schema": "PUBLIC",
+                "tableName": "USERS"
+            })),
+        ]),
+        json!([main_edge("e1", "s", "sf")]),
+    ));
+    assert_eq!(r.status, "ok", "snowflake jwt sink failed: {:?}", r.error);
+
+    let req = rx.recv_timeout(Duration::from_secs(10)).expect("expected 1 jwt request");
+    let _ = handle.join();
+    let body = String::from_utf8_lossy(&req).to_string();
+    let auth_line = body
+        .lines()
+        .find(|l| l.to_ascii_lowercase().starts_with("authorization:"))
+        .expect("authorization header present");
+    let auth_value = auth_line.splitn(2, ':').nth(1).unwrap_or("").trim();
+    let jwt = auth_value.trim_start_matches("Bearer ").trim();
+    let parts: Vec<&str> = jwt.split('.').collect();
+    assert_eq!(parts.len(), 3, "JWT should have 3 segments: {}", jwt);
+    let payload_bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
+        .decode(parts[1])
+        .expect("decode payload");
+    let payload: serde_json::Value =
+        serde_json::from_slice(&payload_bytes).expect("payload JSON");
+    let iss = payload.get("iss").and_then(|v| v.as_str()).unwrap_or("");
+    let sub = payload.get("sub").and_then(|v| v.as_str()).unwrap_or("");
+    // Locator only - region/cloud/privatelink stripped, uppercased.
+    assert!(
+        iss.starts_with("XY12345.MY_USER.SHA256:"),
+        "iss must use the account locator only (got: {})",
+        iss
+    );
+    assert_eq!(sub, "XY12345.MY_USER", "sub must use the account locator only");
+}
+
+#[test]
 fn snk_snowflake_posts_multirow_insert() {
     // Mock HTTP listener pretends to be Snowflake's /api/v2/statements.
     // Verifies the engine sends a single multi-row INSERT for both rows
