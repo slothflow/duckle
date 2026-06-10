@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
     ReactFlow,
     ReactFlowProvider,
@@ -34,6 +34,7 @@ import {
 import DuckleNode from './nodes/DuckleNode';
 import DuckleEdge from './DuckleEdge';
 import ConnectionTypePicker from './ConnectionTypePicker';
+import { QuickAddSearch } from './QuickAddSearch';
 import { CONNECTION_TYPES, type ConnectionType } from './connection-types';
 import type { DuckleNodeData } from '../pipeline-types';
 import type { ComponentDef } from '../workflow-ui/palette-data';
@@ -121,10 +122,53 @@ function CanvasInner({
     const [pendingConnection, setPendingConnection] = useState<Connection | null>(null);
     const [pickerPos, setPickerPos] = useState<{ x: number; y: number } | null>(null);
     const [pickerAllowed, setPickerAllowed] = useState<Set<ConnectionType> | null>(null);
+    const wrapperRef = useRef<HTMLDivElement>(null);
+    // Quick-add: null = closed; a string = open, seeded with the first typed char.
+    const [quickAddSeed, setQuickAddSeed] = useState<string | null>(null);
 
     const onMouseMove = useCallback((e: React.MouseEvent) => {
         mouseRef.current = { x: e.clientX, y: e.clientY };
     }, []);
+
+    // Start typing on the canvas to open the quick-add component search. Only
+    // fires for a bare printable key while focus is on the canvas/body (never
+    // inside a text field, the properties panel, or a modal) so normal typing
+    // and shortcuts are untouched.
+    useEffect(() => {
+        const onKey = (e: KeyboardEvent) => {
+            if (quickAddSeed !== null) return;
+            if (e.metaKey || e.ctrlKey || e.altKey) return;
+            if (e.key.length !== 1 || e.key === ' ') return;
+            const ae = document.activeElement as HTMLElement | null;
+            const inField =
+                !!ae &&
+                (ae.tagName === 'INPUT' ||
+                    ae.tagName === 'TEXTAREA' ||
+                    ae.tagName === 'SELECT' ||
+                    ae.isContentEditable);
+            const inCanvas = ae === document.body || (wrapperRef.current?.contains(ae) ?? false);
+            if (inField || !inCanvas) return;
+            e.preventDefault();
+            setQuickAddSeed(e.key);
+        };
+        document.addEventListener('keydown', onKey);
+        return () => document.removeEventListener('keydown', onKey);
+    }, [quickAddSeed]);
+
+    const handleQuickAdd = useCallback(
+        (component: ComponentDef) => {
+            // Drop where the cursor last was; fall back to the pane centre if
+            // the mouse hasn't moved yet (e.g. right after loading).
+            let screen = mouseRef.current;
+            if (!screen.x && !screen.y) {
+                const r = wrapperRef.current?.getBoundingClientRect();
+                if (r) screen = { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+            }
+            onDropComponent(component, screenToFlowPosition(screen));
+            setQuickAddSeed(null);
+        },
+        [onDropComponent, screenToFlowPosition],
+    );
 
     const handleConnectStart = useCallback(() => {
         // Capture position at start; in case onConnect doesn't fire (cancelled drag)
@@ -435,6 +479,7 @@ function CanvasInner({
 
     return (
         <div
+            ref={wrapperRef}
             className="canvas-dnd"
             onDragOver={handleDragOver}
             onDrop={handleDrop}
@@ -471,6 +516,13 @@ function CanvasInner({
                     allowedTypes={pickerAllowed ?? undefined}
                     onPick={handlePickType}
                     onCancel={handleCancelPick}
+                />
+            ) : null}
+            {quickAddSeed !== null ? (
+                <QuickAddSearch
+                    initialQuery={quickAddSeed}
+                    onPick={handleQuickAdd}
+                    onClose={() => setQuickAddSeed(null)}
                 />
             ) : null}
         </div>

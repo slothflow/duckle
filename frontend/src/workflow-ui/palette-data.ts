@@ -770,3 +770,54 @@ export const ALL_COMPONENTS: ComponentDef[] = PALETTE.flatMap(c => c.groups.flat
 export const TOTAL_COMPONENT_COUNT = ALL_COMPONENTS.length;
 
 export const AVAILABLE_COUNT = ALL_COMPONENTS.filter(c => c.availability === 'available').length;
+
+/** True if every char of `term` appears in order within `text` (gap-tolerant
+ * subsequence match, e.g. "sf" matches "snowflake"). */
+function fuzzySubseq(text: string, term: string): boolean {
+    let i = 0;
+    for (let j = 0; j < text.length && i < term.length; j++) {
+        if (text[j] === term[i]) i++;
+    }
+    return i === term.length;
+}
+
+/**
+ * Fuzzy-rank components for the canvas quick-add search. Matches each
+ * whitespace-separated term against the label, the id (with the src./snk./xf./
+ * etc. prefix both kept and stripped), the summary and the kind; a term may
+ * also match as a gap-tolerant subsequence of the label/id. All terms must
+ * match (AND). Exact > prefix > substring > subsequence, with available
+ * components ranked above preview/planned. Returns the top `limit`.
+ */
+export function searchComponents(query: string, limit = 14): ComponentDef[] {
+    const q = query.trim().toLowerCase();
+    if (!q) return [];
+    const terms = q.split(/\s+/).filter(Boolean);
+    const scored: { c: ComponentDef; score: number }[] = [];
+    for (const c of ALL_COMPONENTS) {
+        const label = c.label.toLowerCase();
+        const id = c.id.toLowerCase();
+        const idShort = id.includes('.') ? id.slice(id.indexOf('.') + 1) : id;
+        const summary = (c.summary ?? '').toLowerCase();
+        let score = 0;
+        let matchedAll = true;
+        for (const t of terms) {
+            let s = 0;
+            if (label === t || idShort === t) s = 100;
+            else if (label.startsWith(t)) s = 60;
+            else if (idShort.startsWith(t)) s = 50;
+            else if (label.includes(t)) s = 32;
+            else if (idShort.includes(t) || id.includes(t)) s = 22;
+            else if (summary.includes(t) || c.kind.includes(t)) s = 12;
+            else if (fuzzySubseq(label, t) || fuzzySubseq(idShort, t)) s = 6;
+            else { matchedAll = false; break; }
+            score += s;
+        }
+        if (!matchedAll) continue;
+        if (c.availability === 'available') score += 8;
+        else if (c.availability === 'preview') score += 3;
+        scored.push({ c, score });
+    }
+    scored.sort((a, b) => b.score - a.score || a.c.label.localeCompare(b.c.label));
+    return scored.slice(0, limit).map(s => s.c);
+}
