@@ -333,25 +333,34 @@ pub(crate) fn json_to_avro_value(v: &JsonValue) -> apache_avro::types::Value {
     }
 }
 
-/// Infer an Avro JSON-schema type for a single JSON value. Used by
-/// snk.avro when schemaJson isn't supplied. Numeric values get the
-/// most-permissive numeric type (double); strings stay string;
-/// booleans stay boolean; nulls become "null"; everything else
-/// (objects, arrays) falls back to string with the JSON encoding.
-pub(crate) fn infer_avro_field_type(v: &JsonValue) -> JsonValue {
-    match v {
-        JsonValue::Null => JsonValue::String("null".into()),
-        JsonValue::Bool(_) => JsonValue::String("boolean".into()),
-        JsonValue::Number(n) => {
-            if n.is_i64() {
-                JsonValue::String("long".into())
-            } else {
-                JsonValue::String("double".into())
-            }
+/// Infer a nullable Avro field type for column `name` by scanning `rows`
+/// for the first non-null value. Used by snk.avro when schemaJson isn't
+/// supplied. Every field is a `["null", T]` union so ANY row may be null
+/// without the writer rejecting it - inferring from row 0 alone would pin a
+/// leading-null column to the null-only "null" type (which then rejects every
+/// later non-null value) and a leading-value column to a non-nullable type
+/// (which rejects every later null). Numeric columns get a `["null","long",
+/// "double"]` union so a mix of integer and fractional values both validate.
+/// Strings/booleans map to their type; objects, arrays and all-null columns
+/// fall back to string (objects/arrays are JSON-stringified on write).
+pub(crate) fn infer_avro_nullable_field(rows: &[JsonValue], name: &str) -> JsonValue {
+    let first_non_null = rows.iter().filter_map(|r| r.as_object()).find_map(|o| {
+        match o.get(name) {
+            Some(v) if !v.is_null() => Some(v),
+            _ => None,
         }
-        JsonValue::String(_) => JsonValue::String("string".into()),
-        JsonValue::Array(_) | JsonValue::Object(_) => JsonValue::String("string".into()),
+    });
+    let mut branches: Vec<&str> = vec!["null"];
+    match first_non_null {
+        Some(JsonValue::Bool(_)) => branches.push("boolean"),
+        Some(JsonValue::Number(_)) => {
+            branches.push("long");
+            branches.push("double");
+        }
+        // strings, objects, arrays (JSON-stringified) and all-null columns
+        _ => branches.push("string"),
     }
+    JsonValue::Array(branches.into_iter().map(|s| JsonValue::String(s.into())).collect())
 }
 
 /// Parse `git log -z --pretty=format:%H%x09%h%x09%an%x09%ae%x09%ad%x09%s`
@@ -844,4 +853,40 @@ pub(crate) fn chunk_text(text: &str, size: usize, overlap: usize) -> Vec<String>
         start += step;
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::infer_avro_nullable_field;
+    use serde_json::json;
+
+    #[test]
+    fn avro_field_is_nullable_union_inferred_past_leading_null() {
+        // Column `a` is null in row 0 but an integer in row 1: the inferred
+        // type must be a nullable numeric union, not the null-only "null"
+        // type (which would reject the later non-null value).
+        let rows = vec![json!({ "a": null, "b": "x" }), json!({ "a": 5, "b": "y" })];
+        assert_eq!(
+            infer_avro_nullable_field(&rows, "a"),
+            json!(["null", "long", "double"])
+        );
+        assert_eq!(infer_avro_nullable_field(&rows, "b"), json!(["null", "string"]));
+    }
+
+    #[test]
+    fn avro_all_null_column_defaults_to_nullable_string() {
+        let rows = vec![json!({ "c": null }), json!({ "c": null })];
+        assert_eq!(infer_avro_nullable_field(&rows, "c"), json!(["null", "string"]));
+    }
+
+    #[test]
+    fn avro_boolean_and_object_columns() {
+        let rows = vec![json!({ "flag": true, "obj": { "k": 1 } })];
+        assert_eq!(
+            infer_avro_nullable_field(&rows, "flag"),
+            json!(["null", "boolean"])
+        );
+        // Objects/arrays are JSON-stringified on write, so they map to string.
+        assert_eq!(infer_avro_nullable_field(&rows, "obj"), json!(["null", "string"]));
+    }
 }

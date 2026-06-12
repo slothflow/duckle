@@ -302,7 +302,7 @@ impl DuckdbEngine {
         let (delete_clause, not_matched_guard) = match delete_col {
             Some(dc) => {
                 let q = sf_quote_ident(dc);
-                let v = spec.delete_value.replace('\'', "''");
+                let v = jsonnative_quote_inner(&spec.delete_value);
                 (
                     format!(" WHEN MATCHED AND s.{q} = '{v}' THEN DELETE", q = q, v = v),
                     format!(" AND (s.{q} IS NULL OR s.{q} <> '{v}')", q = q, v = v),
@@ -2169,10 +2169,14 @@ impl DuckdbEngine {
                                 .map_err(|e| EngineError::Query(format!("xml: write num: {}", e)))?;
                         }
                         JsonValue::Array(_) | JsonValue::Object(_) => {
-                            // Round-trip complex shapes via JSON-in-CDATA.
+                            // Round-trip complex shapes via JSON-in-CDATA. A
+                            // CDATA section can't contain a literal "]]>", so
+                            // split any occurrence across two sections; the
+                            // reader concatenates them back to the original.
                             let json = serde_json::to_string(v).unwrap_or_default();
+                            let safe = json.replace("]]>", "]]]]><![CDATA[>");
                             writer
-                                .write_event(Event::CData(BytesCData::new(json)))
+                                .write_event(Event::CData(BytesCData::new(safe)))
                                 .map_err(|e| EngineError::Query(format!("xml: write cdata: {}", e)))?;
                         }
                     }
@@ -2221,11 +2225,16 @@ impl DuckdbEngine {
                     "avro: upstream rows aren't JSON objects".into(),
                 ));
             };
+            // Infer each field as a ["null", T] union by scanning all rows for
+            // the first non-null value, so a null anywhere in a column (or in
+            // row 0) doesn't abort the writer with a type mismatch.
             let fields: Vec<serde_json::Value> = first
-                .iter()
-                .map(|(name, val)| {
-                    let typ = infer_avro_field_type(val);
-                    serde_json::json!({ "name": name, "type": typ })
+                .keys()
+                .map(|name| {
+                    serde_json::json!({
+                        "name": name,
+                        "type": infer_avro_nullable_field(&rows, name),
+                    })
                 })
                 .collect();
             let schema_json = serde_json::json!({
@@ -2346,7 +2355,7 @@ impl DuckdbEngine {
             .enable_all()
             .build()
             .map_err(|e| EngineError::Query(format!("rabbit: tokio rt: {}", e)))?;
-        let result: Result<Vec<JsonValue>, String> = rt.block_on(async {
+        let result: Result<usize, String> = rt.block_on(async {
             use lapin::options::{BasicAckOptions, BasicGetOptions};
             use lapin::{Connection, ConnectionProperties};
             let conn = Connection::connect(&spec.url, ConnectionProperties::default())
@@ -2359,6 +2368,7 @@ impl DuckdbEngine {
             let deadline = tokio::time::Instant::now()
                 + std::time::Duration::from_millis(spec.timeout_ms);
             let mut out: Vec<JsonValue> = Vec::new();
+            let mut tags: Vec<u64> = Vec::new();
             while (out.len() as u64) < spec.max_messages {
                 if cancel.load(Ordering::Relaxed) {
                     return Err("cancelled".into());
@@ -2393,20 +2403,29 @@ impl DuckdbEngine {
                     JsonValue::from(delivery.delivery_tag),
                 );
                 out.push(JsonValue::Object(obj));
-                channel
-                    .basic_ack(delivery.delivery_tag, BasicAckOptions::default())
-                    .await
-                    .map_err(|e| format!("ack: {}", e))?;
+                // Defer the ack: collect the tag and ack only after the batch
+                // is durably materialized below, so a materialize failure
+                // leaves the messages queued for redelivery instead of
+                // acked-then-lost (mirrors run_pubsub_source).
+                tags.push(delivery.delivery_tag);
             }
-            Ok(out)
+            // Persist BEFORE acknowledging.
+            materialize_jsonobjects_as_table(&self.bin, db, &spec.node_id, &out)
+                .map_err(|e| format!("materialize: {}", e))?;
+            // Now that the rows are written, ack each message. Ack failure is
+            // non-fatal - an un-acked message simply redelivers next run.
+            for tag in &tags {
+                let _ = channel
+                    .basic_ack(*tag, BasicAckOptions::default())
+                    .await;
+            }
+            Ok(out.len())
         });
-        let rows = match result {
-            Ok(r) => r,
+        let count = match result {
+            Ok(c) => c,
             Err(e) if e == "cancelled" => return Err(EngineError::Cancelled),
             Err(e) => return Err(EngineError::Query(format!("rabbit source: {}", e))),
         };
-        let count = rows.len();
-        materialize_jsonobjects_as_table(&self.bin, db, &spec.node_id, &rows)?;
         Ok(format!(
             "rabbit: materialized {} message(s) into {}",
             count, spec.node_id
@@ -3872,6 +3891,10 @@ impl DuckdbEngine {
             .map_err(|e| EngineError::Query(format!("webhook set_nonblocking: {}", e)))?;
         let deadline = Instant::now() + Duration::from_millis(spec.timeout_ms);
         let mut rows: Vec<JsonValue> = Vec::new();
+        // Accepted connections whose 200 is deferred until the batch is
+        // durably written (persist-then-ack), so a materialize failure can't
+        // leave senders thinking a never-stored event was delivered.
+        let mut pending: Vec<std::net::TcpStream> = Vec::new();
         while (rows.len() as u64) < spec.max_requests {
             self.check_cancelled()?;
             if Instant::now() >= deadline {
@@ -3908,9 +3931,6 @@ impl DuckdbEngine {
                     continue;
                 }
             }
-            // Always send 200 OK so the caller knows we got it.
-            let _ = stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok");
-            let _ = stream.flush();
             // Parse the body: prefer JSON shape, fall back to raw.
             let body_str = String::from_utf8_lossy(&body).into_owned();
             match serde_json::from_str::<JsonValue>(&body_str) {
@@ -3933,9 +3953,25 @@ impl DuckdbEngine {
                     rows.push(JsonValue::Object(row));
                 }
             }
+            // Hold the connection open; answer it after the batch is persisted.
+            pending.push(stream);
         }
         let count = rows.len();
-        materialize_jsonobjects_as_table(&self.bin, db, &spec.node_id, &rows)?;
+        let materialized = materialize_jsonobjects_as_table(&self.bin, db, &spec.node_id, &rows);
+        // Persist-then-ack: 200 once the rows are durably written; 503 on
+        // failure so a well-behaved sender retries instead of dropping the
+        // event. A sender that already timed out waiting will also retry,
+        // which is the safe (at-least-once) direction.
+        let response: &[u8] = if materialized.is_ok() {
+            b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok"
+        } else {
+            b"HTTP/1.1 503 Service Unavailable\r\nContent-Length: 5\r\nConnection: close\r\n\r\nretry"
+        };
+        for mut s in pending {
+            let _ = s.write_all(response);
+            let _ = s.flush();
+        }
+        materialized?;
         Ok(format!(
             "webhook: collected {} request(s) on :{} -> {}",
             count, spec.port, spec.node_id
@@ -5591,7 +5627,7 @@ impl DuckdbEngine {
                         let is_delete = spec
                             .delete_column
                             .as_deref()
-                            .map(|dc| doc.get_str(dc) == Ok(spec.delete_value.as_str()))
+                            .map(|dc| bson_flag_matches(doc.get(dc), &spec.delete_value))
                             .unwrap_or(false);
                         if let Some(dc) = &spec.delete_column {
                             doc.remove(dc);
@@ -6459,8 +6495,16 @@ impl DuckdbEngine {
         let mut columns_spec_parts: Vec<String> = Vec::with_capacity(row_type.len());
         let mut select_parts: Vec<String> = Vec::with_capacity(row_type.len());
         for c in row_type {
+            // Bail rather than `continue` on a nameless column: the row data is
+            // an array of cells positioned by the ORIGINAL column index, so
+            // silently dropping one name would shift every later column name
+            // onto the wrong cell. (Snowflake always names columns; this just
+            // guarantees the name list stays index-aligned with the cells.)
             let Some(name) = c.get("name").and_then(|n| n.as_str()) else {
-                continue;
+                return Err(EngineError::Query(
+                    "Snowflake rowType has a column with no name; cannot align result columns"
+                        .into(),
+                ));
             };
             let sf_type = c
                 .get("type")
@@ -6754,7 +6798,7 @@ impl DuckdbEngine {
         let (delete_clause, not_matched_guard) = match delete_col {
             Some(dc) => {
                 let q = db_quote_ident(dc);
-                let v = spec.delete_value.replace('\'', "''");
+                let v = jsonnative_quote_inner(&spec.delete_value);
                 (
                     format!(" WHEN MATCHED AND s.{q} = '{v}' THEN DELETE", q = q, v = v),
                     format!(" AND (s.{q} IS NULL OR s.{q} <> '{v}')", q = q, v = v),
@@ -6854,7 +6898,53 @@ impl DuckdbEngine {
                 .set("Content-Type", "application/json")
                 .set("Accept", "application/json");
             match req.send_string(&body) {
-                Ok(_) => total_inserted += chunk.len(),
+                Ok(r) => {
+                    // An HTTP 200 does NOT mean the statement finished: with
+                    // on_wait_timeout=CONTINUE, Databricks returns the envelope
+                    // with status.state = PENDING/RUNNING (poll required) or
+                    // even FAILED. Inspect the state before counting the batch,
+                    // mirroring run_databricks_source, so we don't report a
+                    // still-running or failed write as inserted.
+                    let env: JsonValue = r
+                        .into_string()
+                        .ok()
+                        .and_then(|s| serde_json::from_str(&s).ok())
+                        .unwrap_or(JsonValue::Null);
+                    let state = env
+                        .pointer("/status/state")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("SUCCEEDED");
+                    match state {
+                        "SUCCEEDED" => {}
+                        "PENDING" | "RUNNING" => {
+                            let statement_id = env
+                                .get("statement_id")
+                                .and_then(|v| v.as_str())
+                                .ok_or_else(|| {
+                                    EngineError::Query(
+                                        "Databricks async write response missing statement_id"
+                                            .into(),
+                                    )
+                                })?;
+                            let poll_url = format!("{}{}", url, statement_id);
+                            poll_databricks_until_done(
+                                &poll_url,
+                                &format!("Bearer {}", spec.pat),
+                            )?;
+                        }
+                        other => {
+                            let err = env
+                                .pointer("/status/error/message")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("(no message)");
+                            return Err(EngineError::Query(format!(
+                                "Databricks write statement state {}: {}",
+                                other, err
+                            )));
+                        }
+                    }
+                    total_inserted += chunk.len();
+                }
                 Err(ureq::Error::Status(code, response)) => {
                     let body = response.into_string().unwrap_or_default();
                     return Err(EngineError::Query(format!(
@@ -7220,6 +7310,34 @@ fn resolve_subpipeline_ref(reference: &str) -> String {
     reference.to_string()
 }
 
+/// Escape a raw value for embedding inside single quotes in a JsonNative
+/// (Snowflake / Databricks) string literal: double backslashes (these engines
+/// treat backslash as a string-literal escape char) then double single quotes.
+/// Matches `sql_literal`'s JsonNative quoting so a hand-built predicate literal
+/// resolves to the same runtime value as a projected source column.
+fn jsonnative_quote_inner(s: &str) -> String {
+    s.replace('\\', "\\\\").replace('\'', "''")
+}
+
+/// CDC delete-flag match for the Mongo sink. The flag column can arrive as a
+/// BSON string, bool, or number: DuckDB `-json` serializes BOOLEAN/INTEGER as
+/// native JSON, so `bson::to_document` yields Bool/Int32/Int64/Double, not
+/// String. Compare by stringifying so a boolean or numeric delete column
+/// matches `delete_value` the same way the SQL sinks' `flag = 'value'`
+/// coercion does, instead of silently never matching (which turned an intended
+/// delete into an upsert).
+fn bson_flag_matches(b: Option<&mongodb::bson::Bson>, target: &str) -> bool {
+    use mongodb::bson::Bson;
+    match b {
+        Some(Bson::String(s)) => s == target,
+        Some(Bson::Boolean(v)) => v.to_string() == target,
+        Some(Bson::Int32(v)) => v.to_string() == target,
+        Some(Bson::Int64(v)) => v.to_string() == target,
+        Some(Bson::Double(v)) => v.to_string() == target,
+        _ => false,
+    }
+}
+
 /// SFTP (SSH File Transfer Protocol) detection. SFTP is a different protocol
 /// from FTP / FTPS and is not handled by src.ftp (suppaftp). Catch the common
 /// targeting mistakes - the SSH port (22) or an sftp:// / ssh:// scheme on the
@@ -7244,5 +7362,35 @@ mod ftp_tests {
         assert!(!is_sftp_target("files.example.com", 21));
         assert!(!is_sftp_target("ftp://files.example.com", 21));
         assert!(!is_sftp_target("ftps://files.example.com", 990));
+    }
+}
+
+#[cfg(test)]
+mod connector_helper_tests {
+    use super::{bson_flag_matches, jsonnative_quote_inner};
+    use mongodb::bson::Bson;
+
+    #[test]
+    fn jsonnative_quoting_doubles_backslash_and_quote() {
+        // Snowflake / Databricks treat backslash as a literal escape char, so
+        // a delete_value with a backslash must be doubled to round-trip.
+        assert_eq!(jsonnative_quote_inner("a\\b"), "a\\\\b");
+        assert_eq!(jsonnative_quote_inner("o'reilly"), "o''reilly");
+        assert_eq!(jsonnative_quote_inner("C:\\path\\x"), "C:\\\\path\\\\x");
+        assert_eq!(jsonnative_quote_inner("delete"), "delete");
+    }
+
+    #[test]
+    fn mongo_delete_flag_matches_non_string_bson() {
+        // The flag column can be a native bool/number, not just a string.
+        assert!(bson_flag_matches(Some(&Bson::String("delete".into())), "delete"));
+        assert!(bson_flag_matches(Some(&Bson::Boolean(true)), "true"));
+        assert!(bson_flag_matches(Some(&Bson::Int32(1)), "1"));
+        assert!(bson_flag_matches(Some(&Bson::Int64(1)), "1"));
+        assert!(bson_flag_matches(Some(&Bson::Double(1.0)), "1"));
+        // Non-matches and absent column.
+        assert!(!bson_flag_matches(Some(&Bson::Boolean(false)), "true"));
+        assert!(!bson_flag_matches(Some(&Bson::String("keep".into())), "delete"));
+        assert!(!bson_flag_matches(None, "delete"));
     }
 }
