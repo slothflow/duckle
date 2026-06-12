@@ -1959,3 +1959,55 @@
             err
         );
     }
+
+    #[test]
+    fn second_lookup_edge_rejected() {
+        // A join reads one lookup via first_lookup(); a 2nd lookup edge would
+        // be silently dropped, so the planner must reject it (not xf.map).
+        let doc = pipeline_from_json(
+            r#"{"name":"t","nodes":[
+                {"id":"s","type":"source","position":{"x":0,"y":0},"data":{"label":"s","componentId":"src.csv","properties":{"path":"s.csv"}}},
+                {"id":"r1","type":"source","position":{"x":0,"y":0},"data":{"label":"r1","componentId":"src.csv","properties":{"path":"r1.csv"}}},
+                {"id":"r2","type":"source","position":{"x":0,"y":0},"data":{"label":"r2","componentId":"src.csv","properties":{"path":"r2.csv"}}},
+                {"id":"j","type":"transform","position":{"x":0,"y":0},"data":{"label":"j","componentId":"xf.join.inner","properties":{"leftKey":"id","rightKey":"id"}}},
+                {"id":"k","type":"sink","position":{"x":0,"y":0},"data":{"label":"k","componentId":"snk.csv","properties":{"path":"o.csv"}}}
+            ],"edges":[
+                {"id":"e1","source":"s","target":"j","sourceHandle":"main","targetHandle":"main","data":{"connectionType":"main"}},
+                {"id":"e2","source":"r1","target":"j","sourceHandle":"main","targetHandle":"lookup","data":{"connectionType":"lookup"}},
+                {"id":"e3","source":"r2","target":"j","sourceHandle":"main","targetHandle":"lookup","data":{"connectionType":"lookup"}},
+                {"id":"e4","source":"j","target":"k","sourceHandle":"main","targetHandle":"main","data":{"connectionType":"main"}}
+            ]}"#,
+        );
+        let err = compile(&doc).unwrap_err();
+        assert!(
+            format!("{:?}", err).contains("lookup"),
+            "expected a lookup fan-in error, got {:?}",
+            err
+        );
+    }
+
+    #[test]
+    fn dbt_exposes_all_main_inputs() {
+        // xf.dbt is multi-main: both upstream tables should land in from_views
+        // (exposed to dbt as var('duckle_inputs')), not just the first.
+        let doc = pipeline_from_json(
+            r#"{"name":"t","nodes":[
+                {"id":"a","type":"source","position":{"x":0,"y":0},"data":{"label":"a","componentId":"src.csv","properties":{"path":"a.csv"}}},
+                {"id":"b","type":"source","position":{"x":0,"y":0},"data":{"label":"b","componentId":"src.csv","properties":{"path":"b.csv"}}},
+                {"id":"d","type":"transform","position":{"x":0,"y":0},"data":{"label":"d","componentId":"xf.dbt","properties":{"model":"SELECT 1 AS x","modelName":"m"}}}
+            ],"edges":[
+                {"id":"e1","source":"a","target":"d","sourceHandle":"main","targetHandle":"main","data":{"connectionType":"main"}},
+                {"id":"e2","source":"b","target":"d","sourceHandle":"main","targetHandle":"main","data":{"connectionType":"main"}}
+            ]}"#,
+        );
+        let stages = compile(&doc).unwrap().stages;
+        let dbt = stages.iter().find(|s| s.node_id == "d").expect("dbt stage");
+        match &dbt.runtime {
+            Some(RuntimeSpec::Dbt(spec)) => {
+                assert_eq!(spec.from_views.len(), 2, "both inputs expected: {:?}", spec.from_views);
+                assert!(spec.from_views.contains(&"a".to_string()));
+                assert!(spec.from_views.contains(&"b".to_string()));
+            }
+            other => panic!("expected a Dbt runtime spec, got {:?}", other),
+        }
+    }

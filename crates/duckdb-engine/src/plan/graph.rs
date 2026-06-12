@@ -593,6 +593,14 @@ pub(crate) fn is_multi_main_component(component_id: &str) -> bool {
     )
 }
 
+/// xf.map (tMap) is the only component that reads several lookup ports (its
+/// configured `lookups` list). Every other join / diff / scd / upsert reads a
+/// single lookup via first_lookup(), so a second lookup edge would be silently
+/// dropped - the fan-in guard rejects that for everything except Map.
+pub(crate) fn is_multi_lookup_component(component_id: &str) -> bool {
+    component_id == "xf.map"
+}
+
 pub(crate) fn is_data_edge(edge: &PipelineEdge) -> bool {
     match edge.data.as_ref() {
         Some(d) => matches!(

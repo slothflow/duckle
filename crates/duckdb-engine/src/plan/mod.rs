@@ -389,6 +389,24 @@ pub fn compile(pipeline: &PipelineDoc) -> Result<CompiledPipeline, EngineError> 
                 }
             }
         }
+        // Same data-loss guard for lookup ports: join / diff / scd / upsert read
+        // a single lookup via first_lookup(), so a second lookup edge would be
+        // silently dropped. xf.map (tMap) is exempt - it reads every configured
+        // lookup port.
+        if !is_multi_lookup_component(component_id) {
+            let lookups: usize = node_inputs
+                .ports
+                .iter()
+                .filter(|(k, _)| k.starts_with("lookup"))
+                .map(|(_, v)| v.len())
+                .sum();
+            if lookups > 1 {
+                return Err(EngineError::Config(format!(
+                    "{} ({} / {}): {} inputs are wired into this node's lookup port, but only one is read - the rest would be silently dropped. Union them first, or use a Map node for multiple lookups.",
+                    node.data.label, component_id, node.id, lookups
+                )));
+            }
+        }
         let mut stage = build_stage(node, component_id, node_inputs, &consumer_count)?;
         if let Some(spec) = parallelize_specs.remove(node_id) {
             stage.runtime = Some(RuntimeSpec::Parallelize(spec));
@@ -1897,7 +1915,9 @@ fn build_stage(
                     None
                 }
             });
-        let from = inputs.main().map(|s| s.to_string());
+        let from_views: Vec<String> =
+            inputs.all_main_ports().iter().map(|s| s.to_string()).collect();
+        let from = from_views.first().cloned();
         dbt = Some(DbtSpec {
             node_id: node.id.clone(),
             project_dir,
@@ -1913,6 +1933,7 @@ fn build_stage(
                 .unwrap_or_else(|| "main".into()),
             output_model,
             from_view: from.clone(),
+            from_views: from_views.clone(),
             timeout_ms: props
                 .get("timeoutMs")
                 .and_then(|v| v.as_u64())

@@ -532,8 +532,12 @@ pub struct DbtSpec {
     pub schema: String,
     /// Model/table to read back as this node's output rows.
     pub output_model: Option<String>,
-    /// Upstream node table, exposed to dbt as var("duckle_input").
+    /// First upstream node table, exposed to dbt as var("duckle_input").
     pub from_view: Option<String>,
+    /// All upstream node tables (by node id), exposed to dbt as the list
+    /// var("duckle_inputs") so a multi-source inline model can reference them
+    /// all. Each is also a real table dbt can read via sources.
+    pub from_views: Vec<String>,
     pub timeout_ms: Option<u64>,
 }
 

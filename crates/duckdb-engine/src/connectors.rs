@@ -2709,7 +2709,19 @@ impl DuckdbEngine {
             args.push("--profile".into());
             args.push(profile_name.clone());
         }
-        if let Some(fv) = &spec.from_view {
+        // Expose the upstream tables to dbt: the first as var('duckle_input')
+        // (back-compat / single-source) and ALL of them as the list
+        // var('duckle_inputs') for multi-source inline models.
+        if !spec.from_views.is_empty() {
+            args.push("--vars".into());
+            args.push(
+                serde_json::json!({
+                    "duckle_input": spec.from_views.first(),
+                    "duckle_inputs": spec.from_views,
+                })
+                .to_string(),
+            );
+        } else if let Some(fv) = &spec.from_view {
             args.push("--vars".into());
             args.push(serde_json::json!({ "duckle_input": fv }).to_string());
         }
