@@ -2269,8 +2269,15 @@ impl DuckdbEngine {
             for (k, v) in obj {
                 record.put(k, json_to_avro_value(v));
             }
+            // The inferred schema types every field as a ["null", T] union;
+            // apache_avro won't encode a bare value against a union, so resolve
+            // the record first to wrap each value into its matching branch
+            // (also a no-op for a user-supplied non-union schema).
+            let value = apache_avro::types::Value::from(record)
+                .resolve(&schema)
+                .map_err(|e| EngineError::Query(format!("avro: encode row: {}", e)))?;
             writer
-                .append(record)
+                .append(value)
                 .map_err(|e| EngineError::Query(format!("avro: append: {}", e)))?;
             total += 1;
         }
