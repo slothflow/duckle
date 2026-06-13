@@ -102,6 +102,13 @@ export default function PropertiesPanel({
         }
     }, [focusNameRequest]);
 
+    // Every component opens on the Basic tab. Switching to Schema / Preview /
+    // Advanced / Validation is then the user's choice and stays put while this
+    // component is selected; selecting a different node resets back to Basic.
+    useEffect(() => {
+        setTab('basic');
+    }, [selected?.id]);
+
     const upstreamSchema = useMemo<Column[]>(
         () => resolveUpstreamSchema(selected?.id, allNodes, edges),
         [selected, edges, allNodes],
