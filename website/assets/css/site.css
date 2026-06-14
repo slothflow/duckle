@@ -74,9 +74,9 @@
     --kind-transform: #9d8cff;
     --kind-sink: var(--orange);
 
-    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4), 0 6px 18px rgba(0, 0, 0, 0.4);
-    --shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
-    --shadow-lg: 0 36px 80px rgba(0, 0, 0, 0.6);
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    --shadow-lg: 0 24px 60px rgba(0, 0, 0, 0.45);
 
     --nav-bg: rgba(11, 14, 22, 0.78);
     --hero-tint: radial-gradient(900px 400px at 80% -10%, rgba(244, 180, 0, 0.16), transparent 60%),
