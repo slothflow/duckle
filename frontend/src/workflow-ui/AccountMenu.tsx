@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { Check, ChevronDown, ImagePlus, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { type Account, initials } from '../accounts';
@@ -183,7 +184,9 @@ export function ProfileSetupModal({
     );
 }
 
-/** Top-right account chip + dropdown switcher + add/edit/remove. */
+/** Top-right account chip + dropdown switcher + add/edit/remove.
+   The menu and editor are portaled to <body> so the topbar's backdrop-filter
+   (which creates a containing block / stacking context) can't clip them. */
 export function AccountChip({
     accounts,
     activeId,
@@ -204,6 +207,14 @@ export function AccountChip({
     const [editor, setEditor] = useState<null | { mode: 'add' } | { mode: 'edit'; id: string }>(
         null,
     );
+    const chipRef = useRef<HTMLButtonElement>(null);
+    const [menuPos, setMenuPos] = useState<{ top: number; right: number }>({ top: 56, right: 12 });
+
+    const openMenu = () => {
+        const r = chipRef.current?.getBoundingClientRect();
+        if (r) setMenuPos({ top: r.bottom + 8, right: Math.max(8, window.innerWidth - r.right) });
+        setOpen(true);
+    };
 
     useEffect(() => {
         if (!open) return;
@@ -221,9 +232,10 @@ export function AccountChip({
     return (
         <div className="acct-wrap">
             <button
+                ref={chipRef}
                 type="button"
                 className="acct-chip"
-                onClick={() => setOpen(o => !o)}
+                onClick={() => (open ? setOpen(false) : openMenu())}
                 title={t('account.menu', 'Account')}
                 aria-haspopup="menu"
                 aria-expanded={open}
@@ -233,95 +245,112 @@ export function AccountChip({
                 <ChevronDown size={13} className="acct-chip-caret" />
             </button>
 
-            {open ? (
-                <>
-                    <div className="acct-backdrop" onClick={() => setOpen(false)} />
-                    <div className="acct-menu" role="menu">
-                        <div className="acct-menu-head">{t('account.switch', 'Switch account')}</div>
-                        {accounts.map(a => (
-                            <div key={a.id} className="acct-menu-row">
-                                <button
-                                    type="button"
-                                    className="acct-menu-item"
-                                    onClick={() => {
-                                        onSwitch(a.id);
-                                        setOpen(false);
-                                    }}
-                                >
-                                    <Avatar account={a} size={24} />
-                                    <span className="acct-menu-name">{a.username}</span>
-                                    {a.id === active.id ? (
-                                        <Check size={14} className="acct-menu-check" />
-                                    ) : null}
-                                </button>
-                                <button
-                                    type="button"
-                                    className="acct-icon-btn"
-                                    title={t('account.edit', 'Edit')}
-                                    onClick={() => setEditor({ mode: 'edit', id: a.id })}
-                                >
-                                    <Pencil size={13} />
-                                </button>
-                                {accounts.length > 1 ? (
-                                    <button
-                                        type="button"
-                                        className="acct-icon-btn acct-icon-danger"
-                                        title={t('account.remove', 'Remove')}
-                                        onClick={() => onRemove(a.id)}
-                                    >
-                                        <Trash2 size={13} />
-                                    </button>
-                                ) : null}
-                            </div>
-                        ))}
-                        <button
-                            type="button"
-                            className="acct-menu-add"
-                            onClick={() => setEditor({ mode: 'add' })}
-                        >
-                            <Plus size={15} /> {t('account.add', 'Add account')}
-                        </button>
-                    </div>
-                </>
-            ) : null}
+            {open
+                ? createPortal(
+                      <>
+                          <div className="acct-backdrop" onClick={() => setOpen(false)} />
+                          <div
+                              className="acct-menu"
+                              role="menu"
+                              style={{ top: menuPos.top, right: menuPos.right }}
+                          >
+                              <div className="acct-menu-head">
+                                  {t('account.switch', 'Switch account')}
+                              </div>
+                              {accounts.map(a => (
+                                  <div key={a.id} className="acct-menu-row">
+                                      <button
+                                          type="button"
+                                          className="acct-menu-item"
+                                          onClick={() => {
+                                              onSwitch(a.id);
+                                              setOpen(false);
+                                          }}
+                                      >
+                                          <Avatar account={a} size={24} />
+                                          <span className="acct-menu-name">{a.username}</span>
+                                          {a.id === active.id ? (
+                                              <Check size={14} className="acct-menu-check" />
+                                          ) : null}
+                                      </button>
+                                      <button
+                                          type="button"
+                                          className="acct-icon-btn"
+                                          title={t('account.edit', 'Edit')}
+                                          onClick={() => setEditor({ mode: 'edit', id: a.id })}
+                                      >
+                                          <Pencil size={13} />
+                                      </button>
+                                      {accounts.length > 1 ? (
+                                          <button
+                                              type="button"
+                                              className="acct-icon-btn acct-icon-danger"
+                                              title={t('account.remove', 'Remove')}
+                                              onClick={() => onRemove(a.id)}
+                                          >
+                                              <Trash2 size={13} />
+                                          </button>
+                                      ) : null}
+                                  </div>
+                              ))}
+                              <button
+                                  type="button"
+                                  className="acct-menu-add"
+                                  onClick={() => setEditor({ mode: 'add' })}
+                              >
+                                  <Plus size={15} /> {t('account.add', 'Add account')}
+                              </button>
+                          </div>
+                      </>,
+                      document.body,
+                  )
+                : null}
 
-            {editor ? (
-                <div className="acct-overlay">
-                    <div className="acct-modal" role="dialog" aria-modal="true">
-                        <button
-                            type="button"
-                            className="acct-modal-x"
-                            aria-label={t('common.close', 'Close')}
-                            onClick={() => setEditor(null)}
-                        >
-                            <X size={16} />
-                        </button>
-                        <h3>
-                            {editor.mode === 'add'
-                                ? t('account.addTitle', 'Add an account')
-                                : t('account.editTitle', 'Edit account')}
-                        </h3>
-                        <ProfileForm
-                            initial={{
-                                username: editing?.username ?? '',
-                                avatar: editing?.avatar,
-                            }}
-                            submitLabel={
-                                editor.mode === 'add'
-                                    ? t('account.create', 'Create account')
-                                    : t('common.save', 'Save')
-                            }
-                            onCancel={() => setEditor(null)}
-                            onSubmit={v => {
-                                if (editor.mode === 'add') onAdd(v);
-                                else onEdit(editor.id, v);
-                                setEditor(null);
-                                setOpen(false);
-                            }}
-                        />
-                    </div>
-                </div>
-            ) : null}
+            {editor
+                ? createPortal(
+                      <div className="acct-overlay" onClick={() => setEditor(null)}>
+                          <div
+                              className="acct-modal"
+                              role="dialog"
+                              aria-modal="true"
+                              onClick={e => e.stopPropagation()}
+                          >
+                              <button
+                                  type="button"
+                                  className="acct-modal-x"
+                                  aria-label={t('common.close', 'Close')}
+                                  onClick={() => setEditor(null)}
+                              >
+                                  <X size={16} />
+                              </button>
+                              <h3>
+                                  {editor.mode === 'add'
+                                      ? t('account.addTitle', 'Add an account')
+                                      : t('account.editTitle', 'Edit account')}
+                              </h3>
+                              <ProfileForm
+                                  initial={{
+                                      username: editing?.username ?? '',
+                                      avatar: editing?.avatar,
+                                  }}
+                                  submitLabel={
+                                      editor.mode === 'add'
+                                          ? t('account.create', 'Create account')
+                                          : t('common.save', 'Save')
+                                  }
+                                  onCancel={() => setEditor(null)}
+                                  onSubmit={v => {
+                                      if (editor.mode === 'add') onAdd(v);
+                                      else onEdit(editor.id, v);
+                                      setEditor(null);
+                                      setOpen(false);
+                                  }}
+                              />
+                          </div>
+                      </div>,
+                      document.body,
+                  )
+                : null}
         </div>
     );
 }

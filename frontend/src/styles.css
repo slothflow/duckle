@@ -7555,8 +7555,8 @@ html[dir='rtl'] .topbar-lang {
 .acct-chip-caret { color: var(--text-3); flex-shrink: 0; }
 .acct-avatar { border-radius: 50%; object-fit: cover; display: block; flex-shrink: 0; }
 .acct-avatar-initials { display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; background: var(--accent); color: var(--btn-primary-fg, #0a0a0a); font-weight: 700; line-height: 1; flex-shrink: 0; }
-.acct-backdrop { position: fixed; inset: 0; z-index: 900; }
-.acct-menu { position: absolute; top: calc(100% + 8px); right: 0; z-index: 901; min-width: 250px; background: var(--bg-elevated, var(--bg-1)); border: 1px solid var(--border-strong); border-radius: var(--radius, 10px); box-shadow: var(--shadow-2); padding: 6px; }
+.acct-backdrop { position: fixed; inset: 0; z-index: 2000; }
+.acct-menu { position: fixed; z-index: 2001; min-width: 250px; background: var(--bg-elevated, var(--bg-1)); border: 1px solid var(--border-strong); border-radius: var(--radius, 10px); box-shadow: var(--shadow-2); padding: 6px; }
 .acct-menu-head { font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--text-3); padding: 8px 10px 6px; }
 .acct-menu-row { display: flex; align-items: center; gap: 2px; }
 .acct-menu-item { flex: 1; display: flex; align-items: center; gap: 9px; padding: 8px 10px; background: none; border: none; border-radius: 8px; color: var(--text-1); cursor: pointer; font-size: 13px; text-align: left; min-width: 0; }
@@ -7568,7 +7568,7 @@ html[dir='rtl'] .topbar-lang {
 .acct-icon-danger:hover { color: var(--danger, #ff5f57); }
 .acct-menu-add { width: 100%; display: flex; align-items: center; gap: 8px; margin-top: 4px; padding: 9px 10px; background: none; border: none; border-top: 1px solid var(--border); color: var(--text-2); cursor: pointer; font-size: 13px; font-weight: 600; }
 .acct-menu-add:hover { background: var(--bg-2); color: var(--text-1); }
-.acct-overlay { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 20px; background: rgba(0, 0, 0, .55); backdrop-filter: blur(3px); -webkit-app-region: no-drag; }
+.acct-overlay { position: fixed; inset: 0; z-index: 3000; display: flex; align-items: center; justify-content: center; padding: 20px; background: rgba(0, 0, 0, .55); backdrop-filter: blur(3px); -webkit-app-region: no-drag; }
 .acct-modal { position: relative; width: 100%; max-width: 420px; background: var(--bg-1); border: 1px solid var(--border-strong); border-radius: var(--radius-lg, 14px); box-shadow: var(--shadow-2); padding: 26px; }
 .acct-modal h3 { margin: 0 0 6px; font-size: 18px; color: var(--text-1); }
 .acct-modal-sub { margin: 0 0 18px; font-size: 13px; line-height: 1.5; color: var(--text-3); }
