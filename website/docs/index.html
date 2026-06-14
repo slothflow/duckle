@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Documentation - Duckle</title>
+<meta name="description" content="Duckle documentation: getting started, the 329-component reference, integrations, the Duckie AI assistant, scheduling, the MCP server, and server deployment." />
+<link rel="icon" href="../assets/img/duckle-logo-dark.svg" />
+<link rel="preconnect" href="https://rsms.me/" />
+<link rel="stylesheet" href="https://rsms.me/inter/inter.css" />
+<link rel="stylesheet" href="../assets/css/site.css" />
+<script>(function(){try{var t=localStorage.getItem("duckle-theme");if(t)document.documentElement.setAttribute("data-theme",t);}catch(e){}})();</script>
+</head>
+<body>
+<header class="nav">
+  <div class="wrap nav-inner">
+    <a class="brand" href="../index.html"><img class="logo-dark" src="../assets/img/duckle-logo-dark.svg" alt="" /><img class="logo-light" src="../assets/img/duckle-logo-light.svg" alt="" /><span>Duckle<span class="dot">.</span></span></a>
+    <nav class="nav-links" id="navLinks">
+      <a href="../index.html#features">Features</a>
+      <a href="../index.html#integrations">Integrations</a>
+      <a href="../index.html#usecases">Use cases</a>
+      <a href="../index.html#ecosystem">Ecosystem</a>
+      <a href="index.html">Docs</a>
+    </nav>
+    <div class="nav-right">
+      <a class="gh-star" id="ghStar" href="https://github.com/SouravRoy-ETL/duckle" target="_blank" rel="noopener" aria-label="Star Duckle on GitHub">
+        <span class="gh-label"><svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg><span>Star</span></span>
+        <span class="gh-count" id="ghCount">★</span>
+      </a>
+      <button class="icon-btn theme-toggle" id="themeToggle" aria-label="Toggle theme" title="Toggle theme">
+        <svg class="moon" width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        <svg class="sun" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32 1.41 1.41M2 12h2m16 0h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+      </button>
+      <a class="btn btn-primary" href="../index.html#download">Download</a>
+      <button class="icon-btn nav-toggle" id="navToggle" aria-label="Open menu"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg></button>
+    </div>
+  </div>
+</header>
+
+<div class="wrap section">
+  <div class="docs-shell">
+    <aside class="docs-side">
+      <h4>Getting started</h4>
+      <a href="index.html">Overview</a>
+      <a href="getting-started.html">Install &amp; quickstart</a>
+      <a href="getting-started.html#first-pipeline">Your first pipeline</a>
+      <h4>Reference</h4>
+      <a href="components.html">Component reference</a>
+      <a href="integrations.html">Integrations directory</a>
+      <h4>Guides</h4>
+      <a href="ai-duckie.html">Duckie AI &amp; AI transforms</a>
+      <a href="automation.html">Scheduling, MCP &amp; deploy</a>
+      <h4>Project</h4>
+      <a href="https://github.com/SouravRoy-ETL/duckle" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://github.com/SouravRoy-ETL/duckle/releases" target="_blank" rel="noopener">Releases</a>
+    </aside>
+
+    <main class="docs-main">
+      <span class="eyebrow">Documentation</span>
+      <h1>Duckle docs</h1>
+      <p class="lead">Duckle is an open-source, local-first ETL / ELT studio. Build pipelines visually, run them at native speed on DuckDB, and ship them as plain files. This is everything you need to go from download to a scheduled production pipeline.</p>
+
+      <div class="note"><b>New here?</b> Start with <a href="getting-started.html">Install &amp; quickstart</a> - you will have a pipeline running in about a minute.</div>
+
+      <h2>Explore</h2>
+      <div class="grid cols-2" style="margin-top:18px;">
+        <a class="card" href="getting-started.html"><span class="ico">&#128640;</span><h3>Getting started</h3><p>Download, install the DuckDB engine on first launch, and build + run your first source &rarr; transform &rarr; sink pipeline.</p></a>
+        <a class="card src" href="components.html"><span class="ico">&#129513;</span><h3>Component reference</h3><p>All 329 components: 104 sources, 128 transforms, 59 sinks, 12 quality validators, 19 control-flow nodes, 7 code runners.</p></a>
+        <a class="card" href="integrations.html"><span class="ico">&#128268;</span><h3>Integrations directory</h3><p>Every connector by category - files, databases, warehouses, object stores, streaming, SaaS, NoSQL and vector DBs.</p></a>
+        <a class="card xf" href="ai-duckie.html"><span class="ico">&#129302;</span><h3>Duckie AI</h3><p>The on-device assistant, the six AI transforms, and how to clean data before it reaches your models.</p></a>
+        <a class="card snk" href="automation.html"><span class="ico">&#9881;</span><h3>Scheduling, MCP &amp; deploy</h3><p>Cron / interval / file-watch schedules, the MCP server for Claude and other LLMs, connections, contexts, and headless server deployment.</p></a>
+        <a class="card" href="../index.html#usecases"><span class="ico">&#128161;</span><h3>Use cases &amp; recipes</h3><p>Ready-to-adapt patterns: warehouse loading, RAG ingestion, S3 to partitioned Parquet, Slack digests, and more.</p></a>
+      </div>
+
+      <h2>What is Duckle?</h2>
+      <p>A visual data pipeline studio that runs on your laptop. Drag sources, transforms, validators and sinks onto a canvas, wire them, and press <b>Run</b>. Duckle compiles the graph to SQL and executes it through DuckDB - a real columnar engine - with live previews, generated SQL on every node, and zero hidden state.</p>
+      <ul>
+        <li><b>An AI assistant in the box.</b> Describe a pipeline in English; Duckie writes the JSON and drops it on the canvas. The model runs locally - no API key, no telemetry.</li>
+        <li><b>329 components at install time.</b> Files, lakehouses, SQL databases, warehouses, NoSQL, vector DBs, streaming brokers, SaaS APIs, FTP and IMAP - working today.</li>
+        <li><b>A self-contained binary you can audit.</b> ~65 MB download; engines install on first launch; workspaces are plain files in a folder you choose.</li>
+      </ul>
+
+      <h2>Built on DuckDB</h2>
+      <p>Every pipeline runs through <a href="https://duckdb.org" target="_blank" rel="noopener">DuckDB</a> - vectorized, columnar, local. Duckle reads the wider DuckDB family natively: DuckLake tables, MotherDuck, the Quack remote protocol, and the community extensions (<code>httpfs</code>, <code>postgres</code>, <code>iceberg</code>, <code>delta</code>, <code>vss</code>, <code>fts</code>, and more). Duckle is an independent, open-source member of the DuckDB ecosystem; it matches the DuckDB brand palette but is not affiliated with DuckDB Labs or MotherDuck.</p>
+    </main>
+  </div>
+</div>
+
+<footer class="footer">
+  <div class="wrap">
+    <div class="legal">
+      <span>&copy; 2026 Duckle. MIT OR Apache-2.0.</span>
+      <span><a href="../index.html">Home</a> &middot; <a href="https://github.com/SouravRoy-ETL/duckle" target="_blank" rel="noopener">GitHub</a></span>
+    </div>
+  </div>
+</footer>
+<script src="../assets/js/site.js"></script>
+</body>
+</html>

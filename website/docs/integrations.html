@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Integrations directory - Duckle</title>
+<link rel="icon" href="../assets/img/duckle-logo-dark.svg" />
+<link rel="preconnect" href="https://rsms.me/" />
+<link rel="stylesheet" href="https://rsms.me/inter/inter.css" />
+<link rel="stylesheet" href="../assets/css/site.css" />
+<script>(function(){try{var t=localStorage.getItem("duckle-theme");if(t)document.documentElement.setAttribute("data-theme",t);}catch(e){}})();</script>
+</head>
+<body>
+<header class="nav">
+  <div class="wrap nav-inner">
+    <a class="brand" href="../index.html"><img class="logo-dark" src="../assets/img/duckle-logo-dark.svg" alt="" /><img class="logo-light" src="../assets/img/duckle-logo-light.svg" alt="" /><span>Duckle<span class="dot">.</span></span></a>
+    <nav class="nav-links" id="navLinks">
+      <a href="../index.html#features">Features</a>
+      <a href="../index.html#integrations">Integrations</a>
+      <a href="../index.html#usecases">Use cases</a>
+      <a href="../index.html#ecosystem">Ecosystem</a>
+      <a href="index.html">Docs</a>
+    </nav>
+    <div class="nav-right">
+      <a class="gh-star" id="ghStar" href="https://github.com/SouravRoy-ETL/duckle" target="_blank" rel="noopener" aria-label="Star Duckle on GitHub">
+        <span class="gh-label"><svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg><span>Star</span></span>
+        <span class="gh-count" id="ghCount">&#9733;</span>
+      </a>
+      <button class="icon-btn theme-toggle" id="themeToggle" aria-label="Toggle theme" title="Toggle theme">
+        <svg class="moon" width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        <svg class="sun" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32 1.41 1.41M2 12h2m16 0h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+      </button>
+      <a class="btn btn-primary" href="../index.html#download">Download</a>
+      <button class="icon-btn nav-toggle" id="navToggle" aria-label="Open menu"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg></button>
+    </div>
+  </div>
+</header>
+<div class="wrap section">
+  <div class="docs-shell">
+    <aside class="docs-side">
+      <h4>Getting started</h4>
+      <a href="index.html">Overview</a>
+      <a href="getting-started.html">Install &amp; quickstart</a>
+      <h4>Reference</h4>
+      <a href="components.html">Component reference</a>
+      <a href="integrations.html">Integrations directory</a>
+      <h4>Guides</h4>
+      <a href="ai-duckie.html">Duckie AI &amp; AI transforms</a>
+      <a href="automation.html">Scheduling, MCP &amp; deploy</a>
+      <h4>Project</h4>
+      <a href="https://github.com/SouravRoy-ETL/duckle" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://github.com/SouravRoy-ETL/duckle/releases" target="_blank" rel="noopener">Releases</a>
+    </aside>
+    <main class="docs-main">
+<span class="eyebrow">Integrations</span>
+<h1>Integrations directory</h1>
+<p class="lead">104 sources and 59 sinks that work today, each covered by tests. Organized by category; sources read in, sinks write out.</p>
+
+<div class="grid cols-3">
+  <div class="card">
+    <span class="ico">&#128229;</span>
+    <h3>104 sources</h3>
+    <p>Read from files, databases, warehouses, object storage, streams, NoSQL stores, vector DBs, and SaaS APIs.</p>
+  </div>
+  <a class="card" href="components.html">
+    <span class="ico">&#128295;</span>
+    <h3>128 transforms</h3>
+    <p>Shape, join, enrich, and validate data between source and sink. See the component reference.</p>
+  </a>
+  <div class="card">
+    <span class="ico">&#128228;</span>
+    <h3>59 destinations</h3>
+    <p>Write to files, databases, warehouses, object storage, vector DBs, messaging, and mailboxes.</p>
+  </div>
+</div>
+
+<h2>Sources</h2>
+<p>Source components carry the <code>src.*</code> id prefix and feed rows into a pipeline.</p>
+
+<h3>Files &amp; formats</h3>
+<div class="chips">
+  <span class="chip">CSV</span>
+  <span class="chip">TSV</span>
+  <span class="chip">Parquet</span>
+  <span class="chip">JSON</span>
+  <span class="chip">JSONL</span>
+  <span class="chip">Excel</span>
+  <span class="chip">YAML</span>
+  <span class="chip">TOML</span>
+  <span class="chip">XML</span>
+  <span class="chip">Avro</span>
+  <span class="chip">Fixed-width</span>
+</div>
+
+<h3>Geospatial</h3>
+<div class="chips">
+  <span class="chip">GeoJSON</span>
+  <span class="chip">Shapefile</span>
+  <span class="chip">GeoPackage</span>
+  <span class="chip">KML</span>
+  <span class="chip">GPX</span>
+  <span class="chip">GML</span>
+</div>
+
+<h3>Lakehouse</h3>
+<div class="chips">
+  <span class="chip">Iceberg</span>
+  <span class="chip">Delta Lake</span>
+  <span class="chip">DuckLake</span>
+</div>
+
+<h3>Embedded DB</h3>
+<div class="chips">
+  <span class="chip">SQLite</span>
+  <span class="chip">DuckDB</span>
+</div>
+
+<h3>Relational DB</h3>
+<div class="chips">
+  <span class="chip">PostgreSQL</span>
+  <span class="chip">MySQL</span>
+  <span class="chip">MariaDB</span>
+  <span class="chip">CockroachDB</span>
+  <span class="chip">SQL Server</span>
+  <span class="chip">Oracle</span>
+  <span class="chip">ClickHouse</span>
+</div>
+
+<h3>Warehouses</h3>
+<div class="chips">
+  <span class="chip">Snowflake</span>
+  <span class="chip">BigQuery</span>
+  <span class="chip">Redshift</span>
+  <span class="chip">Databricks</span>
+  <span class="chip">MotherDuck</span>
+  <span class="chip">Azure Synapse</span>
+  <span class="chip">DuckDB Quack</span>
+</div>
+
+<h3>Object storage</h3>
+<div class="chips">
+  <span class="chip">Amazon S3</span>
+  <span class="chip">Google Cloud Storage</span>
+  <span class="chip">Azure Blob</span>
+  <span class="chip">MinIO</span>
+  <span class="chip">Cloudflare R2</span>
+  <span class="chip">Backblaze B2</span>
+  <span class="chip">HTTP</span>
+</div>
+
+<h3>Streaming</h3>
+<div class="chips">
+  <span class="chip">Apache Kafka</span>
+  <span class="chip">Redpanda</span>
+  <span class="chip">NATS JetStream</span>
+  <span class="chip">GCP Pub/Sub</span>
+  <span class="chip">RabbitMQ</span>
+  <span class="chip">AWS Kinesis</span>
+</div>
+
+<h3>NoSQL &amp; search</h3>
+<div class="chips">
+  <span class="chip">MongoDB</span>
+  <span class="chip">Cassandra</span>
+  <span class="chip">ScyllaDB</span>
+  <span class="chip">Elasticsearch</span>
+  <span class="chip">OpenSearch</span>
+  <span class="chip">Redis</span>
+  <span class="chip">CouchDB</span>
+  <span class="chip">DynamoDB</span>
+</div>
+
+<h3>Vector &amp; AI</h3>
+<div class="chips">
+  <span class="chip">pgvector</span>
+  <span class="chip">Qdrant</span>
+  <span class="chip">Weaviate</span>
+  <span class="chip">Milvus</span>
+</div>
+
+<h3>SaaS &amp; APIs</h3>
+<div class="chips">
+  <span class="chip">Salesforce</span>
+  <span class="chip">HubSpot</span>
+  <span class="chip">Pipedrive</span>
+  <span class="chip">Zendesk</span>
+  <span class="chip">Intercom</span>
+  <span class="chip">Stripe</span>
+  <span class="chip">QuickBooks</span>
+  <span class="chip">Xero</span>
+  <span class="chip">Shopify</span>
+  <span class="chip">Notion</span>
+  <span class="chip">Airtable</span>
+  <span class="chip">Asana</span>
+  <span class="chip">Trello</span>
+  <span class="chip">ClickUp</span>
+  <span class="chip">Monday.com</span>
+  <span class="chip">GitHub</span>
+  <span class="chip">GitLab</span>
+  <span class="chip">Linear</span>
+  <span class="chip">Jira</span>
+  <span class="chip">Slack</span>
+  <span class="chip">Discord</span>
+  <span class="chip">Telegram</span>
+  <span class="chip">Twilio</span>
+  <span class="chip">Mailchimp</span>
+  <span class="chip">SendGrid</span>
+  <span class="chip">Segment</span>
+  <span class="chip">REST</span>
+  <span class="chip">GraphQL</span>
+  <span class="chip">OData</span>
+  <span class="chip">SOAP</span>
+</div>
+
+<h3>File transfer &amp; mailbox</h3>
+<div class="chips">
+  <span class="chip">FTP</span>
+  <span class="chip">FTPS</span>
+  <span class="chip">SFTP</span>
+  <span class="chip">IMAP</span>
+</div>
+
+<h3>Other</h3>
+<div class="chips">
+  <span class="chip">Webhook listener</span>
+  <span class="chip">System clipboard</span>
+  <span class="chip">Git repo</span>
+</div>
+
+<h2>Destinations</h2>
+<p>Sink components carry the <code>snk.*</code> id prefix and write pipeline output back out.</p>
+
+<h3>Files</h3>
+<div class="chips">
+  <span class="chip">Parquet</span>
+  <span class="chip">CSV</span>
+  <span class="chip">TSV</span>
+  <span class="chip">JSON</span>
+  <span class="chip">JSONL</span>
+  <span class="chip">Excel</span>
+  <span class="chip">XML</span>
+  <span class="chip">Avro</span>
+  <span class="chip">Spatial</span>
+  <span class="chip">Iceberg</span>
+</div>
+
+<h3>Databases</h3>
+<div class="chips">
+  <span class="chip">PostgreSQL</span>
+  <span class="chip">MySQL</span>
+  <span class="chip">MariaDB</span>
+  <span class="chip">CockroachDB</span>
+  <span class="chip">SQLite</span>
+  <span class="chip">DuckDB</span>
+</div>
+
+<h3>Warehouses</h3>
+<div class="chips">
+  <span class="chip">Snowflake</span>
+  <span class="chip">BigQuery</span>
+  <span class="chip">Redshift</span>
+  <span class="chip">MotherDuck</span>
+  <span class="chip">Databricks</span>
+  <span class="chip">DuckLake</span>
+  <span class="chip">Quack</span>
+</div>
+
+<h3>Object storage</h3>
+<div class="chips">
+  <span class="chip">Amazon S3</span>
+  <span class="chip">Google Cloud Storage</span>
+  <span class="chip">Azure Blob</span>
+</div>
+
+<h3>NoSQL</h3>
+<div class="chips">
+  <span class="chip">MongoDB</span>
+</div>
+
+<h3>Vector DBs</h3>
+<div class="chips">
+  <span class="chip">pgvector</span>
+  <span class="chip">Pinecone</span>
+  <span class="chip">Qdrant</span>
+  <span class="chip">Weaviate</span>
+  <span class="chip">Milvus</span>
+</div>
+
+<h3>Messaging</h3>
+<div class="chips">
+  <span class="chip">Kafka</span>
+  <span class="chip">NATS</span>
+  <span class="chip">Pub/Sub</span>
+  <span class="chip">RabbitMQ</span>
+</div>
+
+<h3>Email &amp; transfer</h3>
+<div class="chips">
+  <span class="chip">SMTP email</span>
+  <span class="chip">FTP</span>
+  <span class="chip">FTPS</span>
+  <span class="chip">SFTP</span>
+</div>
+
+<div class="note"><b>Roadmap.</b> Roadmap connectors (e.g. IBM DB2, Pulsar, Event Hubs, multi-shard Kinesis, Chroma, LanceDB) are reserved in the palette and shipping engine-by-engine. All upserts support optional CDC delete propagation. For the transforms and quality nodes that run between source and sink, see the <a href="components.html">component reference</a>.</div>
+    </main>
+  </div>
+</div>
+<footer class="footer">
+  <div class="wrap">
+    <div class="legal">
+      <span>&copy; 2026 Duckle. MIT OR Apache-2.0.</span>
+      <span><a href="../index.html">Home</a> &middot; <a href="https://github.com/SouravRoy-ETL/duckle" target="_blank" rel="noopener">GitHub</a></span>
+    </div>
+  </div>
+</footer>
+<script src="../assets/js/site.js"></script>
+</body>
+</html>

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="Duckle">
+  <!-- Duckle "D." mark, light variant: soft light disc with the brand-orange glyph. -->
+  <circle cx="128" cy="128" r="120" fill="#F4F4F5"/>
+  <g fill="#FF6900">
+    <path d="M56 54 A74 74 0 0 1 56 202 Z"/>
+    <circle cx="173" cy="128" r="27"/>
+  </g>
+</svg>

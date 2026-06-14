@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Component reference - Duckle</title>
+<link rel="icon" href="../assets/img/duckle-logo-dark.svg" />
+<link rel="preconnect" href="https://rsms.me/" />
+<link rel="stylesheet" href="https://rsms.me/inter/inter.css" />
+<link rel="stylesheet" href="../assets/css/site.css" />
+<script>(function(){try{var t=localStorage.getItem("duckle-theme");if(t)document.documentElement.setAttribute("data-theme",t);}catch(e){}})();</script>
+</head>
+<body>
+<header class="nav">
+  <div class="wrap nav-inner">
+    <a class="brand" href="../index.html"><img class="logo-dark" src="../assets/img/duckle-logo-dark.svg" alt="" /><img class="logo-light" src="../assets/img/duckle-logo-light.svg" alt="" /><span>Duckle<span class="dot">.</span></span></a>
+    <nav class="nav-links" id="navLinks">
+      <a href="../index.html#features">Features</a>
+      <a href="../index.html#integrations">Integrations</a>
+      <a href="../index.html#usecases">Use cases</a>
+      <a href="../index.html#ecosystem">Ecosystem</a>
+      <a href="index.html">Docs</a>
+    </nav>
+    <div class="nav-right">
+      <a class="gh-star" id="ghStar" href="https://github.com/SouravRoy-ETL/duckle" target="_blank" rel="noopener" aria-label="Star Duckle on GitHub">
+        <span class="gh-label"><svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg><span>Star</span></span>
+        <span class="gh-count" id="ghCount">&#9733;</span>
+      </a>
+      <button class="icon-btn theme-toggle" id="themeToggle" aria-label="Toggle theme" title="Toggle theme">
+        <svg class="moon" width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        <svg class="sun" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32 1.41 1.41M2 12h2m16 0h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+      </button>
+      <a class="btn btn-primary" href="../index.html#download">Download</a>
+      <button class="icon-btn nav-toggle" id="navToggle" aria-label="Open menu"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg></button>
+    </div>
+  </div>
+</header>
+<div class="wrap section">
+  <div class="docs-shell">
+    <aside class="docs-side">
+      <h4>Getting started</h4>
+      <a href="index.html">Overview</a>
+      <a href="getting-started.html">Install &amp; quickstart</a>
+      <h4>Reference</h4>
+      <a href="components.html">Component reference</a>
+      <a href="integrations.html">Integrations directory</a>
+      <h4>Guides</h4>
+      <a href="ai-duckie.html">Duckie AI &amp; AI transforms</a>
+      <a href="automation.html">Scheduling, MCP &amp; deploy</a>
+      <h4>Project</h4>
+      <a href="https://github.com/SouravRoy-ETL/duckle" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://github.com/SouravRoy-ETL/duckle/releases" target="_blank" rel="noopener">Releases</a>
+    </aside>
+    <main class="docs-main">
+<span class="eyebrow">Reference</span>
+<h1>Component reference</h1>
+<p class="lead">Duckle ships 329 components across six kinds - 104 sources (<code>src.*</code>), 128 transforms (<code>xf.*</code>), 59 sinks (<code>snk.*</code>), 12 data-quality validators (<code>qa.*</code>), 19 control-flow nodes (<code>ctl.*</code>), and 7 code runners (<code>code.*</code>). Every component has Basic, Schema, Preview, Advanced, and Validation tabs and a live preview.</p>
+
+<div class="grid cols-3">
+  <div class="card"><span class="ico">&#128229;</span><h3>104 sources</h3><p>Files, lakehouse, databases, warehouses, object storage, streaming, SaaS APIs, NoSQL, vector DBs and more, all under <code>src.*</code>.</p></div>
+  <div class="card"><span class="ico">&#128260;</span><h3>128 transforms</h3><p>Fields, rows, aggregates, joins, windows, strings, dates, JSON, arrays, CDC/SCD, AI and search, all under <code>xf.*</code>.</p></div>
+  <div class="card"><span class="ico">&#128228;</span><h3>59 sinks</h3><p>Files, databases, warehouses, object storage, vector DBs, messaging and comms, all under <code>snk.*</code> with universal write modes.</p></div>
+</div>
+
+<p>Looking for a connector-only list grouped by system? See the <a href="integrations.html">integrations directory</a>. New to Duckle? Start with <a href="getting-started.html">install &amp; quickstart</a>.</p>
+
+<h2>Sources <code>src.*</code></h2>
+<p>Sources read data into a pipeline. Connection-backed sources reuse saved, encrypted connections; file sources accept paths, globs and object-storage URIs.</p>
+<table>
+  <thead><tr><th>Group</th><th>Items</th></tr></thead>
+  <tbody>
+    <tr><td>Files</td><td>CSV, TSV, Parquet, JSON, JSONL/NDJSON, Excel .xlsx, YAML, TOML, Fixed-width, XML, Apache Avro</td></tr>
+    <tr><td>Geospatial files</td><td>GeoJSON, Shapefile, GeoPackage, KML, GPX, GML (via spatial extension)</td></tr>
+    <tr><td>Lakehouse</td><td>Apache Iceberg, Delta Lake, DuckLake</td></tr>
+    <tr><td>Embedded DBs</td><td>SQLite, DuckDB</td></tr>
+    <tr><td>Network relational</td><td>PostgreSQL, MySQL, MariaDB, CockroachDB, SQL Server, Oracle, ClickHouse</td></tr>
+    <tr><td>Object storage</td><td>Amazon S3, Google Cloud Storage, Azure Blob, HTTP(S), MinIO, Cloudflare R2, Backblaze B2</td></tr>
+    <tr><td>Warehouses</td><td>MotherDuck, Snowflake, BigQuery, Redshift, Databricks SQL, Azure Synapse, DuckDB Quack</td></tr>
+    <tr><td>Streaming</td><td>Apache Kafka/Redpanda, NATS JetStream, GCP Pub/Sub, RabbitMQ, AWS Kinesis</td></tr>
+    <tr><td>SaaS REST</td><td>Salesforce, HubSpot, Stripe, Shopify, Notion, Airtable, GitHub, GitLab, Jira, Slack, Zendesk and more, plus generic <code>src.rest</code> / <code>src.graphql</code></td></tr>
+    <tr><td>API protocols</td><td>OData v4, SOAP/XML</td></tr>
+    <tr><td>NoSQL &amp; search</td><td>MongoDB, Cassandra/ScyllaDB, Elasticsearch/OpenSearch, Redis, CouchDB, DynamoDB</td></tr>
+    <tr><td>Vector/AI DBs</td><td>pgvector, Qdrant, Weaviate, Milvus</td></tr>
+    <tr><td>File transfer</td><td>FTP/FTPS, SFTP</td></tr>
+    <tr><td>Mailbox</td><td>IMAP</td></tr>
+    <tr><td>Webhook listener</td><td>Inbound webhook endpoint</td></tr>
+    <tr><td>Desktop clipboard</td><td>Read from the system clipboard</td></tr>
+    <tr><td>Git repo</td><td>Read files from a Git repository</td></tr>
+  </tbody>
+</table>
+<div class="note"><b>Date parsing:</b> the CSV/TSV Schema panel supports a per-column strptime Format on Date and Timestamp columns.</div>
+
+<h2>Transforms <code>xf.*</code></h2>
+<p>Transforms reshape, combine and enrich rows between sources and sinks. The visual Map node (<code>xf.map</code>) joins a main input to up to 3 lookups with per-output expressions and a filter.</p>
+<table>
+  <thead><tr><th>Group</th><th>Items</th></tr></thead>
+  <tbody>
+    <tr><td>Fields</td><td>Map (visual mapper joining a main input to up to 3 lookups with per-output expressions + filter), Project/Select, Cast, Rename, Add/Drop/Reorder Column, Coalesce, UUID v4</td></tr>
+    <tr><td>Rows</td><td>Filter (with reject port), Distinct, Sample, Top N/Limit, Sort, Skip, Top N per Group, Forward/Backward/Constant Fill</td></tr>
+    <tr><td>Aggregate</td><td>Group By, Rollup, Cube, Count, Window Aggregate, Cumulative, Approx Quantile (t-digest), Approx Count Distinct (HyperLogLog)</td></tr>
+    <tr><td>Join</td><td>Inner, Left, Right, Full Outer, Cross, Lookup, Semi, Anti, Spatial</td></tr>
+    <tr><td>Set ops</td><td>Union, Union All, Intersect, Except</td></tr>
+    <tr><td>Window</td><td>Row Number, Rank, Dense Rank, Lead, Lag, First Value, Last Value, NTile</td></tr>
+    <tr><td>Strings</td><td>Regex Replace/Extract/Match, Split, Concat, Trim, Case, Length, Substring, Format, Hash (md5/sha1/sha256), IP Parse, URL Parse, Text Similarity, Base64, Pad</td></tr>
+    <tr><td>Date/Time</td><td>Parse, Format, Extract, Diff/Add, Truncate, Timezone, Time Bin, Now, Epoch</td></tr>
+    <tr><td>Numeric</td><td>Round, Modulo, Abs, Log, Power, Sqrt, Bucketize, Z-Score, Clamp, Sign</td></tr>
+    <tr><td>JSON/nested</td><td>Parse, Stringify, Flatten, JSONPath, Merge, Array Aggregate</td></tr>
+    <tr><td>Array</td><td>Explode/Unnest, Collect List, Element At, Contains, Distinct, Length</td></tr>
+    <tr><td>Pivot/shape</td><td>Pivot, Unpivot, Denormalize, Normalize, Transpose</td></tr>
+    <tr><td>CDC/SCD</td><td>Incremental Load (watermark), Diff Detect, SCD Type 1, SCD Type 2, Merge/Upsert (with delete propagation), DuckLake CDC reader, Row Hash, Audit Stamp</td></tr>
+    <tr><td>AI/Search</td><td>Vector Similarity Search (vss), Full-Text Search BM25 (fts), Embeddings, LLM Transform, Classify, Text Chunker, PII Redact, Semantic Dedupe</td></tr>
+    <tr><td>Geospatial</td><td>Spatial Distance, Buffer, Intersects</td></tr>
+    <tr><td>Debug</td><td>Log Rows, Assert</td></tr>
+    <tr><td>dbt</td><td><code>xf.dbt</code> runs dbt models (dbt-duckdb / Fusion)</td></tr>
+  </tbody>
+</table>
+<div class="note"><b>AI transforms:</b> for embeddings, LLM transforms, classification and semantic dedupe, see <a href="ai-duckie.html">Duckie AI &amp; AI transforms</a>.</div>
+
+<h2>Sinks <code>snk.*</code></h2>
+<p>Sinks write pipeline output to a destination. All sinks support the same write modes.</p>
+<table>
+  <thead><tr><th>Group</th><th>Items</th></tr></thead>
+  <tbody>
+    <tr><td>Files</td><td>CSV, TSV, Parquet, JSON/JSONL, Excel, XML, Avro, Spatial, Iceberg</td></tr>
+    <tr><td>Databases</td><td>Postgres, CockroachDB, MySQL, MariaDB, SQLite, DuckDB</td></tr>
+    <tr><td>Warehouses</td><td>Snowflake, BigQuery, Redshift, MotherDuck, Databricks, DuckLake, Quack</td></tr>
+    <tr><td>Object storage</td><td>S3, GCS, Azure Blob (Parquet/CSV/JSON)</td></tr>
+    <tr><td>NoSQL</td><td>MongoDB</td></tr>
+    <tr><td>Vector DBs</td><td>pgvector, Pinecone, Qdrant, Weaviate, Milvus</td></tr>
+    <tr><td>Messaging</td><td>Kafka, NATS, Pub/Sub, RabbitMQ</td></tr>
+    <tr><td>Comms</td><td>Email (via SMTP)</td></tr>
+    <tr><td>File transfer</td><td>FTP/FTPS/SFTP</td></tr>
+  </tbody>
+</table>
+<table>
+  <thead><tr><th>Write mode</th><th>Behavior</th></tr></thead>
+  <tbody>
+    <tr><td><code>overwrite</code></td><td>Replace the destination contents</td></tr>
+    <tr><td><code>append</code></td><td>Add rows to existing data</td></tr>
+    <tr><td><code>truncate</code></td><td>Empty the target, then write</td></tr>
+    <tr><td><code>upsert</code></td><td>Universal MERGE with optional delete propagation</td></tr>
+  </tbody>
+</table>
+
+<h2>Data quality <code>qa.*</code></h2>
+<p>Validators split their input: passing rows continue on the main port, while failures route to a reject port for quarantine or re-processing.</p>
+<table>
+  <thead><tr><th>Group</th><th>Items</th></tr></thead>
+  <tbody>
+    <tr><td>Validators</td><td>Not Null, Range, Regex, Uniqueness, Schema Validate</td></tr>
+    <tr><td>Profiling</td><td>Column Profile, Describe, Histogram</td></tr>
+    <tr><td>Cleansing &amp; matching</td><td>Standardize, Fuzzy Deduplicate (Jaro-Winkler/Levenshtein), Record Match</td></tr>
+  </tbody>
+</table>
+
+<h2>Control flow <code>ctl.*</code></h2>
+<p>Control-flow nodes orchestrate execution, branching, concurrency and error handling across a pipeline (19 total).</p>
+<table>
+  <thead><tr><th>Group</th><th>Items</th></tr></thead>
+  <tbody>
+    <tr><td>Orchestration</td><td>Run Job (call a child pipeline with context vars), Iterate, For Each, Schedule trigger</td></tr>
+    <tr><td>Concurrency</td><td>Parallelize (concurrent in-pipeline branches, auto-detected from CPU cores)</td></tr>
+    <tr><td>Branching</td><td>Switch (route rows to case outputs), Try/fallback</td></tr>
+    <tr><td>Signals</td><td>Wait, Die, Warn, Log, and more</td></tr>
+  </tbody>
+</table>
+
+<h2>Code <code>code.*</code></h2>
+<p>Code runners drop down to custom logic when a visual node is not enough (7 total).</p>
+<table>
+  <thead><tr><th>Runner</th><th>Notes</th></tr></thead>
+  <tbody>
+    <tr><td>Custom SQL</td><td><code>code.sql</code></td></tr>
+    <tr><td>SQL template</td><td>Parameterized SQL</td></tr>
+    <tr><td>Shell</td><td><code>code.shell</code></td></tr>
+    <tr><td>JavaScript</td><td>boa engine</td></tr>
+    <tr><td>WebAssembly</td><td>wasmi</td></tr>
+    <tr><td>Python-style routines</td><td>Scripted row logic</td></tr>
+  </tbody>
+</table>
+
+<div class="note"><b>Every node has more:</b> per-node Advanced settings (retry attempts, wait, memory limit) and a Plan tab that shows the generated SQL. For a connector-only directory grouped by system, see <a href="integrations.html">integrations</a>.</div>
+    </main>
+  </div>
+</div>
+<footer class="footer">
+  <div class="wrap">
+    <div class="legal">
+      <span>&copy; 2026 Duckle. MIT OR Apache-2.0.</span>
+      <span><a href="../index.html">Home</a> &middot; <a href="https://github.com/SouravRoy-ETL/duckle" target="_blank" rel="noopener">GitHub</a></span>
+    </div>
+  </div>
+</footer>
+<script src="../assets/js/site.js"></script>
+</body>
+</html>

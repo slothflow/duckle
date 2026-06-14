@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Scheduling, MCP and deployment - Duckle</title>
+<link rel="icon" href="../assets/img/duckle-logo-dark.svg" />
+<link rel="preconnect" href="https://rsms.me/" />
+<link rel="stylesheet" href="https://rsms.me/inter/inter.css" />
+<link rel="stylesheet" href="../assets/css/site.css" />
+<script>(function(){try{var t=localStorage.getItem("duckle-theme");if(t)document.documentElement.setAttribute("data-theme",t);}catch(e){}})();</script>
+</head>
+<body>
+<header class="nav">
+  <div class="wrap nav-inner">
+    <a class="brand" href="../index.html"><img class="logo-dark" src="../assets/img/duckle-logo-dark.svg" alt="" /><img class="logo-light" src="../assets/img/duckle-logo-light.svg" alt="" /><span>Duckle<span class="dot">.</span></span></a>
+    <nav class="nav-links" id="navLinks">
+      <a href="../index.html#features">Features</a>
+      <a href="../index.html#integrations">Integrations</a>
+      <a href="../index.html#usecases">Use cases</a>
+      <a href="../index.html#ecosystem">Ecosystem</a>
+      <a href="index.html">Docs</a>
+    </nav>
+    <div class="nav-right">
+      <a class="gh-star" id="ghStar" href="https://github.com/SouravRoy-ETL/duckle" target="_blank" rel="noopener" aria-label="Star Duckle on GitHub">
+        <span class="gh-label"><svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg><span>Star</span></span>
+        <span class="gh-count" id="ghCount">&#9733;</span>
+      </a>
+      <button class="icon-btn theme-toggle" id="themeToggle" aria-label="Toggle theme" title="Toggle theme">
+        <svg class="moon" width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        <svg class="sun" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32 1.41 1.41M2 12h2m16 0h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+      </button>
+      <a class="btn btn-primary" href="../index.html#download">Download</a>
+      <button class="icon-btn nav-toggle" id="navToggle" aria-label="Open menu"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg></button>
+    </div>
+  </div>
+</header>
+<div class="wrap section">
+  <div class="docs-shell">
+    <aside class="docs-side">
+      <h4>Getting started</h4>
+      <a href="index.html">Overview</a>
+      <a href="getting-started.html">Install &amp; quickstart</a>
+      <h4>Reference</h4>
+      <a href="components.html">Component reference</a>
+      <a href="integrations.html">Integrations directory</a>
+      <h4>Guides</h4>
+      <a href="ai-duckie.html">Duckie AI &amp; AI transforms</a>
+      <a href="automation.html">Scheduling, MCP &amp; deploy</a>
+      <h4>Project</h4>
+      <a href="https://github.com/SouravRoy-ETL/duckle" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://github.com/SouravRoy-ETL/duckle/releases" target="_blank" rel="noopener">Releases</a>
+    </aside>
+    <main class="docs-main">
+<span class="eyebrow">Guides</span>
+<h1>Scheduling, MCP and deployment</h1>
+<p class="lead">Run pipelines unattended, connect any LLM over MCP, and ship a self-contained server bundle.</p>
+
+<h2>Schedules and triggers</h2>
+<p>Pipelines can run on a cron expression, a fixed interval, or a file-change watch. Schedules live on the pipeline right-click menu and in the Runs/History tab, so you can review past runs and set up future ones from the same place.</p>
+<p>Watermark incremental loads (<code>xf.incremental</code>) and DuckLake CDC persist state to the workspace and advance only on a fully successful run. A partial "Run from here" never advances the watermark, so you can safely re-run a slice of a pipeline without skipping data on the next scheduled load.</p>
+<div class="grid cols-3">
+  <div class="card"><span class="ico">&#128197;</span><h3>Cron</h3><p>Schedule with a standard cron expression for precise recurring runs.</p></div>
+  <div class="card"><span class="ico">&#9201;</span><h3>Interval</h3><p>Run on a fixed interval for simple, regular polling.</p></div>
+  <div class="card"><span class="ico">&#128193;</span><h3>File watch</h3><p>Trigger a run when a watched file changes.</p></div>
+</div>
+
+<h2>Connections and contexts</h2>
+<p>Connections are reusable, type-filtered credential sets stored under <code>connections/</code> and AES-256-GCM encrypted at rest with a per-workspace key. Each database, warehouse, or storage node has a "Saved connection" picker that auto-fills host, port, database, and credentials, so the same credentials are shared across every node that needs them.</p>
+<p>Context variables let you parameterize any field with <code>${VAR}</code> or <code>${ContextName.VAR}</code> (for example, a database password), resolved at run time on the canvas and on scheduled runs alike. Never hardcode secrets; use <code>${ENV:KEY}</code> placeholders for env-supplied values.</p>
+<div class="note"><b>Tip</b> Use a context per environment (dev, staging, prod) and select it at run time so one pipeline targets different systems without edits.</div>
+
+<h2>MCP server (connect Claude or any LLM)</h2>
+<p>Duckle embeds an MCP (Model Context Protocol) stdio server. Connect it in one click from the in-app MCP popup, or run it headless. Over MCP an LLM can drive the studio end to end:</p>
+<table>
+<thead><tr><th>Tool</th><th>What it does</th></tr></thead>
+<tbody>
+<tr><td>List components</td><td>Enumerate the available sources, transforms, sinks, quality, control, and code nodes.</td></tr>
+<tr><td>Get a component schema</td><td>Fetch the option schema for a single component.</td></tr>
+<tr><td>Create a pipeline</td><td>Generate a pipeline, validated before writing.</td></tr>
+<tr><td>Validate a pipeline</td><td>Check a pipeline for errors without running it.</td></tr>
+<tr><td>Run a pipeline</td><td>Execute a pipeline headlessly.</td></tr>
+<tr><td>Read run logs</td><td>Read the logs from a run.</td></tr>
+<tr><td>Build a standalone executable</td><td>Export the pipeline as a self-contained binary.</td></tr>
+<tr><td>Manage connections</td><td>List and create reusable connections.</td></tr>
+</tbody>
+</table>
+<div class="note"><b>Note</b> Never hardcode secrets - use <code>${ENV:KEY}</code> placeholders. The run pipeline and build pipeline tools need a DuckDB binary (<code>DUCKLE_DUCKDB_BIN</code>); build pipeline also needs the <code>duckle-runner</code> binary.</div>
+
+<h2>Headless runner and server deployment (Build Pipeline)</h2>
+<p>The <code>duckle-runner</code> CLI executes a pipeline file headlessly. "Build Pipeline" exports a self-contained server bundle (engine plus runner) with env/passphrase secret handling, so a pipeline can run on a server or in CI without the desktop app.</p>
+<p>There is also a File Transfer sink (<code>snk.ftp</code>, FTP/FTPS/SFTP) for delivering outputs to a remote host as part of the run.</p>
+
+<h2>Engines</h2>
+<p>Duckle runs each pipeline on a selectable engine. DuckDB is the default; the others are opt-in or planned.</p>
+<table>
+<thead><tr><th>Engine</th><th>Role</th></tr></thead>
+<tbody>
+<tr><td>DuckDB</td><td>Default execution engine, tracking v1.5.3.</td></tr>
+<tr><td>Duckie AI</td><td>Local llama.cpp plus Qwen, opt-in.</td></tr>
+<tr><td>SlothDB</td><td>Alternate embedded analytical engine, selectable per pipeline.</td></tr>
+<tr><td>Native</td><td>In-process Rust streaming engine, planned.</td></tr>
+</tbody>
+</table>
+
+<div class="note"><b>Git-friendly by design</b> Workspaces are plain files, so schedules, connections (encrypted) and pipelines are all git-friendly. See <a href="getting-started.html">Install &amp; quickstart</a> to set up a workspace, and the <a href="components.html">component reference</a> for the nodes you can schedule.</div>
+    </main>
+  </div>
+</div>
+<footer class="footer">
+  <div class="wrap">
+    <div class="legal">
+      <span>&copy; 2026 Duckle. MIT OR Apache-2.0.</span>
+      <span><a href="../index.html">Home</a> &middot; <a href="https://github.com/SouravRoy-ETL/duckle" target="_blank" rel="noopener">GitHub</a></span>
+    </div>
+  </div>
+</footer>
+<script src="../assets/js/site.js"></script>
+</body>
+</html>

@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Install and quickstart - Duckle</title>
+<link rel="icon" href="../assets/img/duckle-logo-dark.svg" />
+<link rel="preconnect" href="https://rsms.me/" />
+<link rel="stylesheet" href="https://rsms.me/inter/inter.css" />
+<link rel="stylesheet" href="../assets/css/site.css" />
+<script>(function(){try{var t=localStorage.getItem("duckle-theme");if(t)document.documentElement.setAttribute("data-theme",t);}catch(e){}})();</script>
+</head>
+<body>
+<header class="nav">
+  <div class="wrap nav-inner">
+    <a class="brand" href="../index.html"><img class="logo-dark" src="../assets/img/duckle-logo-dark.svg" alt="" /><img class="logo-light" src="../assets/img/duckle-logo-light.svg" alt="" /><span>Duckle<span class="dot">.</span></span></a>
+    <nav class="nav-links" id="navLinks">
+      <a href="../index.html#features">Features</a>
+      <a href="../index.html#integrations">Integrations</a>
+      <a href="../index.html#usecases">Use cases</a>
+      <a href="../index.html#ecosystem">Ecosystem</a>
+      <a href="index.html">Docs</a>
+    </nav>
+    <div class="nav-right">
+      <a class="gh-star" id="ghStar" href="https://github.com/SouravRoy-ETL/duckle" target="_blank" rel="noopener" aria-label="Star Duckle on GitHub">
+        <span class="gh-label"><svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg><span>Star</span></span>
+        <span class="gh-count" id="ghCount">&#9733;</span>
+      </a>
+      <button class="icon-btn theme-toggle" id="themeToggle" aria-label="Toggle theme" title="Toggle theme">
+        <svg class="moon" width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        <svg class="sun" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32 1.41 1.41M2 12h2m16 0h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+      </button>
+      <a class="btn btn-primary" href="../index.html#download">Download</a>
+      <button class="icon-btn nav-toggle" id="navToggle" aria-label="Open menu"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg></button>
+    </div>
+  </div>
+</header>
+<div class="wrap section">
+  <div class="docs-shell">
+    <aside class="docs-side">
+      <h4>Getting started</h4>
+      <a href="index.html">Overview</a>
+      <a href="getting-started.html">Install &amp; quickstart</a>
+      <h4>Reference</h4>
+      <a href="components.html">Component reference</a>
+      <a href="integrations.html">Integrations directory</a>
+      <h4>Guides</h4>
+      <a href="ai-duckie.html">Duckie AI &amp; AI transforms</a>
+      <a href="automation.html">Scheduling, MCP &amp; deploy</a>
+      <h4>Project</h4>
+      <a href="https://github.com/SouravRoy-ETL/duckle" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://github.com/SouravRoy-ETL/duckle/releases" target="_blank" rel="noopener">Releases</a>
+    </aside>
+    <main class="docs-main">
+<span class="eyebrow">Getting started</span>
+<h1>Install and quickstart</h1>
+<p class="lead">Duckle ships as a single-file desktop app of roughly 65 MB for Windows, macOS, and Linux. The engines it needs install on first launch, so there is nothing to set up by hand. It is free and open source under MIT OR Apache-2.0.</p>
+
+<h2>Download</h2>
+<p>Download the latest binary for your operating system from the <a href="https://github.com/SouravRoy-ETL/duckle/releases/latest" target="_blank" rel="noopener">GitHub Releases page</a>. There is no installer: Duckle is a single executable that you run directly.</p>
+<p>Each release publishes six assets, one per platform and architecture:</p>
+<table>
+  <thead>
+    <tr><th>Platform</th><th>Asset</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>Windows (x64)</td><td><code>Duckle-windows-x64.exe</code></td></tr>
+    <tr><td>Windows (ARM64)</td><td><code>Duckle-windows-arm64.exe</code></td></tr>
+    <tr><td>macOS (Apple silicon)</td><td><code>Duckle-macos-arm64</code></td></tr>
+    <tr><td>macOS (Intel)</td><td><code>Duckle-macos-x64</code></td></tr>
+    <tr><td>Linux (x64)</td><td><code>Duckle-linux-x64</code></td></tr>
+    <tr><td>Linux (ARM64)</td><td><code>Duckle-linux-arm64</code></td></tr>
+  </tbody>
+</table>
+
+<h2>First launch: install the engine</h2>
+<p>On first run, a guided Setup step downloads the DuckDB CLI (tracking v1.5.3) and pre-fetches the extensions Duckle uses, with per-extension progress. The pre-fetched extensions are <code>httpfs</code>, <code>azure</code>, <code>sqlite</code>, <code>postgres</code>, <code>mysql</code>, <code>excel</code>, <code>iceberg</code>, <code>delta</code>, <code>ducklake</code>, <code>vss</code>, and <code>fts</code>.</p>
+<p>The spatial extension (roughly 50 MB of GDAL) is larger, so it is lazy-loaded on first use of a geospatial node rather than downloaded up front. The optional Duckie AI model (roughly 1.1 GB) is a separate, opt-in download that you can enable later.</p>
+
+<h2>Build from source</h2>
+<p>Building from source is optional. The prerequisites are Rust (stable) and Node 20 or newer. Duckle is a Cargo workspace paired with a Tauri 2 and React 19 frontend.</p>
+<pre><code>npm --prefix frontend ci
+npm --prefix frontend run build
+cargo build --release --manifest-path apps/desktop/Cargo.toml --features custom-protocol</code></pre>
+<p>The headless runner lives at <code>crates/duckle-runner</code> and the MCP server at <code>crates/duckle-mcp</code>.</p>
+
+<h2 id="first-pipeline">Your first pipeline</h2>
+<ol>
+  <li><b>Add a source.</b> Drag a CSV source from the palette onto the canvas and set its path.</li>
+  <li><b>Add a transform.</b> For example a Filter or Map, then wire <code>source.main</code> to it.</li>
+  <li><b>Add a sink.</b> For example a Parquet sink, and set the output path.</li>
+  <li><b>Press Run (or F5).</b> Duckle compiles the pipeline to SQL, runs it on DuckDB, and shows per-node row counts, timings, and a live preview.</li>
+  <li><b>Iterate.</b> Every node has Basic, Schema, Preview, Advanced, and Validation tabs, and the Plan tab shows the generated SQL.</li>
+</ol>
+<p>Instead of wiring nodes by hand, you can ask Duckie in plain English and click Insert into canvas. See <a href="ai-duckie.html">Duckie AI &amp; AI transforms</a> for details.</p>
+
+<h2>Where things live</h2>
+<p>A workspace is a folder you pick. Pipelines, connections, contexts, and routines are stored as plain JSON files under it, in <code>pipelines/</code>, <code>connections/</code>, <code>contexts/</code>, and <code>routines/</code>, so the whole workspace is git-friendly. Secrets are encrypted at rest.</p>
+
+<div class="note"><b>Next:</b> explore the full <a href="components.html">component reference</a> or wire up a <a href="automation.html">schedule</a>.</div>
+    </main>
+  </div>
+</div>
+<footer class="footer">
+  <div class="wrap">
+    <div class="legal">
+      <span>&copy; 2026 Duckle. MIT OR Apache-2.0.</span>
+      <span><a href="../index.html">Home</a> &middot; <a href="https://github.com/SouravRoy-ETL/duckle" target="_blank" rel="noopener">GitHub</a></span>
+    </div>
+  </div>
+</footer>
+<script src="../assets/js/site.js"></script>
+</body>
+</html>

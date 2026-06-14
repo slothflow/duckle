@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Duckie AI and AI transforms - Duckle</title>
+<link rel="icon" href="../assets/img/duckle-logo-dark.svg" />
+<link rel="preconnect" href="https://rsms.me/" />
+<link rel="stylesheet" href="https://rsms.me/inter/inter.css" />
+<link rel="stylesheet" href="../assets/css/site.css" />
+<script>(function(){try{var t=localStorage.getItem("duckle-theme");if(t)document.documentElement.setAttribute("data-theme",t);}catch(e){}})();</script>
+</head>
+<body>
+<header class="nav">
+  <div class="wrap nav-inner">
+    <a class="brand" href="../index.html"><img class="logo-dark" src="../assets/img/duckle-logo-dark.svg" alt="" /><img class="logo-light" src="../assets/img/duckle-logo-light.svg" alt="" /><span>Duckle<span class="dot">.</span></span></a>
+    <nav class="nav-links" id="navLinks">
+      <a href="../index.html#features">Features</a>
+      <a href="../index.html#integrations">Integrations</a>
+      <a href="../index.html#usecases">Use cases</a>
+      <a href="../index.html#ecosystem">Ecosystem</a>
+      <a href="index.html">Docs</a>
+    </nav>
+    <div class="nav-right">
+      <a class="gh-star" id="ghStar" href="https://github.com/SouravRoy-ETL/duckle" target="_blank" rel="noopener" aria-label="Star Duckle on GitHub">
+        <span class="gh-label"><svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg><span>Star</span></span>
+        <span class="gh-count" id="ghCount">&#9733;</span>
+      </a>
+      <button class="icon-btn theme-toggle" id="themeToggle" aria-label="Toggle theme" title="Toggle theme">
+        <svg class="moon" width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        <svg class="sun" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32 1.41 1.41M2 12h2m16 0h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+      </button>
+      <a class="btn btn-primary" href="../index.html#download">Download</a>
+      <button class="icon-btn nav-toggle" id="navToggle" aria-label="Open menu"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg></button>
+    </div>
+  </div>
+</header>
+<div class="wrap section">
+  <div class="docs-shell">
+    <aside class="docs-side">
+      <h4>Getting started</h4>
+      <a href="index.html">Overview</a>
+      <a href="getting-started.html">Install &amp; quickstart</a>
+      <h4>Reference</h4>
+      <a href="components.html">Component reference</a>
+      <a href="integrations.html">Integrations directory</a>
+      <h4>Guides</h4>
+      <a href="ai-duckie.html">Duckie AI &amp; AI transforms</a>
+      <a href="automation.html">Scheduling, MCP &amp; deploy</a>
+      <h4>Project</h4>
+      <a href="https://github.com/SouravRoy-ETL/duckle" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://github.com/SouravRoy-ETL/duckle/releases" target="_blank" rel="noopener">Releases</a>
+    </aside>
+    <main class="docs-main">
+<span class="eyebrow">Guides</span>
+<h1>Duckie AI and AI transforms</h1>
+<p class="lead">Duckle ships a local AI assistant (Duckie) plus six AI transforms; three are pure-local, three call any OpenAI-compatible API.</p>
+
+<h2>Duckie, the local assistant</h2>
+<p>Duckie is powered by Qwen 2.5 Coder 1.5B via llama.cpp, downloaded once (~1.1 GB) and run entirely on your CPU as a <code>llama-server</code> subprocess on <code>127.0.0.1</code>. Describe a pipeline in English; Duckie streams back valid Duckle pipeline JSON; an "Insert into canvas" button drops positioned, wired nodes.</p>
+<ul>
+  <li><b>Truly local</b> - no API key, works offline.</li>
+  <li><b>Streamed responses</b> - watch the pipeline JSON appear token by token.</li>
+  <li><b>One-click insert</b> - the "Insert into canvas" button drops positioned, wired nodes.</li>
+  <li><b>Bring-your-own-model</b> - point <code>baseUrl</code> at Ollama, OpenAI, llama.cpp, Cohere, Voyage, anything OpenAI-shaped.</li>
+  <li><b>Sandboxed</b> - the model has no filesystem, network, or tool access; it only emits text.</li>
+</ul>
+
+<h2>AI transforms</h2>
+<table>
+  <thead>
+    <tr><th>Component</th><th>What it does</th><th>Local?</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>Embeddings (<code>xf.ai.embed</code>)</td><td>OpenAI-compatible <code>/v1/embeddings</code></td><td>Needs API</td></tr>
+    <tr><td>LLM Transform (<code>xf.ai.llm</code>)</td><td>Per-row chat completion with <code>{column}</code> templates</td><td>Needs API</td></tr>
+    <tr><td>Classify (<code>xf.ai.classify</code>)</td><td>LLM-backed, constrains to N user categories, normalizes to <code>UNKNOWN</code></td><td>Needs API</td></tr>
+    <tr><td>Text Chunker (<code>xf.ai.chunk</code>)</td><td>RAG-ready splitter</td><td>Pure local</td></tr>
+    <tr><td>PII Redact (<code>xf.ai.pii</code>)</td><td>Regex redaction of emails, phones, SSNs, cards</td><td>Pure local</td></tr>
+    <tr><td>Semantic Dedupe (<code>xf.ai.dedupe</code>)</td><td>Cosine over precomputed embeddings</td><td>Pure local</td></tr>
+  </tbody>
+</table>
+
+<h2>Clean data before it reaches your AI</h2>
+<p>Garbage in, garbage out applies doubly to retrieval and model context. Duckle gives you the data-quality toolkit to put clean, deduplicated, validated rows in front of your AI before you spend a single embedding token. The same canvas that builds your ETL also builds your RAG ingestion.</p>
+<ul>
+  <li><b>Deduplicate</b> with exact Distinct, Uniqueness, Fuzzy Deduplicate, and Record Match.</li>
+  <li><b>Semantic dedupe</b> to collapse near-duplicate text by meaning.</li>
+  <li><b>Profile and describe columns</b> up front so you know what you are feeding the model.</li>
+  <li><b>Validate</b> and route failures to a reject port instead of poisoning your index.</li>
+  <li><b>Normalize</b> types, encodings, and casing.</li>
+  <li><b>Redact PII</b> before embedding.</li>
+  <li><b>Chunk and embed</b> for RAG.</li>
+  <li><b>Classify rows</b> with an LLM.</li>
+  <li><b>Hybrid retrieval locally</b> with Vector Similarity Search (cosine, L2, inner product via <code>vss</code>) and Full-Text Search (BM25 via <code>fts</code>), no model API.</li>
+  <li><b>Land it</b> in pgvector, Pinecone, Qdrant, Weaviate, or Milvus.</li>
+</ul>
+
+<h2>Example: RAG ingestion</h2>
+<pre><code>src.s3 (markdown)
+  -> xf.ai.chunk (chunkSize=1500, overlap=150)
+  -> xf.ai.pii (redact)
+  -> xf.ai.embed (model=text-embedding-3-small)
+  -> xf.ai.dedupe (threshold=0.95)
+  -> snk.pgvector (table=docs)</code></pre>
+
+<div class="note"><b>Going further:</b> The same OpenAI-compatible plumbing connects Claude or any LLM to Duckle via the MCP server. See <a href="automation.html">Scheduling, MCP &amp; deploy</a>.</div>
+    </main>
+  </div>
+</div>
+<footer class="footer">
+  <div class="wrap">
+    <div class="legal">
+      <span>&copy; 2026 Duckle. MIT OR Apache-2.0.</span>
+      <span><a href="../index.html">Home</a> &middot; <a href="https://github.com/SouravRoy-ETL/duckle" target="_blank" rel="noopener">GitHub</a></span>
+    </div>
+  </div>
+</footer>
+<script src="../assets/js/site.js"></script>
+</body>
+</html>
