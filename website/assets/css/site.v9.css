@@ -335,7 +335,7 @@ pre code { background: none; border: none; padding: 0; color: var(--code-ink); }
 .mega span { display: block; font-size: .8rem; color: var(--ink-3); line-height: 1.4; }
 .mega.right { left: auto; right: 0; }
 .nav-item:has(> .mega3) { position: static; }
-.mega3 { left: 50%; right: auto; transform: translateX(-50%) translateY(8px); min-width: 0; width: max-content; max-width: calc(100vw - 40px); grid-template-columns: repeat(3, 260px); column-gap: 20px; }
+.mega3 { left: 50%; right: auto; transform: translateX(-50%) translateY(8px); min-width: 0; width: min(1132px, calc(100vw - 40px)); max-width: none; grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: 36px; }
 .nav-item:hover .mega3, .nav-item:focus-within .mega3 { transform: translateX(-50%) translateY(0); }
 .mega3 .mcol { display: flex; flex-direction: column; }
 
