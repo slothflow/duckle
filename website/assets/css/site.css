@@ -334,7 +334,7 @@ pre code { background: none; border: none; padding: 0; color: var(--code-ink); }
 .mega b { display: block; color: var(--ink); font-size: .95rem; font-weight: 650; margin-bottom: 2px; }
 .mega span { display: block; font-size: .8rem; color: var(--ink-3); line-height: 1.4; }
 .mega.right { left: auto; right: 0; }
-.mega3 { min-width: 720px; grid-template-columns: repeat(3, 1fr); column-gap: 22px; }
+.mega3 { min-width: 0; width: 840px; max-width: calc(100vw - 220px); grid-template-columns: repeat(3, 1fr); column-gap: 22px; }
 .mega3 .mcol { display: flex; flex-direction: column; }
 
 /* dark stat band */
