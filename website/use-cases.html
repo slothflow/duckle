@@ -186,6 +186,22 @@
       </div>
     </div>
 
+    <!-- 8. DuckDB + DuckLake + Quack -->
+    <div class="uc rev" id="lakehouse">
+      <div class="uc-text">
+        <span class="uc-kicker">DuckDB + DuckLake + Quack</span>
+        <h3>The whole DuckDB stack in one pipeline</h3>
+        <p><b>The idea.</b> DuckDB is the engine, DuckLake is the lakehouse, Quack puts it on the wire. Duckle is the tool that turns all three into a pipeline you can run and ship.</p>
+        <p><b>In Duckle.</b> Raw podcast plays in an embedded DuckDB file are joined to an episode list (CSV) on a visual <b>Map</b>. The enriched stream lands in a <b>DuckLake</b> lakehouse (versioned Parquet, time travel), and a SQL mart is published two ways at once: to a remote DuckDB over <b>Quack</b> that apps can query live, and to a local DuckDB serving file. One DuckDB family, three storage shapes (embedded, lakehouse, remote), wired by drag-and-drop. Nothing left the laptop.</p>
+        <div class="uc-metrics">
+          <div class="uc-metric"><b>3 engines</b><span>DuckDB + DuckLake + Quack</span></div>
+          <div class="uc-metric"><b>7 nodes</b><span>one local run</span></div>
+          <div class="uc-metric"><b>2,548 ms</b><span>6,080 rows, 0 errors</span></div>
+        </div>
+      </div>
+      <figure class="frame" style="margin:0;"><div class="frame-bar"><i></i><i></i><i></i><span class="url">Podcast Lakehouse</span></div><img src="assets/img/screens/podcast-lakehouse.png" alt="A pipeline joining a DuckDB source and a CSV on a visual Map, landing in a DuckLake lakehouse and publishing a mart to a remote DuckDB over Quack plus a local DuckDB file" loading="lazy" /></figure>
+    </div>
+
     <div class="center" style="margin-top:72px;">
       <a class="btn btn-primary btn-lg" href="index.html#download">Download Duckle and build your own</a>
       <a class="btn btn-ghost btn-lg" href="docs/learn.html">Read the Learn hub</a>
