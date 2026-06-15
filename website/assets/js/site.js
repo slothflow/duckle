@@ -142,7 +142,7 @@
                 + (name ? "\nName: " + name : "")
                 + "\nEmail: " + form.email.value
                 + (form.notes.value.trim() ? "\n\n" + form.notes.value.trim() : "")
-                + "\n\nDuckle: https://souravroy-etl.github.io/duckle/";
+                + "\n\nDuckle: https://duckle.org/";
             var url = "https://calendar.google.com/calendar/render?action=TEMPLATE"
                 + "&text=" + encodeURIComponent(title)
                 + "&dates=" + z(start) + "/" + z(end)

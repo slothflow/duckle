@@ -31,4 +31,4 @@ Allow: /
 User-agent: CCBot
 Allow: /
 
-Sitemap: https://souravroy-etl.github.io/duckle/sitemap.xml
+Sitemap: https://duckle.org/sitemap.xml
