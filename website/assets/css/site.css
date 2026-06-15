@@ -356,25 +356,47 @@ pre code { background: none; border: none; padding: 0; color: var(--code-ink); }
 @media (prefers-reduced-motion: reduce) { .marquee-track { animation: none; } }
 
 /* ---- Integrations directory (docs/integrations.html) ---- */
-.intg-controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin: 20px 0 6px; }
-.intg-search { flex: 1 1 260px; display: flex; align-items: center; gap: 8px; padding: 10px 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--panel); }
-.intg-search input { border: 0; background: transparent; outline: none; color: var(--ink-1); font-size: .95rem; width: 100%; }
+.intg-page { padding-top: 40px; padding-bottom: 64px; }
+.intg-head { max-width: 720px; }
+.intg-head .lead { max-width: 640px; }
+.intg-layout { display: grid; grid-template-columns: 236px 1fr; gap: 30px; align-items: start; margin-top: 28px; }
+.intg-rail { position: sticky; top: 86px; display: flex; flex-direction: column; gap: 22px; }
+.intg-search { display: flex; align-items: center; gap: 9px; padding: 11px 14px; border: 1px solid var(--border); border-radius: 11px; background: var(--panel); }
+.intg-search input { border: 0; background: transparent; outline: none; color: var(--ink-1); font-size: .92rem; width: 100%; }
 .intg-search svg { width: 16px; height: 16px; color: var(--ink-3); flex: 0 0 auto; }
-.intg-kinds { display: flex; gap: 6px; }
-.intg-filters { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 4px; }
-.intg-chip { padding: 6px 13px; border: 1px solid var(--border); border-radius: 999px; background: var(--panel); color: var(--ink-2); font-size: .85rem; font-weight: 600; cursor: pointer; white-space: nowrap; transition: border-color .12s, background .12s, color .12s; }
-.intg-chip:hover { border-color: var(--ink-3); }
-.intg-chip.active { background: var(--lemon); color: #0a0a0a; border-color: var(--lemon); }
-.intg-count { color: var(--ink-3); font-size: .85rem; margin: 10px 0 14px; }
-.intg-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; }
-.intg-card { display: flex; align-items: center; gap: 12px; padding: 13px 14px; border: 1px solid var(--border); border-radius: 14px; background: var(--panel); box-shadow: var(--shadow-sm); }
-.intg-logo { width: 40px; height: 40px; border-radius: 9px; background: #fff; border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; flex: 0 0 auto; overflow: hidden; }
-.intg-logo img { width: 26px; height: 26px; object-fit: contain; }
-.intg-logo.noimg::before { content: attr(data-letter); font-weight: 800; color: #1b1f2a; font-size: 1.05rem; }
+.intg-rlbl { font-size: .7rem; text-transform: uppercase; letter-spacing: .09em; color: var(--ink-3); font-weight: 700; margin: 0 0 10px; }
+.intg-radio { display: flex; align-items: center; gap: 9px; padding: 5px 0; cursor: pointer; color: var(--ink-2); font-size: .9rem; }
+.intg-radio input { accent-color: var(--lemon); width: 15px; height: 15px; }
+.intg-catlist { display: flex; flex-direction: column; gap: 2px; }
+.intg-catlist button { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; text-align: left; background: transparent; border: 0; padding: 8px 11px; border-radius: 9px; color: var(--ink-2); font-size: .9rem; font-weight: 600; cursor: pointer; transition: background .12s, color .12s; }
+.intg-catlist button:hover { background: var(--panel); }
+.intg-catlist button.active { background: var(--lemon); color: #0a0a0a; }
+.intg-catlist button .c { font-size: .76rem; font-weight: 700; color: var(--ink-3); }
+.intg-catlist button.active .c { color: #0a0a0a; opacity: .65; }
+.intg-count { color: var(--ink-3); font-size: .85rem; margin: 0 0 16px; }
+.intg-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(212px, 1fr)); gap: 14px; }
+.intg-card { display: flex; align-items: center; gap: 13px; padding: 15px 16px; border: 1px solid var(--border); border-radius: 14px; background: var(--panel); box-shadow: var(--shadow-sm); transition: transform .14s ease, border-color .14s ease, box-shadow .14s ease; }
+.intg-card:hover { transform: translateY(-2px); border-color: var(--ink-3); box-shadow: var(--shadow-md, 0 10px 26px rgba(0,0,0,.10)); }
+.intg-logo { width: 44px; height: 44px; border-radius: 11px; background: #fff; border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; flex: 0 0 auto; overflow: hidden; }
+.intg-logo img { width: 27px; height: 27px; object-fit: contain; }
+.intg-logo svg { width: 24px; height: 24px; }
 .intg-meta { display: flex; flex-direction: column; min-width: 0; }
-.intg-name { font-weight: 700; font-size: .95rem; color: var(--ink-1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.intg-kind { font-size: .74rem; color: var(--ink-3); }
-.intg-empty { color: var(--ink-3); padding: 28px 0; }
+.intg-name { font-weight: 700; font-size: .96rem; color: var(--ink-1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.intg-kind { font-size: .75rem; color: var(--ink-3); }
+.intg-empty { color: var(--ink-3); padding: 40px 0; text-align: center; }
+
+/* Dark mode: dark slate behind the icons instead of bright white squares.
+   Near-black brand glyphs ship a light variant via .logo-light/.logo-dark. */
+:root[data-theme="dark"] .logo-tile,
+:root[data-theme="dark"] .intg-logo { background: #1b1f2a; border-color: rgba(255, 255, 255, .14); }
+
+@media (max-width: 860px) {
+  .intg-layout { grid-template-columns: 1fr; gap: 18px; }
+  .intg-rail { position: static; }
+  .intg-catlist { flex-direction: row; flex-wrap: wrap; }
+  .intg-catlist button { width: auto; border: 1px solid var(--border); border-radius: 999px; padding: 6px 12px; }
+  .intg-catlist button .c { display: none; }
+}
 
 /* security / compliance strip */
 .secstrip { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }

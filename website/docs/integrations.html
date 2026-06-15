@@ -4,6 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Integrations directory - Duckle</title>
+<meta name="description" content="Browse every Duckle connector: 104 sources and 59 destinations across databases, warehouses, lakehouses, object storage, streaming, NoSQL, vector DBs and SaaS APIs. Search and filter by category and direction." />
 <link rel="icon" href="../assets/img/duckle-logo-dark.svg" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -39,62 +40,41 @@
     </div>
   </div>
 </header>
-<div class="wrap section">
-  <div class="docs-shell">
-    <aside class="docs-side">
-      <h4>Getting started</h4>
-      <a href="index.html">Overview</a>
-      <a href="getting-started.html">Install &amp; quickstart</a>
-      <h4>Reference</h4>
-      <a href="components.html">Component reference</a>
-      <a href="integrations.html">Integrations directory</a>
-      <h4>Guides</h4>
-      <a href="ai-duckie.html">Duckie AI &amp; AI transforms</a>
-      <a href="automation.html">Scheduling, MCP &amp; deploy</a>
-      <a href="learn.html">Learn hub</a>
-      <a href="../use-cases.html">Use cases</a>
-      <h4>Project</h4>
-      <a href="https://github.com/SouravRoy-ETL/duckle" target="_blank" rel="noopener">GitHub</a>
-      <a href="https://github.com/SouravRoy-ETL/duckle/releases" target="_blank" rel="noopener">Releases</a>
+
+<div class="wrap intg-page">
+  <div class="intg-head">
+    <span class="eyebrow">Integrations</span>
+    <h1>Move data from 160+ connectors</h1>
+    <p class="lead">104 sources and 59 destinations that work today, every one covered by tests. Search the catalogue or filter by category and direction. Sources read in, destinations write out.</p>
+  </div>
+
+  <div class="intg-layout">
+    <aside class="intg-rail">
+      <label class="intg-search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+        <input id="intgSearch" type="search" placeholder="Search connectors" autocomplete="off" />
+      </label>
+      <div>
+        <div class="intg-rlbl">Type</div>
+        <label class="intg-radio"><input type="radio" name="intgkind" value="all" checked /> All integrations</label>
+        <label class="intg-radio"><input type="radio" name="intgkind" value="s" /> Sources</label>
+        <label class="intg-radio"><input type="radio" name="intgkind" value="d" /> Destinations</label>
+      </div>
+      <div>
+        <div class="intg-rlbl">Categories</div>
+        <div class="intg-catlist" id="intgCats"></div>
+      </div>
     </aside>
-    <main class="docs-main">
-<span class="eyebrow">Integrations</span>
-<h1>Integrations directory</h1>
-<p class="lead">104 sources and 59 sinks that work today, each covered by tests. Search the catalogue or filter by category and direction. Sources read in, destinations write out.</p>
 
-<div class="grid cols-3">
-  <div class="card">
-    <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg></span>
-    <h3>104 sources</h3>
-    <p>Read from files, databases, warehouses, object storage, streams, NoSQL stores, vector DBs, and SaaS APIs.</p>
+    <div>
+      <div class="intg-count" id="intgCount"></div>
+      <div class="intg-grid" id="intgGrid"></div>
+    </div>
   </div>
-  <a class="card" href="components.html">
-    <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg></span>
-    <h3>128 transforms</h3>
-    <p>Shape, join, enrich, and validate data between source and sink. See the component reference.</p>
-  </a>
-  <div class="card">
-    <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg></span>
-    <h3>59 destinations</h3>
-    <p>Write to files, databases, warehouses, object storage, vector DBs, messaging, and mailboxes.</p>
-  </div>
+
+  <div class="note" style="margin-top:34px;"><b>Roadmap.</b> Roadmap connectors (e.g. IBM DB2, Pulsar sink, Event Hubs, multi-shard Kinesis, Chroma, LanceDB) are reserved in the palette and shipping engine-by-engine. All upserts support optional CDC delete propagation. For the transforms and quality nodes that run between source and sink, see the <a href="components.html">component reference</a>.</div>
 </div>
 
-<div class="intg-controls">
-  <label class="intg-search">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
-    <input id="intgSearch" type="search" placeholder="Search connectors (e.g. Snowflake, Kafka, S3)" autocomplete="off" />
-  </label>
-  <div class="intg-kinds" id="intgKinds"></div>
-</div>
-<div class="intg-filters" id="intgFilters"></div>
-<div class="intg-count" id="intgCount"></div>
-<div class="intg-grid" id="intgGrid"></div>
-
-<div class="note"><b>Roadmap.</b> Roadmap connectors (e.g. IBM DB2, Pulsar sink, Event Hubs, multi-shard Kinesis, Chroma, LanceDB) are reserved in the palette and shipping engine-by-engine. All upserts support optional CDC delete propagation. For the transforms and quality nodes that run between source and sink, see the <a href="components.html">component reference</a>.</div>
-    </main>
-  </div>
-</div>
 <footer class="footer">
   <div class="wrap">
     <div class="legal">
@@ -105,137 +85,178 @@
 </footer>
 
 <script>
-// Connector catalogue. n=name, c=category, k=kind (s=source, d=destination,
-// sd=both), l=logo (full URL, or a Simple Icons slug, or '' for a letter tile).
+// l = logo: a full URL, "gb:<name>" (gilbarbara/logos), "dv:<path>" (devicon),
+// or a bare Simple Icons slug. When there is no brand logo, i = a category icon
+// key (formats / protocols). n=name, c=category, k=kind (s/d/sd).
 const INTG = [
   // Files & formats
-  {n:'CSV',c:'files',k:'sd',l:''},{n:'TSV',c:'files',k:'sd',l:''},
+  {n:'CSV',c:'files',k:'sd',i:'file'},{n:'TSV',c:'files',k:'sd',i:'file'},
   {n:'Parquet',c:'files',k:'sd',l:'apacheparquet'},{n:'JSON',c:'files',k:'sd',l:'json'},
-  {n:'JSONL',c:'files',k:'sd',l:'json'},{n:'Excel',c:'files',k:'sd',l:''},
+  {n:'JSONL',c:'files',k:'sd',l:'json'},{n:'Excel',c:'files',k:'sd',i:'file'},
   {n:'YAML',c:'files',k:'s',l:'yaml'},{n:'TOML',c:'files',k:'s',l:'toml'},
-  {n:'XML',c:'files',k:'sd',l:''},{n:'Avro',c:'files',k:'sd',l:''},
-  {n:'Fixed-width',c:'files',k:'s',l:''},
+  {n:'XML',c:'files',k:'sd',i:'file'},{n:'Avro',c:'files',k:'sd',i:'file'},
+  {n:'Fixed-width',c:'files',k:'s',i:'file'},
   // Geospatial
-  {n:'GeoJSON',c:'geo',k:'s',l:''},{n:'Shapefile',c:'geo',k:'s',l:''},
-  {n:'GeoPackage',c:'geo',k:'s',l:''},{n:'KML',c:'geo',k:'s',l:''},
-  {n:'GPX',c:'geo',k:'s',l:''},{n:'GML',c:'geo',k:'s',l:''},
-  {n:'Spatial',c:'geo',k:'d',l:''},
+  {n:'GeoJSON',c:'geo',k:'s',i:'map'},{n:'Shapefile',c:'geo',k:'s',i:'map'},
+  {n:'GeoPackage',c:'geo',k:'s',i:'map'},{n:'KML',c:'geo',k:'s',i:'map'},
+  {n:'GPX',c:'geo',k:'s',i:'map'},{n:'GML',c:'geo',k:'s',i:'map'},
+  {n:'Spatial',c:'geo',k:'d',i:'map'},
   // Lakehouse
-  {n:'Apache Iceberg',c:'lake',k:'sd',l:''},{n:'Delta Lake',c:'lake',k:'s',l:''},
+  {n:'Apache Iceberg',c:'lake',k:'sd',i:'layers'},{n:'Delta Lake',c:'lake',k:'s',i:'layers'},
   {n:'DuckLake',c:'lake',k:'sd',l:'../assets/img/eco/ducklake.svg'},
   // Databases
   {n:'PostgreSQL',c:'db',k:'sd',l:'postgresql'},{n:'MySQL',c:'db',k:'sd',l:'mysql'},
   {n:'MariaDB',c:'db',k:'sd',l:'mariadb'},{n:'CockroachDB',c:'db',k:'sd',l:'cockroachlabs'},
-  {n:'SQL Server',c:'db',k:'s',l:'https://cdn.jsdelivr.net/gh/devicons/devicon/icons/microsoftsqlserver/microsoftsqlserver-original.svg'},
-  {n:'Oracle',c:'db',k:'s',l:'https://cdn.jsdelivr.net/gh/gilbarbara/logos/logos/oracle.svg'},
-  {n:'ClickHouse',c:'db',k:'s',l:'clickhouse'},{n:'SQLite',c:'db',k:'sd',l:'sqlite'},
-  {n:'DuckDB',c:'db',k:'sd',l:'duckdb'},
+  {n:'SQL Server',c:'db',k:'s',l:'dv:microsoftsqlserver/microsoftsqlserver-original.svg'},
+  {n:'Oracle',c:'db',k:'s',l:'gb:oracle'},{n:'ClickHouse',c:'db',k:'s',l:'clickhouse'},
+  {n:'SQLite',c:'db',k:'sd',l:'sqlite'},{n:'DuckDB',c:'db',k:'sd',l:'duckdb'},
   // Warehouses
   {n:'Snowflake',c:'wh',k:'sd',l:'snowflake'},{n:'BigQuery',c:'wh',k:'sd',l:'googlebigquery'},
-  {n:'Redshift',c:'wh',k:'sd',l:'https://cdn.jsdelivr.net/gh/gilbarbara/logos/logos/aws-redshift.svg'},
-  {n:'Databricks',c:'wh',k:'sd',l:'databricks'},{n:'MotherDuck',c:'wh',k:'sd',l:''},
-  {n:'Azure Synapse',c:'wh',k:'s',l:'https://cdn.jsdelivr.net/gh/gilbarbara/logos/logos/microsoft-azure.svg'},
+  {n:'Redshift',c:'wh',k:'sd',l:'gb:aws-redshift'},{n:'Databricks',c:'wh',k:'sd',l:'databricks'},
+  {n:'MotherDuck',c:'wh',k:'sd',i:'warehouse'},{n:'Azure Synapse',c:'wh',k:'s',l:'gb:microsoft-azure'},
   {n:'Quack',c:'wh',k:'sd',l:'../assets/img/eco/quack.svg'},
   // Object storage
-  {n:'Amazon S3',c:'obj',k:'sd',l:'https://cdn.jsdelivr.net/gh/gilbarbara/logos/logos/aws-s3.svg'},
-  {n:'Google Cloud Storage',c:'obj',k:'sd',l:'googlecloud'},
-  {n:'Azure Blob',c:'obj',k:'sd',l:'https://cdn.jsdelivr.net/gh/gilbarbara/logos/logos/microsoft-azure.svg'},
-  {n:'MinIO',c:'obj',k:'s',l:'minio'},{n:'Cloudflare R2',c:'obj',k:'s',l:'cloudflare'},
-  {n:'Backblaze B2',c:'obj',k:'s',l:'backblaze'},{n:'HTTP',c:'obj',k:'s',l:''},
+  {n:'Amazon S3',c:'obj',k:'sd',l:'gb:aws-s3'},{n:'Google Cloud Storage',c:'obj',k:'sd',l:'googlecloud'},
+  {n:'Azure Blob',c:'obj',k:'sd',l:'gb:microsoft-azure'},{n:'MinIO',c:'obj',k:'s',l:'minio'},
+  {n:'Cloudflare R2',c:'obj',k:'s',l:'cloudflare'},{n:'Backblaze B2',c:'obj',k:'s',l:'backblaze'},
+  {n:'HTTP',c:'obj',k:'s',i:'globe'},
   // Streaming
-  {n:'Apache Kafka',c:'stream',k:'sd',l:'apachekafka'},{n:'Redpanda',c:'stream',k:'s',l:'redpanda'},
+  {n:'Apache Kafka',c:'stream',k:'sd',l:'apachekafka'},{n:'Redpanda',c:'stream',k:'s',i:'stream'},
   {n:'NATS JetStream',c:'stream',k:'sd',l:'natsdotio'},{n:'GCP Pub/Sub',c:'stream',k:'sd',l:'googlecloud'},
-  {n:'RabbitMQ',c:'stream',k:'sd',l:'rabbitmq'},{n:'AWS Kinesis',c:'stream',k:'s',l:''},
+  {n:'RabbitMQ',c:'stream',k:'sd',l:'rabbitmq'},{n:'AWS Kinesis',c:'stream',k:'s',l:'gb:aws-kinesis'},
   // NoSQL & search
   {n:'MongoDB',c:'nosql',k:'sd',l:'mongodb'},{n:'Cassandra',c:'nosql',k:'s',l:'apachecassandra'},
   {n:'ScyllaDB',c:'nosql',k:'s',l:'scylladb'},{n:'Elasticsearch',c:'nosql',k:'s',l:'elasticsearch'},
   {n:'OpenSearch',c:'nosql',k:'s',l:'opensearch'},{n:'Redis',c:'nosql',k:'s',l:'redis'},
-  {n:'CouchDB',c:'nosql',k:'s',l:'apachecouchdb'},{n:'DynamoDB',c:'nosql',k:'s',l:''},
+  {n:'CouchDB',c:'nosql',k:'s',l:'apachecouchdb'},{n:'DynamoDB',c:'nosql',k:'s',l:'gb:aws-dynamodb'},
   // Vector
   {n:'pgvector',c:'vector',k:'sd',l:'postgresql'},{n:'Qdrant',c:'vector',k:'sd',l:'qdrant'},
-  {n:'Weaviate',c:'vector',k:'sd',l:'weaviate'},{n:'Milvus',c:'vector',k:'sd',l:'milvus'},
-  {n:'Pinecone',c:'vector',k:'d',l:'pinecone'},
+  {n:'Weaviate',c:'vector',k:'sd',i:'vector'},{n:'Milvus',c:'vector',k:'sd',l:'milvus'},
+  {n:'Pinecone',c:'vector',k:'d',l:'gb:pinecone'},
   // SaaS & APIs
-  {n:'Salesforce',c:'saas',k:'s',l:'https://cdn.jsdelivr.net/gh/gilbarbara/logos/logos/salesforce.svg'},
-  {n:'HubSpot',c:'saas',k:'s',l:'hubspot'},{n:'Pipedrive',c:'saas',k:'s',l:'pipedrive'},
-  {n:'Zendesk',c:'saas',k:'s',l:'zendesk'},{n:'Intercom',c:'saas',k:'s',l:'intercom'},
-  {n:'Stripe',c:'saas',k:'s',l:'stripe'},{n:'QuickBooks',c:'saas',k:'s',l:'quickbooks'},
-  {n:'Xero',c:'saas',k:'s',l:'xero'},{n:'Shopify',c:'saas',k:'s',l:'shopify'},
-  {n:'Notion',c:'saas',k:'s',l:'notion'},{n:'Airtable',c:'saas',k:'s',l:'airtable'},
-  {n:'Asana',c:'saas',k:'s',l:'asana'},{n:'Trello',c:'saas',k:'s',l:'trello'},
-  {n:'ClickUp',c:'saas',k:'s',l:'clickup'},{n:'Monday.com',c:'saas',k:'s',l:''},
-  {n:'GitHub',c:'saas',k:'s',l:'github'},{n:'GitLab',c:'saas',k:'s',l:'gitlab'},
-  {n:'Linear',c:'saas',k:'s',l:'linear'},{n:'Jira',c:'saas',k:'s',l:'jira'},
-  {n:'Slack',c:'saas',k:'s',l:'https://cdn.jsdelivr.net/gh/gilbarbara/logos/logos/slack-icon.svg'},
+  {n:'Salesforce',c:'saas',k:'s',l:'gb:salesforce'},{n:'HubSpot',c:'saas',k:'s',l:'hubspot'},
+  {n:'Pipedrive',c:'saas',k:'s',l:'gb:pipedrive'},{n:'Zendesk',c:'saas',k:'s',l:'zendesk'},
+  {n:'Intercom',c:'saas',k:'s',l:'intercom'},{n:'Stripe',c:'saas',k:'s',l:'stripe'},
+  {n:'QuickBooks',c:'saas',k:'s',l:'quickbooks'},{n:'Xero',c:'saas',k:'s',l:'xero'},
+  {n:'Shopify',c:'saas',k:'s',l:'shopify'},{n:'Notion',c:'saas',k:'s',l:'notion'},
+  {n:'Airtable',c:'saas',k:'s',l:'airtable'},{n:'Asana',c:'saas',k:'s',l:'asana'},
+  {n:'Trello',c:'saas',k:'s',l:'trello'},{n:'ClickUp',c:'saas',k:'s',l:'clickup'},
+  {n:'Monday.com',c:'saas',k:'s',l:'gb:monday-icon'},{n:'GitHub',c:'saas',k:'s',l:'github'},
+  {n:'GitLab',c:'saas',k:'s',l:'gitlab'},{n:'Linear',c:'saas',k:'s',l:'linear'},
+  {n:'Jira',c:'saas',k:'s',l:'jira'},{n:'Slack',c:'saas',k:'s',l:'gb:slack-icon'},
   {n:'Discord',c:'saas',k:'s',l:'discord'},{n:'Telegram',c:'saas',k:'s',l:'telegram'},
-  {n:'Twilio',c:'saas',k:'s',l:'twilio'},{n:'Mailchimp',c:'saas',k:'s',l:'mailchimp'},
-  {n:'SendGrid',c:'saas',k:'s',l:''},{n:'Segment',c:'saas',k:'s',l:''},
-  {n:'REST',c:'saas',k:'s',l:''},{n:'GraphQL',c:'saas',k:'s',l:'graphql'},
-  {n:'OData',c:'saas',k:'s',l:''},{n:'SOAP',c:'saas',k:'s',l:''},
+  {n:'Twilio',c:'saas',k:'s',l:'gb:twilio'},{n:'Mailchimp',c:'saas',k:'s',l:'mailchimp'},
+  {n:'SendGrid',c:'saas',k:'s',l:'gb:sendgrid'},{n:'Segment',c:'saas',k:'s',l:'gb:segment'},
+  {n:'REST',c:'saas',k:'s',i:'api'},{n:'GraphQL',c:'saas',k:'s',l:'graphql'},
+  {n:'OData',c:'saas',k:'s',i:'api'},{n:'SOAP',c:'saas',k:'s',i:'api'},
   // Transfer & email
-  {n:'FTP',c:'transfer',k:'sd',l:''},{n:'FTPS',c:'transfer',k:'sd',l:''},
-  {n:'SFTP',c:'transfer',k:'sd',l:''},{n:'IMAP',c:'transfer',k:'s',l:''},
-  {n:'SMTP email',c:'transfer',k:'d',l:''},
+  {n:'FTP',c:'transfer',k:'sd',i:'transfer'},{n:'FTPS',c:'transfer',k:'sd',i:'transfer'},
+  {n:'SFTP',c:'transfer',k:'sd',i:'transfer'},{n:'IMAP',c:'transfer',k:'s',i:'mail'},
+  {n:'SMTP email',c:'transfer',k:'d',i:'mail'},
   // Other
-  {n:'Webhook listener',c:'other',k:'s',l:''},{n:'System clipboard',c:'other',k:'s',l:''},
+  {n:'Webhook listener',c:'other',k:'s',i:'api'},{n:'System clipboard',c:'other',k:'s',i:'clipboard'},
   {n:'Git repo',c:'other',k:'s',l:'git'},
 ];
 
 const CATS = [
-  ['all','All'],['db','Databases'],['wh','Warehouses'],['lake','Lakehouse'],
-  ['files','Files & formats'],['geo','Geospatial'],['obj','Object storage'],
-  ['stream','Streaming'],['nosql','NoSQL & search'],['vector','Vector'],
-  ['saas','SaaS & APIs'],['transfer','Transfer & email'],['other','Other'],
+  ['all','All integrations'],['db','Databases'],['wh','Warehouses'],['lake','Lakehouse'],
+  ['files','Files & formats'],['geo','Geospatial'],['obj','Object storage'],['stream','Streaming'],
+  ['nosql','NoSQL & search'],['vector','Vector'],['saas','SaaS & APIs'],
+  ['transfer','Transfer & email'],['other','Other'],
 ];
-const KINDS = [['all','All'],['s','Sources'],['d','Destinations']];
+
+const SI = 'https://cdn.simpleicons.org/';
+const GB = 'https://cdn.jsdelivr.net/gh/gilbarbara/logos/logos/';
+const DV = 'https://cdn.jsdelivr.net/gh/devicons/devicon/icons/';
+// Near-black monochrome glyphs: dark mode serves a light variant.
+const DARK = {json:1, sqlite:1, apachekafka:1, notion:1, github:1};
+
+const ICONS = {
+  file:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>`,
+  map:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-6.3-7-11a7 7 0 0 1 14 0c0 4.7-7 11-7 11z"/><circle cx="12" cy="10" r="2.4"/></svg>`,
+  layers:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 3 8l9 5 9-5-9-5z"/><path d="M3 13l9 5 9-5"/></svg>`,
+  globe:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 0 1 0 18 15 15 0 0 1 0-18z"/></svg>`,
+  stream:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h3l2 6 4-15 2 9h7"/></svg>`,
+  vector:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12 4 7.5M12 12l8-4.5M12 12v9"/></svg>`,
+  api:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m8 8-4 4 4 4M16 8l4 4-4 4M14 4l-4 16"/></svg>`,
+  transfer:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3l4 4-4 4M20 7H8M8 21l-4-4 4-4M4 17h12"/></svg>`,
+  mail:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg>`,
+  clipboard:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="3" width="8" height="4" rx="1"/><path d="M16 5h2a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2"/></svg>`,
+  warehouse:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21V9l9-5 9 5v12"/><path d="M3 21h18M9 21v-6h6v6"/></svg>`,
+};
+const ICOLOR = {
+  file:'#f4b400', map:'#2eafff', layers:'#7d66ff', globe:'#2eafff', stream:'#ff6900',
+  vector:'#7d66ff', api:'#ff6900', transfer:'#7d66ff', mail:'#2eafff',
+  clipboard:'#8a93a6', warehouse:'#2eafff',
+};
 
 let curCat = 'all', curKind = 'all', q = '';
 
 function kindLabel(k){ return k === 'sd' ? 'Source · Destination' : k === 's' ? 'Source' : 'Destination'; }
-function logoUrl(l){ return !l ? '' : (l.indexOf('http') === 0 ? l : 'https://cdn.simpleicons.org/' + l); }
 function esc(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+window.intgFail = function(img){
+  const p = img.parentNode;
+  p.style.color = '#8a93a6';
+  p.innerHTML = ICONS.file;
+};
+
+function logoCell(x){
+  if (x.l){
+    const bare = !/^(http|gb:|dv:)/.test(x.l);
+    if (bare && DARK[x.l]){
+      const u = SI + x.l;
+      return '<span class="intg-logo"><img class="logo-light" src="' + u + '" alt="" loading="lazy" /><img class="logo-dark" src="' + u + '/f5f5f5" alt="" loading="lazy" /></span>';
+    }
+    let u = x.l;
+    if (x.l.indexOf('gb:') === 0) u = GB + x.l.slice(3) + '.svg';
+    else if (x.l.indexOf('dv:') === 0) u = DV + x.l.slice(3);
+    else if (x.l.indexOf('http') !== 0) u = SI + x.l;
+    return '<span class="intg-logo"><img src="' + u + '" alt="" loading="lazy" onerror="intgFail(this)" /></span>';
+  }
+  const key = x.i || 'file';
+  return '<span class="intg-logo" style="color:' + (ICOLOR[key] || '#2eafff') + '">' + (ICONS[key] || ICONS.file) + '</span>';
+}
+
+function matchKind(x){ return curKind === 'all' || x.k.indexOf(curKind) !== -1; }
+
+function renderCats(){
+  const host = document.getElementById('intgCats');
+  host.innerHTML = CATS.map(([v,label]) => {
+    const n = v === 'all'
+      ? INTG.filter(matchKind).length
+      : INTG.filter(x => x.c === v && matchKind(x)).length;
+    return '<button type="button" data-v="' + v + '"><span>' + label + '</span><span class="c">' + n + '</span></button>';
+  }).join('');
+  host.querySelectorAll('button').forEach(b =>
+    b.classList.toggle('active', b.dataset.v === curCat));
+}
 
 function render(){
   const ql = q.trim().toLowerCase();
   const list = INTG.filter(x =>
-    (curCat === 'all' || x.c === curCat) &&
-    (curKind === 'all' || x.k.indexOf(curKind) !== -1) &&
+    (curCat === 'all' || x.c === curCat) && matchKind(x) &&
     (!ql || x.n.toLowerCase().indexOf(ql) !== -1)
   );
   const grid = document.getElementById('intgGrid');
-  if (!list.length){
-    grid.innerHTML = '<div class="intg-empty">No connectors match. Try a different search or category.</div>';
-  } else {
-    grid.innerHTML = list.map(x => {
-      const url = logoUrl(x.l), letter = x.n[0].toUpperCase();
-      const logo = url
-        ? '<span class="intg-logo" data-letter="' + letter + '"><img src="' + url + '" alt="" loading="lazy" onerror="this.parentNode.classList.add(\'noimg\');this.remove();" /></span>'
-        : '<span class="intg-logo noimg" data-letter="' + letter + '"></span>';
-      return '<div class="intg-card">' + logo +
+  grid.innerHTML = list.length
+    ? list.map(x =>
+        '<div class="intg-card">' + logoCell(x) +
         '<span class="intg-meta"><span class="intg-name">' + esc(x.n) + '</span>' +
-        '<span class="intg-kind">' + kindLabel(x.k) + '</span></span></div>';
-    }).join('');
-  }
-  document.getElementById('intgCount').textContent =
-    list.length + ' of ' + INTG.length + ' connectors';
+        '<span class="intg-kind">' + kindLabel(x.k) + '</span></span></div>').join('')
+    : '<div class="intg-empty">No connectors match. Try a different search or category.</div>';
+  document.getElementById('intgCount').textContent = list.length + ' of ' + INTG.length + ' connectors';
 }
 
-function buildChips(host, items, getCur, setCur){
-  host.innerHTML = items.map(([v,label]) =>
-    '<button type="button" class="intg-chip" data-v="' + v + '">' + label + '</button>'
-  ).join('');
-  const sync = () => host.querySelectorAll('.intg-chip').forEach(b =>
-    b.classList.toggle('active', b.dataset.v === getCur()));
-  host.addEventListener('click', e => {
-    const b = e.target.closest('.intg-chip'); if (!b) return;
-    setCur(b.dataset.v); sync(); render();
-  });
-  sync();
-}
-
-buildChips(document.getElementById('intgFilters'), CATS, () => curCat, v => curCat = v);
-buildChips(document.getElementById('intgKinds'), KINDS, () => curKind, v => curKind = v);
+document.getElementById('intgCats').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  curCat = b.dataset.v; renderCats(); render();
+});
+document.querySelectorAll('input[name="intgkind"]').forEach(r =>
+  r.addEventListener('change', e => { curKind = e.target.value; renderCats(); render(); }));
 document.getElementById('intgSearch').addEventListener('input', e => { q = e.target.value; render(); });
+
+renderCats();
 render();
 </script>
 <script src="../assets/js/site.js"></script>
