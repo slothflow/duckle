@@ -2187,6 +2187,55 @@
     }
 
     #[test]
+    fn zip_arrays_to_table_pivots_to_real_columns() {
+        // xf.zip: a row carrying a headings list + a list of row-arrays becomes
+        // one output row per inner array with a real column per heading. It
+        // explodes the values, aligns by position, and PIVOTs to columns. As a
+        // data-driven PIVOT it must materialize as a TABLE, never a lazy VIEW.
+        let p = pipeline_from_json(
+            r#"{
+              "nodes": [
+                {"id":"s1","position":{"x":0,"y":0},"data":{
+                  "label":"JSON","componentId":"src.json",
+                  "properties":{"path":"/tmp/in.json"}}},
+                {"id":"z1","position":{"x":0,"y":0},"data":{
+                  "label":"Zip","componentId":"xf.zip",
+                  "properties":{"headingsColumn":"headings","valuesColumn":"rows"}}},
+                {"id":"k1","position":{"x":0,"y":0},"data":{
+                  "label":"CSV","componentId":"snk.csv",
+                  "properties":{"path":"/tmp/out.csv","hasHeader":true}}}
+              ],
+              "edges": [
+                {"id":"e1","source":"s1","target":"z1","data":{"connectionType":"main"}},
+                {"id":"e2","source":"z1","target":"k1","data":{"connectionType":"main"}}
+              ]
+            }"#,
+        );
+        let compiled = compile(&p).unwrap();
+        let zip = compiled
+            .stages
+            .iter()
+            .find(|s| s.node_id == "z1")
+            .expect("zip stage");
+        assert!(zip.sql.contains("PIVOT"), "zip must emit a PIVOT: {}", zip.sql);
+        assert!(
+            zip.sql.contains("UNNEST(\"rows\")"),
+            "zip must explode the values column: {}",
+            zip.sql
+        );
+        assert!(
+            zip.sql.contains("\"headings\""),
+            "zip must reference the headings column: {}",
+            zip.sql
+        );
+        assert!(
+            zip.sql.contains("CREATE OR REPLACE TABLE \"z1\""),
+            "a data-driven pivot must materialize as a TABLE: {}",
+            zip.sql
+        );
+    }
+
+    #[test]
     fn rejects_cycles() {
         let p = pipeline_from_json(
             r#"{

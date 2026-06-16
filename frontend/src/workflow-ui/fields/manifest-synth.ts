@@ -3307,6 +3307,14 @@ function synthArrayTransform(comp: ComponentDef): ComponentManifest {
               description: 'One output row per element, other columns repeated.' },
         ] }], 'declared');
     }
+    if (id === 'xf.zip') {
+        return base(comp, [{ label: 'Zip arrays to table', fields: [
+            { key: 'headingsColumn', label: 'Headings column', kind: 'column', required: true,
+              description: 'A list column of column names, e.g. headings = ["col1","col2","col3"].' },
+            { key: 'valuesColumn', label: 'Rows column', kind: 'column', required: true,
+              description: 'A list-of-lists column; each inner array becomes one output row, its values aligned to the headings by position.' },
+        ] }], 'declared');
+    }
     // distinct
     return base(comp, [{ label: 'Array distinct', fields: [col, outColField()] }], 'upstream');
 }

@@ -400,6 +400,7 @@ export const PALETTE: Category[] = [
                     xf('arr.contains', 'Contains', 'available'),
                     xf('arr.distinct', 'Array Distinct', 'available'),
                     xf('arr.length', 'Array Length', 'available', 'Scalar length of a list / array column'),
+                    xf('zip', 'Zip Arrays to Table', 'available', 'Zip a headings list and a list of row-arrays (e.g. {headings:[...], rows:[[...]]}) into one row per record with a real column per heading'),
                 ],
             },
             {

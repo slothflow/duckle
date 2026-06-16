@@ -1,6 +1,6 @@
 {
   "version": "1",
-  "componentCount": 329,
+  "componentCount": 330,
   "components": [
     {
       "id": "src.csv",
@@ -20945,6 +20945,85 @@
                 "label": "Output column",
                 "kind": "text",
                 "placeholder": "<column>_length"
+              }
+            ]
+          }
+        ],
+        "ports": {
+          "inputs": [
+            {
+              "id": "main",
+              "label": "main",
+              "type": "main"
+            }
+          ],
+          "outputs": [
+            {
+              "id": "main",
+              "label": "main",
+              "type": "main"
+            },
+            {
+              "id": "reject",
+              "label": "reject",
+              "type": "reject",
+              "optional": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "xf.zip",
+      "label": "Zip Arrays to Table",
+      "kind": "transform",
+      "availability": "available",
+      "summary": "Zip a headings list and a list of row-arrays (e.g. {headings:[...], rows:[[...]]}) into one row per record with a real column per heading",
+      "ports": {
+        "inputs": [
+          {
+            "id": "main",
+            "label": "main",
+            "type": "main"
+          }
+        ],
+        "outputs": [
+          {
+            "id": "main",
+            "label": "main",
+            "type": "main"
+          },
+          {
+            "id": "reject",
+            "label": "reject",
+            "type": "reject",
+            "optional": true
+          }
+        ]
+      },
+      "manifest": {
+        "id": "xf.zip",
+        "kind": "transform",
+        "label": "Zip Arrays to Table",
+        "description": "Zip a headings list and a list of row-arrays (e.g. {headings:[...], rows:[[...]]}) into one row per record with a real column per heading",
+        "schemaSource": "declared",
+        "sections": [
+          {
+            "label": "Zip arrays to table",
+            "fields": [
+              {
+                "key": "headingsColumn",
+                "label": "Headings column",
+                "kind": "column",
+                "required": true,
+                "description": "A list column of column names, e.g. headings = [\"col1\",\"col2\",\"col3\"]."
+              },
+              {
+                "key": "valuesColumn",
+                "label": "Rows column",
+                "kind": "column",
+                "required": true,
+                "description": "A list-of-lists column; each inner array becomes one output row, its values aligned to the headings by position."
               }
             ]
           }

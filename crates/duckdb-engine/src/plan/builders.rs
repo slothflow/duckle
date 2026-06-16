@@ -116,6 +116,7 @@ pub(crate) fn build_view_sql(
         "xf.rownum" | "xf.rank" | "xf.denserank" | "xf.lead" | "xf.lag" | "xf.first"
         | "xf.last" | "xf.ntile" => build_window(inputs, props, component_id),
         "xf.pivot" => build_pivot(inputs, props),
+        "xf.zip" => build_zip(inputs, props),
         "xf.unpivot" => build_unpivot(inputs, props),
         "xf.denorm" => build_denormalize(inputs, props),
         "xf.norm" => build_normalize(inputs, props),
@@ -716,6 +717,46 @@ pub(crate) fn build_arr_collect(inputs: &NodeInputs, props: &JsonValue) -> Resul
             v = v,
         ))
     }
+}
+
+/// xf.zip - "Zip Arrays to Table": turn a row that carries a list of column
+/// names and a list of row-arrays (e.g. {headings:[...], rows:[[...],[...]]})
+/// into one output row per inner array, with one real column per heading. It
+/// explodes the values list, aligns each inner array with the headings by
+/// position, then PIVOTs the heading->value pairs into columns. The output
+/// column set is data-driven, so this is a dynamic PIVOT (forced to a TABLE,
+/// like xf.pivot / xf.transpose).
+pub(crate) fn build_zip(inputs: &NodeInputs, props: &JsonValue) -> Result<String, String> {
+    let upstream = inputs.main().ok_or_else(|| missing_input_msg("xf.zip"))?;
+    let headings = string_prop(props, "headingsColumn")
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| "Zip needs a headings column (a list of column names)".to_string())?;
+    let values = string_prop(props, "valuesColumn")
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| "Zip needs a values column (a list of row arrays)".to_string())?;
+    let up = quote_ident(upstream);
+    let h = quote_ident(&headings);
+    let v = quote_ident(&values);
+    // __duckle_rid keeps each exploded row distinct through the PIVOT; range()
+    // walks each position so headings[i] pairs with values[i]; EXCLUDE drops the
+    // synthetic id from the result.
+    Ok(format!(
+        "SELECT * EXCLUDE (__duckle_rid) FROM (\
+PIVOT (\
+SELECT __duckle_ex.__duckle_rid, \
+__duckle_ex.__duckle_h[__duckle_i] AS __duckle_key, \
+__duckle_ex.__duckle_v[__duckle_i] AS __duckle_val \
+FROM (\
+SELECT row_number() OVER () AS __duckle_rid, {h} AS __duckle_h, __duckle_rv AS __duckle_v \
+FROM {up}, UNNEST({v}) AS __duckle_t(__duckle_rv)\
+) __duckle_ex, \
+UNNEST(range(1, len(__duckle_ex.__duckle_h) + 1)) AS __duckle_g(__duckle_i)\
+) ON __duckle_key USING first(__duckle_val) GROUP BY __duckle_rid ORDER BY __duckle_rid\
+)",
+        h = h,
+        v = v,
+        up = up,
+    ))
 }
 
 pub(crate) fn build_arr_contains(inputs: &NodeInputs, props: &JsonValue) -> Result<String, String> {

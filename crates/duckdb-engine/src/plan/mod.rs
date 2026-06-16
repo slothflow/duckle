@@ -3084,7 +3084,7 @@ fn build_stage(
         // for components whose body uses dynamic PIVOT so they don't
         // hit that limit when the consumer-count path picks VIEW.
         let uses_dynamic_pivot =
-            matches!(component_id, "xf.transpose" | "xf.pivot");
+            matches!(component_id, "xf.transpose" | "xf.pivot" | "xf.zip");
         // DUCKLE_FORCE_VIEWS=1 makes every eligible step a VIEW even when
         // multiple downstream nodes consume it (issue #5). The default
         // (single-consumer => VIEW, multi-consumer => TABLE) balances
