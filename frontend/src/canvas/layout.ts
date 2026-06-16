@@ -1,8 +1,11 @@
 import type { Edge, Node } from '@xyflow/react';
 import type { DuckleNodeData } from '../pipeline-types';
 
-const RANK_GAP_X = 320; // horizontal distance between dependency levels
-const NODE_GAP_Y = 170; // vertical distance between nodes sharing a level
+// Node cards are min-width 220px and grow with longer labels, so leave a wide
+// horizontal gap between dependency levels for the edges and side connectors to
+// breathe, plus a generous vertical gap between siblings sharing a level.
+const RANK_GAP_X = 460; // horizontal distance between dependency levels
+const NODE_GAP_Y = 210; // vertical distance between nodes sharing a level
 const ORIGIN_X = 80;
 const ORIGIN_Y = 140;
 
