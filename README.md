@@ -1157,6 +1157,7 @@ Thanks goes to these wonderful people who contribute to Duckle ([emoji key](http
   <tbody>
     <tr>
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/mitslabo"><img src="https://avatars.githubusercontent.com/u/176633224?v=4?s=100" width="100px;" alt="mits"/><br /><sub><b>mits</b></sub></a><br /><a href="#infra-mitslabo" title="Infrastructure (Hosting, Build-Tools, etc)">🚇</a> <a href="https://github.com/ducklelabs/duckle/commits?author=mitslabo" title="Tests">⚠️</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/add944"><img src="https://avatars.githubusercontent.com/u/288381564?v=4?s=100" width="100px;" alt="add944"/><br /><sub><b>add944</b></sub></a><br /><a href="#infra-add944" title="Infrastructure (Hosting, Build-Tools, etc)">🚇</a> <a href="https://github.com/ducklelabs/duckle/commits?author=add944" title="Tests">⚠️</a> <a href="https://github.com/ducklelabs/duckle/commits?author=add944" title="Code">💻</a></td>
     </tr>
   </tbody>
 </table>
