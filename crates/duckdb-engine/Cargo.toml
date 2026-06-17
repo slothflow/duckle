@@ -98,7 +98,7 @@ quick-xml = "0.36"
 # RabbitMQ / AMQP 0.9.1 client. Pure Rust, async. Same block_on
 # pattern as Kafka/NATS. Publishes to an exchange + routing key;
 # pulls from a queue with a per-message timeout for batch ETL.
-lapin = { version = "2", default-features = false, features = ["rustls"] }
+lapin = { version = "4", default-features = false, features = ["rustls"] }
 # FTP / FTPS client. Pure Rust, synchronous API (fits the per-stage
 # blocking model - no block_on dance). Rustls-backed TLS keeps the
 # build self-contained on every OS.
