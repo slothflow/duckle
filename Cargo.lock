@@ -2096,7 +2096,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
- "thiserror 1.0.69",
+ "thiserror 2.0.18",
  "tokio",
 ]
 
@@ -2178,7 +2178,7 @@ dependencies = [
  "sha2",
  "suppaftp",
  "tempfile",
- "thiserror 1.0.69",
+ "thiserror 2.0.18",
  "tiberius",
  "tokio",
  "tokio-util",
@@ -2194,7 +2194,7 @@ name = "duckle-execution-core"
 version = "0.0.1"
 dependencies = [
  "async-trait",
- "thiserror 1.0.69",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -2213,7 +2213,7 @@ dependencies = [
  "chrono",
  "serde",
  "serde_json",
- "thiserror 1.0.69",
+ "thiserror 2.0.18",
  "uuid",
 ]
 
@@ -2225,7 +2225,7 @@ dependencies = [
  "duckle-metadata",
  "serde",
  "serde_json",
- "thiserror 1.0.69",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -2249,7 +2249,7 @@ version = "0.0.1"
 dependencies = [
  "anyhow",
  "serde",
- "thiserror 1.0.69",
+ "thiserror 2.0.18",
  "tokio",
  "tracing",
 ]
@@ -2266,7 +2266,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
- "thiserror 1.0.69",
+ "thiserror 2.0.18",
  "tokio",
  "tracing",
  "uuid",
@@ -2276,7 +2276,7 @@ dependencies = [
 name = "duckle-slothdb-engine"
 version = "0.0.1"
 dependencies = [
- "thiserror 1.0.69",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -2284,7 +2284,7 @@ name = "duckle-stream-engine"
 version = "0.0.1"
 dependencies = [
  "futures",
- "thiserror 1.0.69",
+ "thiserror 2.0.18",
  "tokio",
 ]
 
@@ -2292,7 +2292,7 @@ dependencies = [
 name = "duckle-transform-engine"
 version = "0.0.1"
 dependencies = [
- "thiserror 1.0.69",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -2300,7 +2300,7 @@ name = "duckle-workflow-engine"
 version = "0.0.1"
 dependencies = [
  "serde",
- "thiserror 1.0.69",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
