@@ -23,6 +23,17 @@
         "infra",
         "test"
       ]
+    },
+    {
+      "login": "stephaneheckel",
+      "name": "Stéphane Heckel",
+      "avatar_url": "https://avatars.githubusercontent.com/u/206326846?v=4",
+      "profile": "https://github.com/stephaneheckel",
+      "contributions": [
+        "infra",
+        "test",
+        "code"
+      ]
     }
   ]
 }
