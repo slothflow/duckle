@@ -16,6 +16,9 @@
 <img alt="typescript" src="https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white"/>
 <img alt="duckdb" src="https://img.shields.io/badge/DuckDB-FFF000?logo=duckdb&logoColor=black"/>
 <img alt="stars" src="https://img.shields.io/github/stars/ducklelabs/duckle?style=social"/>
+<!-- ALL-CONTRIBUTORS-BADGE:START - Do not remove or modify this section -->
+<a href="#contributors"><img alt="all contributors" src="https://img.shields.io/github/all-contributors/ducklelabs/duckle?color=ff6900"/></a>
+<!-- ALL-CONTRIBUTORS-BADGE:END -->
 </p>
 
 </div>
@@ -1140,6 +1143,22 @@ A complete planned-component breakdown lives in [`docs/roadmap.md`](docs/roadmap
 ## Contributing
 
 Contributions, issues, and ideas are welcome. Duckle is young and there is a lot of green field. Open an issue to discuss a change before a large PR, match the existing code style, and keep changes focused. Run `cargo test` and `npm --prefix frontend run build` before submitting. See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+---
+
+## Contributors
+
+Thanks goes to these wonderful people who contribute to Duckle ([emoji key](https://allcontributors.org/docs/en/emoji-key)):
+
+<!-- ALL-CONTRIBUTORS-LIST:START - Do not remove or modify this section -->
+<!-- prettier-ignore-start -->
+<!-- markdownlint-disable -->
+<!-- markdownlint-restore -->
+<!-- prettier-ignore-end -->
+
+<!-- ALL-CONTRIBUTORS-LIST:END -->
+
+This project follows the [all-contributors](https://github.com/all-contributors/all-contributors) specification. Contributions of any kind - code, docs, design, bug reports, ideas - are welcome and recognized here. Comment on any issue or PR with `@all-contributors please add @name for code, doc` and the bot opens a PR adding them.
 
 ---
 
