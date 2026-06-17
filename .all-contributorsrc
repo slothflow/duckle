@@ -23,6 +23,17 @@
         "infra",
         "test"
       ]
+    },
+    {
+      "login": "hawkfish",
+      "name": "Richard Wesley",
+      "avatar_url": "https://avatars.githubusercontent.com/u/13156216?v=4",
+      "profile": "https://www.linkedin.com/in/riwesley/",
+      "contributions": [
+        "infra",
+        "test",
+        "code"
+      ]
     }
   ]
 }
