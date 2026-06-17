@@ -23,6 +23,17 @@
         "infra",
         "test"
       ]
+    },
+    {
+      "login": "ABChristian",
+      "name": "Christian",
+      "avatar_url": "https://avatars.githubusercontent.com/u/4749931?v=4",
+      "profile": "https://github.com/ABChristian",
+      "contributions": [
+        "ideas",
+        "test",
+        "code"
+      ]
     }
   ]
 }
