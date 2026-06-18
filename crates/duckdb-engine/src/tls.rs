@@ -70,6 +70,33 @@ pub fn build_client_config() -> rustls::ClientConfig {
         .with_no_client_auth()
 }
 
+/// Read an HTTP/HTTPS proxy URL from the environment. Prefers Duckle's own var
+/// (so a user can point Duckle at a proxy without changing global env), then the
+/// conventional HTTPS_PROXY / ALL_PROXY / HTTP_PROXY (any case). Unlike reqwest,
+/// ureq does NOT pick these up on its own, so behind a corporate proxy every
+/// REST / cloud-API call would connect directly and time out (os error 10060,
+/// issue #80). The URL may include credentials, e.g. http://user:pass@host:8080.
+pub fn proxy_url_from_env() -> Option<String> {
+    for key in [
+        "DUCKLE_HTTPS_PROXY",
+        "DUCKLE_PROXY",
+        "HTTPS_PROXY",
+        "https_proxy",
+        "ALL_PROXY",
+        "all_proxy",
+        "HTTP_PROXY",
+        "http_proxy",
+    ] {
+        if let Ok(v) = std::env::var(key) {
+            let v = v.trim();
+            if !v.is_empty() {
+                return Some(v.to_string());
+            }
+        }
+    }
+    None
+}
+
 /// A process-wide ureq agent using the merged trust config above. The agent
 /// is internally reference-counted, so cloning it per request is cheap; we
 /// build it once and hand out clones.
@@ -77,9 +104,17 @@ pub fn http_agent() -> ureq::Agent {
     static AGENT: OnceLock<ureq::Agent> = OnceLock::new();
     AGENT
         .get_or_init(|| {
-            ureq::AgentBuilder::new()
-                .tls_config(Arc::new(build_client_config()))
-                .build()
+            let mut builder =
+                ureq::AgentBuilder::new().tls_config(Arc::new(build_client_config()));
+            // Honor a configured proxy so REST / cloud connectors work behind a
+            // corporate proxy instead of timing out on a direct connect (#80).
+            if let Some(url) = proxy_url_from_env() {
+                match ureq::Proxy::new(&url) {
+                    Ok(p) => builder = builder.proxy(p),
+                    Err(e) => eprintln!("duckle: ignoring invalid proxy '{url}': {e}"),
+                }
+            }
+            builder.build()
         })
         .clone()
 }
@@ -103,5 +138,18 @@ mod tests {
     #[test]
     fn agent_builds() {
         let _ = http_agent();
+    }
+
+    #[test]
+    fn proxy_env_prefers_duckle_var() {
+        // The Duckle-specific var wins over the conventional ones so a user can
+        // point Duckle at a proxy without changing global env. (Best-effort
+        // env-mutation test; the value is harmless - it is never connected to.)
+        std::env::set_var("DUCKLE_HTTPS_PROXY", "http://proxy.example:8080");
+        assert_eq!(
+            proxy_url_from_env().as_deref(),
+            Some("http://proxy.example:8080")
+        );
+        std::env::remove_var("DUCKLE_HTTPS_PROXY");
     }
 }

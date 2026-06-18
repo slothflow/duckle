@@ -21,11 +21,18 @@ pub enum Progress {
 }
 
 fn http_client() -> Result<reqwest::blocking::Client, String> {
-    reqwest::blocking::Client::builder()
+    let mut b = reqwest::blocking::Client::builder()
         .user_agent("duckle")
-        .use_preconfigured_tls(duckle_duckdb_engine::tls::build_client_config())
-        .build()
-        .map_err(|e| format!("http client: {e}"))
+        .use_preconfigured_tls(duckle_duckdb_engine::tls::build_client_config());
+    // Honor a configured proxy (DUCKLE_HTTPS_PROXY / HTTPS_PROXY / ...) so the
+    // updater works behind a corporate proxy (#80). reqwest reads the standard
+    // vars itself, but this also picks up the Duckle-specific one.
+    if let Some(url) = duckle_duckdb_engine::tls::proxy_url_from_env() {
+        if let Ok(p) = reqwest::Proxy::all(&url) {
+            b = b.proxy(p);
+        }
+    }
+    b.build().map_err(|e| format!("http client: {e}"))
 }
 
 fn download(

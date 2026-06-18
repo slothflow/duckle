@@ -945,6 +945,7 @@ A few knobs you can set without touching code.
 | **Env var `RUST_LOG`** | Before launching the binary | `RUST_LOG=debug duckle.exe` to see verbose engine logs |
 | **Env var `DUCKLE_DUCKDB_BIN`** | Before running engine tests | Points the integration test suite at a DuckDB CLI |
 | **Env var `DUCKLE_CA_CERT`** | Before launching the binary | Path to a PEM bundle of extra CA certificates to trust (corporate proxy / private CA), added on top of the OS trust store and bundled roots |
+| **Env var `DUCKLE_HTTPS_PROXY`** (or standard `HTTPS_PROXY` / `HTTP_PROXY` / `ALL_PROXY`) | Before launching the binary | Routes REST / cloud-API connectors and the in-app updater through an HTTP proxy, e.g. `http://user:pass@proxy:8080`. Use the standard vars to also cover engine / model downloads |
 
 ---
 
@@ -1078,6 +1079,7 @@ See the [Contributing](#contributing) section and `crates/duckdb-engine/src/plan
 | **Postgres `ATTACH` says "could not connect"** | Local SSL mode mismatch | Connection -> Advanced -> set SSL mode to `disable` for localhost / `require` for production |
 | **AI tests skip with no failure** | `DUCKLE_DUCKDB_BIN` isn't set | `export DUCKLE_DUCKDB_BIN=/path/to/duckdb` before `cargo test` |
 | **TLS "UnknownIssuer" / "invalid peer certificate" behind a corporate proxy** | A TLS-inspecting proxy (Zscaler, Netskope, ...) re-signs traffic with its own CA | Duckle trusts your OS certificate store on top of its bundled roots, so the proxy CA in the Windows / macOS / Linux store is honoured automatically. If the CA isn't in the store, point `DUCKLE_CA_CERT` at a PEM file containing it. Note: DuckDB's own extension fetch (`extensions.duckdb.org`) and cloud reads (S3 / GCS / Azure) run inside the DuckDB engine with its own TLS, so also allow / exempt `extensions.duckdb.org` from inspection. |
+| **REST / cloud calls fail with "Connection Failed" / timeout (os error 10060)** behind a proxy | The network requires an HTTP proxy to reach the internet, and Duckle is connecting directly | Set `HTTPS_PROXY` (and `HTTP_PROXY`) to your proxy URL, e.g. `http://user:pass@proxy:8080`, before launching Duckle - REST / cloud connectors and the updater now route through it. Use `DUCKLE_HTTPS_PROXY` if you want a Duckle-only proxy without changing global env. |
 
 If you see something not listed, please [open an issue](https://github.com/ducklelabs/duckle/issues) with steps to reproduce + the relevant log line.
 
