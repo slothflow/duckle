@@ -72,7 +72,8 @@ export function UpdateBanner() {
         download_url: null,
         error: null,
     };
-    const url = display.release_url ?? display.download_url ?? null;
+    // The releases page doubles as the changelog (release notes per tag).
+    const changelogUrl = display.release_url ?? display.download_url ?? null;
     const tag = display.latest_tag ? ` ${display.latest_tag}` : '';
     // Only offer in-place update when the backend resolved a real download for
     // this OS (a forced/preview banner has none).
@@ -118,7 +119,7 @@ export function UpdateBanner() {
                 {updating && progress ? (
                     progressLabel(progress)
                 ) : updateErr ? (
-                    <>Update failed: {updateErr} Use Get the update instead.</>
+                    <>Update failed: {updateErr} Open the releases page to download manually.</>
                 ) : (
                     <>
                         A newer Duckle build{tag} is available. You're on {display.current_build}.
@@ -134,12 +135,12 @@ export function UpdateBanner() {
                 <button
                     type="button"
                     className="update-banner-cta update-banner-cta-secondary"
-                    disabled={!url}
+                    disabled={!changelogUrl}
                     onClick={() => {
-                        if (url) void openExternal(url);
+                        if (changelogUrl) void openExternal(changelogUrl);
                     }}
                 >
-                    Get the update
+                    View Changelog
                 </button>
             ) : null}
             {!updating ? (
