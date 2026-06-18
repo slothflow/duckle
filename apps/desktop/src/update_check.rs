@@ -94,6 +94,19 @@ fn epoch_to_human(epoch: i64) -> String {
         .unwrap_or_else(|| "unknown".into())
 }
 
+/// GitHub API base. Hardcoded in real builds so the update source can never be
+/// redirected by the environment (a security property). The `update-selftest`
+/// feature - compiled OUT of releases - lets a local test point the check at a
+/// localhost fake-release via DUCKLE_UPDATE_API_BASE.
+#[cfg(not(feature = "update-selftest"))]
+fn api_base() -> String {
+    "https://api.github.com".to_string()
+}
+#[cfg(feature = "update-selftest")]
+fn api_base() -> String {
+    std::env::var("DUCKLE_UPDATE_API_BASE").unwrap_or_else(|_| "https://api.github.com".to_string())
+}
+
 /// Fetch the latest release that ships this OS's asset and decide whether it
 /// is newer than the running build. Network / parse errors are returned as a
 /// non-fatal `error` with `update_available = false` so the UI just stays
@@ -110,7 +123,7 @@ pub fn check() -> UpdateInfo {
 
     // List releases (newest first) rather than /releases/latest so prereleases
     // and same-tag re-rolls are both visible.
-    let url = format!("https://api.github.com/repos/{REPO}/releases?per_page=10");
+    let url = format!("{}/repos/{REPO}/releases?per_page=10", api_base());
     let resp = duckle_duckdb_engine::tls::http_agent()
         .get(&url)
         .set("User-Agent", "duckle-app")

@@ -239,6 +239,24 @@ pub fn selftest_main() -> ! {
     }
 }
 
+/// Feature-gated headless drive of the FULL `run()` (check -> download -> verify
+/// -> swap), i.e. exactly what the "Update now" button's command does minus the
+/// restart. Point check at a local fake-release with DUCKLE_UPDATE_API_BASE.
+/// Swaps THIS process's exe, so run it on a throwaway copy.
+#[cfg(feature = "update-selftest")]
+pub fn selftest_run_main() -> ! {
+    match run(|p| eprintln!("progress: {p:?}")) {
+        Ok(()) => {
+            println!("SELFTEST_RUN_OK");
+            std::process::exit(0);
+        }
+        Err(e) => {
+            println!("SELFTEST_RUN_ERR: {e}");
+            std::process::exit(4);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -8,5 +8,9 @@ fn main() {
     if std::env::args().any(|a| a == "--self-update-selftest") {
         duckle_desktop_lib::self_update_selftest();
     }
+    #[cfg(feature = "update-selftest")]
+    if std::env::args().any(|a| a == "--self-update-run") {
+        duckle_desktop_lib::self_update_run_selftest();
+    }
     duckle_desktop_lib::run();
 }

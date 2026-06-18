@@ -723,6 +723,13 @@ pub fn self_update_selftest() -> ! {
     self_update::selftest_main()
 }
 
+/// Test-only: drive the full update run() (check -> download -> verify -> swap)
+/// against a local fake-release. Compiled only with `--features update-selftest`.
+#[cfg(feature = "update-selftest")]
+pub fn self_update_run_selftest() -> ! {
+    self_update::selftest_run_main()
+}
+
 /// Write the embedded HOST duckle-runner bytes to a temp stub file and return
 /// the path. The host runner is always the BUILDER (run with `build ...`); for
 /// a same-OS target it is also the artifact stub. The file must have no open
