@@ -82,6 +82,7 @@ pub(crate) fn build_view_sql(
         "src.json" | "src.jsonl" => Ok(build_json_source(props)),
         "src.sqlite" => Ok(build_sqlite_source(props)),
         "src.duckdb" => Ok(build_duckdb_source(props)),
+        "src.ducklake.diff" => Ok(build_ducklake_diff(props)),
         "src.s3" | "src.gcs" | "src.azureblob" | "src.http"
         | "src.minio" | "src.r2" | "src.b2" => {
             // MinIO / R2 / B2 are S3-compatible; the endpoint lives in
@@ -3265,7 +3266,7 @@ pub(crate) fn attach_prelude(component_id: &str, props: &JsonValue) -> String {
         "snk.motherduck" => return md_attach(props, false),
         "src.quack" => return quack_attach(props, true),
         "snk.quack" => return quack_attach(props, false),
-        "src.ducklake" => return ducklake_attach(props, true),
+        "src.ducklake" | "src.ducklake.diff" => return ducklake_attach(props, true),
         "snk.ducklake" => return ducklake_attach(props, false),
         // BigQuery via the duckdb-bigquery community extension. The
         // user's prop 'project' becomes the BigQuery project ID; the
@@ -3388,6 +3389,36 @@ fn time_travel_clause(props: &JsonValue) -> String {
         return format!(" AT (TIMESTAMP => '{}')", sql_escape(ts.trim()));
     }
     String::new()
+}
+
+/// DuckLake Data Diff source (src.ducklake.diff): the row-level change feed
+/// between two explicit snapshots, via the global
+/// `ducklake_table_changes(catalog, schema, table, from, to)` (catalog +
+/// schema + table passed separately, which handles non-default schemas, unlike
+/// the catalog-method form). Emits a `change_type` column (insert / delete /
+/// update_preimage / update_postimage) plus the row, so it doubles as a data
+/// diff / CI assertion when wired into a validator. Both versions are literals
+/// (the catalog is ATTACHed as duckle_src by attach_prelude); pick them with
+/// the Browse button.
+pub(crate) fn build_ducklake_diff(props: &JsonValue) -> String {
+    let table = string_prop(props, "table").filter(|s| !s.is_empty()).unwrap_or_default();
+    let schema = string_prop(props, "schema")
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| "main".into());
+    let ver = |k: &str| -> u64 {
+        props
+            .get(k)
+            .and_then(|v| v.as_u64())
+            .or_else(|| string_prop(props, k).and_then(|s| s.trim().parse::<u64>().ok()))
+            .unwrap_or(0)
+    };
+    format!(
+        "SELECT * FROM ducklake_table_changes('duckle_src', '{}', '{}', {}, {})",
+        sql_escape(&schema),
+        sql_escape(&table),
+        ver("fromVersion"),
+        ver("toVersion")
+    )
 }
 
 pub(crate) fn build_relational_source(component_id: &str, props: &JsonValue) -> Result<String, String> {

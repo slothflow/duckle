@@ -106,6 +106,7 @@ export const PALETTE: Category[] = [
                     src('delta', 'Delta Lake', 'available', 'Read Delta Lake tables via DuckDB delta_scan'),
                     src('ducklake', 'DuckLake', 'available', 'Read tables from a DuckLake catalog (DuckDB native lakehouse)'),
                     src('ducklake.changes', 'DuckLake CDC', 'available', 'Change-data-feed source: reads table_changes() since the last consumed snapshot (saved in workspace state), emitting row-level insert / delete / update_preimage / update_postimage with a change_type column. True incremental CDC for DuckLake-managed tables.'),
+                    src('ducklake.diff', 'DuckLake Data Diff', 'available', 'Data diff between two snapshots of a DuckLake table: emits the row-level change feed (insert / delete / update_preimage / update_postimage with a change_type column) between a chosen From and To snapshot. Pick snapshots with Browse; wire into a validator to assert expected changes in CI.'),
                 ],
             },
             {

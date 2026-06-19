@@ -941,6 +941,32 @@ function synthLakehouseSource(comp: ComponentDef): ComponentManifest {
             },
         ]);
     }
+    if (comp.id === 'src.ducklake.diff') {
+        // DuckLake Data Diff: the change feed between two explicit snapshots of
+        // one table. Pick the From / To snapshots with the Browse picker.
+        return base(comp, [
+            {
+                label: 'Catalog',
+                fields: [
+                    { key: 'path', label: 'Catalog path', kind: 'text', required: true, placeholder: '/var/lakes/catalog.ducklake', description: 'Path to the DuckLake catalog (a .ducklake file or metadata DB DSN).' },
+                ],
+            },
+            {
+                label: 'Table',
+                fields: [
+                    { key: 'schema', label: 'Schema', kind: 'text', defaultValue: 'main' },
+                    { key: 'table', label: 'Table', kind: 'text', required: true, placeholder: 'orders' },
+                ],
+            },
+            {
+                label: 'Snapshots to compare',
+                fields: [
+                    { key: 'fromVersion', label: 'From snapshot', kind: 'ducklake-snapshot', required: true, placeholder: 'e.g. 2', description: 'The earlier snapshot id. Click Browse to pick from the catalog.' },
+                    { key: 'toVersion', label: 'To snapshot', kind: 'ducklake-snapshot', required: true, placeholder: 'e.g. 5', description: 'The later snapshot id. Click Browse to pick from the catalog.' },
+                ],
+            },
+        ]);
+    }
     if (comp.id === 'src.ducklake') {
         // DuckLake attaches a catalog (path) and then names a specific
         // table inside it.

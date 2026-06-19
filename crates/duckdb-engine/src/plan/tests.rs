@@ -677,6 +677,17 @@
     }
 
     #[test]
+    fn ducklake_diff_builds_change_feed_between_versions() {
+        // src.ducklake.diff: the change feed between two explicit snapshots.
+        use serde_json::json;
+        let body = build_ducklake_diff(&json!({"schema":"main","table":"orders","fromVersion":2,"toVersion":5}));
+        assert_eq!(body, "SELECT * FROM ducklake_table_changes('duckle_src', 'main', 'orders', 2, 5)");
+        // string versions + default schema (main)
+        let b2 = build_ducklake_diff(&json!({"table":"orders","fromVersion":"1","toVersion":"3"}));
+        assert_eq!(b2, "SELECT * FROM ducklake_table_changes('duckle_src', 'main', 'orders', 1, 3)");
+    }
+
+    #[test]
     fn materialize_duckdb_temp_routes_to_duckdb_spec_without_path() {
         // materialize=duckdb persists the stage into a temp DuckDB file (no
         // user path).
