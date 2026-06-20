@@ -8,6 +8,7 @@
 //! breaking-change data-diff, and data contracts - build the resolver once.
 
 use serde_json::Value as JsonValue;
+use std::collections::HashMap;
 
 /// A source column an output column is derived from. `table` is the reference's
 /// qualifier as written (a table name or alias), if any - alias->real-table
@@ -111,6 +112,95 @@ fn collect_column_refs(expr: &JsonValue, out: &mut Vec<ColumnSource>) {
     }
 }
 
+// ---- Cross-stage stitching ---------------------------------------------
+//
+// A pipeline compiles to a DAG of stages; each stage's SQL has its own
+// column lineage (above). Stitching chains those per-stage maps so a final
+// output column traces back to the root source columns it actually came from.
+
+/// A resolved origin: the column at the node where it enters the pipeline (a
+/// source node with no upstream, or the deepest node the trace could reach).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RootColumn {
+    pub node: String,
+    pub column: String,
+}
+
+/// One node's lineage plus the upstream node ids feeding it, for stitching.
+#[derive(Debug, Clone)]
+pub struct NodeLineage {
+    pub outputs: Vec<OutputColumn>,
+    pub upstreams: Vec<String>,
+}
+
+/// Trace `column` of `node` back to its root source columns across the stage
+/// graph. A node with no upstreams (a source) is a root; a column whose source
+/// references an upstream node is followed into that node recursively.
+pub fn resolve_roots(
+    node: &str,
+    column: &str,
+    graph: &HashMap<String, NodeLineage>,
+) -> Vec<RootColumn> {
+    let mut roots = Vec::new();
+    resolve_inner(node, column, graph, &mut Vec::new(), &mut roots);
+    roots
+}
+
+fn resolve_inner(
+    node: &str,
+    column: &str,
+    graph: &HashMap<String, NodeLineage>,
+    visiting: &mut Vec<(String, String)>,
+    roots: &mut Vec<RootColumn>,
+) {
+    let key = (node.to_string(), column.to_string());
+    if visiting.contains(&key) {
+        return; // cycle guard
+    }
+    let push_root = |roots: &mut Vec<RootColumn>, n: &str, c: &str| {
+        let r = RootColumn { node: n.to_string(), column: c.to_string() };
+        if !roots.contains(&r) {
+            roots.push(r);
+        }
+    };
+    let nl = match graph.get(node) {
+        Some(n) => n,
+        // Unknown node (e.g. a base table / source we don't have lineage for).
+        None => return push_root(roots, node, column),
+    };
+    if nl.upstreams.is_empty() {
+        return push_root(roots, node, column); // a source node is a root
+    }
+    let oc = nl.outputs.iter().find(|o| o.name == column);
+    let oc = match oc {
+        Some(o) if !o.sources.is_empty() => o,
+        // No traceable derivation here - stop at this node.
+        _ => return push_root(roots, node, column),
+    };
+    visiting.push(key);
+    for src in &oc.sources {
+        match pick_upstream(src, nl) {
+            Some(u) => resolve_inner(&u, &src.column, graph, visiting, roots),
+            None => push_root(roots, node, &src.column),
+        }
+    }
+    visiting.pop();
+}
+
+/// Choose which upstream node a column reference came from: a matching table
+/// qualifier (alias/id), else the sole upstream when there is exactly one.
+fn pick_upstream(src: &ColumnSource, nl: &NodeLineage) -> Option<String> {
+    if let Some(t) = &src.table {
+        if let Some(u) = nl.upstreams.iter().find(|u| u.as_str() == t) {
+            return Some(u.clone());
+        }
+    }
+    if nl.upstreams.len() == 1 {
+        return Some(nl.upstreams[0].clone());
+    }
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -169,5 +259,72 @@ mod tests {
     fn non_select_yields_empty() {
         assert!(lineage_from_serialized_sql(&json!({ "error": false, "statements": [] })).is_empty());
         assert!(lineage_from_serialized_sql(&json!({})).is_empty());
+    }
+
+    fn oc(name: &str, sources: &[(Option<&str>, &str)]) -> OutputColumn {
+        OutputColumn {
+            name: name.into(),
+            sources: sources
+                .iter()
+                .map(|(t, c)| ColumnSource { table: t.map(String::from), column: (*c).into() })
+                .collect(),
+        }
+    }
+
+    #[test]
+    fn stitches_lineage_across_stages_to_root_sources() {
+        // s (source) -> t1: total = b + c, region passthrough -> t2: grand = total
+        let mut g: HashMap<String, NodeLineage> = HashMap::new();
+        g.insert("s".into(), NodeLineage { outputs: vec![], upstreams: vec![] });
+        g.insert(
+            "t1".into(),
+            NodeLineage {
+                outputs: vec![oc("total", &[(None, "b"), (None, "c")]), oc("region", &[(None, "region")])],
+                upstreams: vec!["s".into()],
+            },
+        );
+        g.insert(
+            "t2".into(),
+            NodeLineage {
+                outputs: vec![oc("grand", &[(None, "total")]), oc("reg", &[(None, "region")])],
+                upstreams: vec!["t1".into()],
+            },
+        );
+        let mut grand = resolve_roots("t2", "grand", &g);
+        grand.sort_by(|a, b| a.column.cmp(&b.column));
+        assert_eq!(
+            grand,
+            vec![
+                RootColumn { node: "s".into(), column: "b".into() },
+                RootColumn { node: "s".into(), column: "c".into() },
+            ]
+        );
+        assert_eq!(
+            resolve_roots("t2", "reg", &g),
+            vec![RootColumn { node: "s".into(), column: "region".into() }]
+        );
+    }
+
+    #[test]
+    fn stitch_join_uses_qualifier_to_pick_upstream() {
+        // j joins a and b; id <- a.id, cust <- b.name (qualifier disambiguates).
+        let mut g: HashMap<String, NodeLineage> = HashMap::new();
+        g.insert("a".into(), NodeLineage { outputs: vec![], upstreams: vec![] });
+        g.insert("b".into(), NodeLineage { outputs: vec![], upstreams: vec![] });
+        g.insert(
+            "j".into(),
+            NodeLineage {
+                outputs: vec![oc("id", &[(Some("a"), "id")]), oc("cust", &[(Some("b"), "name")])],
+                upstreams: vec!["a".into(), "b".into()],
+            },
+        );
+        assert_eq!(
+            resolve_roots("j", "cust", &g),
+            vec![RootColumn { node: "b".into(), column: "name".into() }]
+        );
+        assert_eq!(
+            resolve_roots("j", "id", &g),
+            vec![RootColumn { node: "a".into(), column: "id".into() }]
+        );
     }
 }
