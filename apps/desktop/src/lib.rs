@@ -1125,6 +1125,57 @@ struct WebPanel {
 
 static WEB_PANEL: std::sync::Mutex<Option<WebPanel>> = std::sync::Mutex::new(None);
 
+/// `duckle serve [args...]` - launch the web management console straight from a
+/// terminal using just the desktop binary (no separate runner download needed).
+/// Delegates to the embedded headless runner's `serve` subcommand and forwards
+/// any args (`--workspace`, `--port`, ...). Returns false when the first arg is
+/// not `serve` (normal GUI launch); on the serve path it never returns - it runs
+/// the server and exits with its status.
+pub fn run_serve_cli() -> bool {
+    let mut it = std::env::args();
+    let _exe = it.next();
+    if it.next().as_deref() != Some("serve") {
+        return false;
+    }
+    let rest: Vec<String> = it.collect();
+    // A GUI-subsystem binary has no console of its own; reattach to the terminal
+    // that launched us so the runner's output is visible.
+    #[cfg(windows)]
+    unsafe {
+        extern "system" {
+            fn AttachConsole(dw_process_id: u32) -> i32;
+        }
+        AttachConsole(0xFFFF_FFFFu32); // ATTACH_PARENT_PROCESS
+    }
+    if EMBEDDED_RUNNER.is_empty() {
+        eprintln!("duckle serve: this build does not bundle the runner");
+        std::process::exit(1);
+    }
+    let dir = std::env::temp_dir().join("duckle-serve");
+    let _ = std::fs::create_dir_all(&dir);
+    let suffix = if cfg!(windows) { ".exe" } else { "" };
+    let runner = dir.join(format!("duckle-runner{suffix}"));
+    if let Err(e) = write_if_changed(&runner, EMBEDDED_RUNNER) {
+        eprintln!("duckle serve: {e}");
+        std::process::exit(1);
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(&runner, std::fs::Permissions::from_mode(0o755));
+    }
+    let code = std::process::Command::new(&runner)
+        .arg("serve")
+        .args(&rest)
+        .status()
+        .map(|s| s.code().unwrap_or(0))
+        .unwrap_or_else(|e| {
+            eprintln!("duckle serve: failed to start: {e}");
+            1
+        });
+    std::process::exit(code);
+}
+
 /// Stage the embedded host runner into a stable app-data dir so the long-lived
 /// `serve` process runs from a fixed path (not a temp stub).
 fn stage_panel_runner(app_data: &std::path::Path) -> Result<PathBuf, String> {

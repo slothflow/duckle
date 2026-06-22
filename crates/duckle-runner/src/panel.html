@@ -44,6 +44,9 @@
   .side-foot { padding: 14px 16px; border-top: 1px solid var(--line); font-size: 12px; color: var(--faint); }
   .side-foot .ws { color: var(--muted); word-break: break-all; font-family: Consolas, monospace; font-size: 11px; margin-top: 3px; }
   .side-foot label { display: flex; align-items: center; gap: 7px; margin-top: 10px; color: var(--muted); cursor: pointer; }
+  .side-foot .cli { margin-top: 12px; color: var(--faint); }
+  .side-foot .cli code { display: block; margin-top: 4px; padding: 6px 8px; background: #0c0f18; border: 1px solid var(--line);
+    border-radius: 7px; color: var(--lemon); font-family: Consolas, monospace; font-size: 11px; word-break: break-all; user-select: all; }
 
   /* Main */
   main { flex: 1; height: 100vh; overflow-y: auto; }
@@ -151,6 +154,7 @@
   <div class="side-foot">
     Workspace
     <div class="ws" id="ws">-</div>
+    <div class="cli">Start from a terminal:<br><code id="cli-cmd">duckle serve</code></div>
     <label><input type="checkbox" id="autorefresh"> Auto-refresh (5s)</label>
   </div>
 </aside>
@@ -274,7 +278,9 @@ function jobStats(id){
 async function refreshAll(){
   const [s,p,r]=await Promise.all([api('/api/summary'),api('/api/pipelines'),api('/api/runs')]);
   PIPES=p.pipelines||[]; RUNS=r.runs||[];
-  $('ws').textContent=(s.workspace||'').replace(/^\\\\\?\\/,'');
+  const wsClean=(s.workspace||'').replace(/^\\\\\?\\/,'');
+  $('ws').textContent=wsClean;
+  $('cli-cmd').textContent = wsClean ? `duckle serve --workspace "${wsClean}"` : 'duckle serve';
   $('m-pipes').textContent=s.pipelineCount; $('m-runs').textContent=s.totalRuns;
   $('m-failed').textContent=s.failed;
   $('m-rate').textContent=s.totalRuns? Math.round(s.ok/s.totalRuns*100)+'%':'-';

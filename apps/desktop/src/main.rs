@@ -12,5 +12,10 @@ fn main() {
     if std::env::args().any(|a| a == "--self-update-run") {
         duckle_desktop_lib::self_update_run_selftest();
     }
+    // `duckle serve [...]` runs the web management console from a terminal,
+    // delegating to the embedded headless runner. Anything else is a GUI launch.
+    if duckle_desktop_lib::run_serve_cli() {
+        return;
+    }
     duckle_desktop_lib::run();
 }
