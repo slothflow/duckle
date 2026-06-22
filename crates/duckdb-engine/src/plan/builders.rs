@@ -148,7 +148,11 @@ pub(crate) fn build_view_sql(
         "qa.matchgroup" => build_matchgroup(inputs, props),
         "qa.expect" => build_expect(inputs, props),
         "qa.contract" => build_contract(inputs, props),
+        "qa.freshness" => build_freshness(inputs, props),
+        "qa.outlier" => build_outlier(inputs, props, false),
         "xf.surrogatekey" => build_surrogate_key(inputs, props),
+        "xf.sessionize" => build_sessionize(inputs, props),
+        "xf.cdc.scd3" => build_scd3(inputs, props),
         "qa.sample.adv" => build_sample_adv(inputs, props),
         "qa.refintegrity" => build_refintegrity(inputs, props, false),
         "qa.profile.adv" => build_profile_adv(inputs, props),
@@ -2507,6 +2511,176 @@ pub(crate) fn build_classify(inputs: &NodeInputs, props: &JsonValue) -> Result<S
     ))
 }
 
+/// SCD Type 3: keep the PREVIOUS value of each tracked attribute in a sibling
+/// previous_<col> column. main = current rows; the prior snapshot is on the
+/// lookup port (mirrors build_scd2). Joined on keyColumns (NULL previous for new
+/// keys). Optional effective-date stamp.
+pub(crate) fn build_scd3(inputs: &NodeInputs, props: &JsonValue) -> Result<String, String> {
+    let cur = inputs.main().ok_or_else(|| missing_input_msg("xf.cdc.scd3"))?;
+    let prev = inputs.first_lookup().ok_or_else(|| {
+        "SCD3 needs a 'previous' input on the lookup port (the prior snapshot)".to_string()
+    })?;
+    let keys = columns_list(props, "keyColumns");
+    if keys.is_empty() {
+        return Err("SCD3 needs key columns".to_string());
+    }
+    let tracked = columns_list(props, "trackColumns");
+    if tracked.is_empty() {
+        return Err("SCD3 needs at least one column to track a previous value for".to_string());
+    }
+    let key_eq = keys.iter().map(|k| { let q = quote_ident(k); format!("p.{q} = c.{q}") }).collect::<Vec<_>>().join(" AND ");
+    let prev_cols = tracked.iter()
+        .map(|t| format!("p.{src} AS {dst}", src = quote_ident(t), dst = quote_ident(&format!("previous_{t}"))))
+        .collect::<Vec<_>>().join(", ");
+    let eff_select = string_prop(props, "effectiveDateColumn")
+        .filter(|s| !s.trim().is_empty())
+        .map(|name| format!(", CURRENT_TIMESTAMP AS {}", quote_ident(name.trim())))
+        .unwrap_or_default();
+    Ok(format!(
+        "SELECT c.*, {prev_cols}{eff_select} FROM {cur} c LEFT JOIN {prev} p ON {key_eq}",
+        cur = quote_ident(cur), prev = quote_ident(prev)
+    ))
+}
+
+/// qa.outlier: statistical outlier detection. Inliers pass; outliers route to
+/// the reject port (mirrors build_quality). method=iqr (outside [Q1-k*IQR,
+/// Q3+k*IQR], k default 1.5) or zscore (abs((x-mean)/stddev) > threshold,
+/// default 3). Stats are window aggregates over the whole input; NULLs pass;
+/// zero spread -> nothing is an outlier (also avoids /0). reject=true yields the
+/// outlier rows.
+pub(crate) fn build_outlier(inputs: &NodeInputs, props: &JsonValue, reject: bool) -> Result<String, String> {
+    let upstream = inputs.main().ok_or_else(|| missing_input_msg("qa.outlier"))?;
+    let column = string_prop(props, "column").filter(|s| !s.is_empty())
+        .ok_or_else(|| "Outlier detection needs a numeric column".to_string())?;
+    let method = string_prop(props, "method").unwrap_or_else(|| "iqr".into());
+    let col = quote_ident(&column);
+    let val = format!("CAST({} AS DOUBLE)", col);
+    let default = if method == "zscore" { 3.0 } else { 1.5 };
+    let sensitivity = props.get("sensitivity").and_then(|v| v.as_f64()).unwrap_or(default);
+    if !(sensitivity > 0.0) {
+        return Err("Outlier sensitivity must be greater than 0".into());
+    }
+    let (helpers, inlier) = match method.as_str() {
+        "zscore" => (
+            format!("avg({val}) OVER () AS __dq_mean, stddev_pop({val}) OVER () AS __dq_sd"),
+            format!("{col} IS NULL OR __dq_sd = 0 OR abs(({val} - __dq_mean) / __dq_sd) <= {sensitivity}"),
+        ),
+        _ => (
+            format!("quantile_cont({val}, 0.25) OVER () AS __dq_q1, quantile_cont({val}, 0.75) OVER () AS __dq_q3"),
+            format!("{col} IS NULL OR {val} BETWEEN (__dq_q1 - {sensitivity} * (__dq_q3 - __dq_q1)) AND (__dq_q3 + {sensitivity} * (__dq_q3 - __dq_q1))"),
+        ),
+    };
+    let exclude = if method == "zscore" { "__dq_mean, __dq_sd" } else { "__dq_q1, __dq_q3" };
+    let guard = if reject { "NOT COALESCE" } else { "COALESCE" };
+    Ok(format!(
+        "SELECT * EXCLUDE ({exclude}) FROM (SELECT *, {helpers} FROM {up}) WHERE {guard}(({inlier}), TRUE)",
+        up = quote_ident(upstream)
+    ))
+}
+
+/// xf.sessionize: assign a session id to event rows by inactivity gap. Within
+/// each partition, ordered by the timestamp, a new session starts when the gap
+/// from the previous event exceeds the threshold; session_id is a cumulative sum
+/// of the new-session flag, session_seq the 1-based event index within a session.
+pub(crate) fn build_sessionize(inputs: &NodeInputs, props: &JsonValue) -> Result<String, String> {
+    let upstream = inputs.main().ok_or_else(|| missing_input_msg("xf.sessionize"))?;
+    let order_col = string_prop(props, "orderBy").filter(|s| !s.trim().is_empty())
+        .ok_or_else(|| "Sessionize needs an Order By column (the event timestamp)".to_string())?;
+    let gap = props.get("gap").and_then(|v| v.as_f64())
+        .or_else(|| num_prop(props, "gap").and_then(|s| s.parse::<f64>().ok()))
+        .filter(|g| *g > 0.0)
+        .ok_or_else(|| "Sessionize needs a positive inactivity gap".to_string())?;
+    let unit = string_prop(props, "gapUnit").unwrap_or_else(|| "minutes".into());
+    let seconds_per = match unit.to_lowercase().as_str() {
+        "second" | "seconds" => 1.0_f64,
+        "minute" | "minutes" => 60.0,
+        "hour" | "hours" => 3_600.0,
+        other => return Err(format!("Sessionize: unknown gap unit '{}' (use seconds | minutes | hours)", other)),
+    };
+    let gap_seconds = gap * seconds_per;
+    let gap_literal = if gap_seconds.fract() == 0.0 { format!("{}", gap_seconds as i64) } else { format!("{}", gap_seconds) };
+    let session_col = string_prop(props, "sessionColumn").filter(|s| !s.trim().is_empty()).unwrap_or_else(|| "session_id".into());
+    let partition = columns_list(props, "partitionBy");
+    let emit_seq = props.get("emitSeq").and_then(JsonValue::as_bool).unwrap_or(true);
+    let seq_col = string_prop(props, "seqColumn").filter(|s| !s.trim().is_empty()).unwrap_or_else(|| "session_seq".into());
+    let ord = quote_ident(&order_col);
+    let part_list = partition.iter().map(|c| quote_ident(c)).collect::<Vec<_>>().join(", ");
+    let part_clause = if partition.is_empty() { String::new() } else { format!("PARTITION BY {} ", part_list) };
+    let sid = quote_ident(&session_col);
+    let up = quote_ident(upstream);
+    let core = format!(
+        "WITH __flag AS (\
+           SELECT *, \
+             CASE WHEN lag({ord}) OVER w IS NULL \
+                    OR (epoch(CAST({ord} AS TIMESTAMP)) - epoch(CAST(lag({ord}) OVER w AS TIMESTAMP))) > {gap} \
+                  THEN 1 ELSE 0 END AS __new_sess \
+           FROM {up} WINDOW w AS ({part}ORDER BY {ord})\
+         ), \
+         __sid AS (\
+           SELECT * EXCLUDE (__new_sess), \
+             SUM(__new_sess) OVER ({part}ORDER BY {ord}) AS {sid} FROM __flag\
+         )",
+        ord = ord, gap = gap_literal, up = up, part = part_clause, sid = sid
+    );
+    if !emit_seq {
+        return Ok(format!("{core} SELECT * FROM __sid"));
+    }
+    let seq_part = if partition.is_empty() {
+        format!("PARTITION BY {sid} ", sid = sid)
+    } else {
+        format!("PARTITION BY {part}, {sid} ", part = part_list, sid = sid)
+    };
+    Ok(format!(
+        "{core} SELECT *, ROW_NUMBER() OVER ({seq_part}ORDER BY {ord}) AS {seq} FROM __sid",
+        seq_part = seq_part, ord = ord, seq = quote_ident(&seq_col)
+    ))
+}
+
+/// qa.freshness: data freshness / SLA gate. age = now - max(column) vs maxAge
+/// (minutes/hours/days). mode=gate passes rows through when fresh, else FAILS
+/// THE RUN (MATERIALIZED CTE + error() read in the outer WHERE, like
+/// qa.contract). mode=report emits one row (max_timestamp, age, threshold,
+/// is_fresh). Empty / all-null input is a vacuous pass.
+pub(crate) fn build_freshness(inputs: &NodeInputs, props: &JsonValue) -> Result<String, String> {
+    let upstream = inputs.main().ok_or_else(|| missing_input_msg("qa.freshness"))?;
+    let from = quote_ident(upstream);
+    let column = string_prop(props, "column").filter(|s| !s.trim().is_empty())
+        .ok_or_else(|| "Freshness Check needs a timestamp/date column".to_string())?;
+    let col = quote_ident(column.trim());
+    let max_age = num_prop(props, "maxAge").ok_or_else(|| "Freshness Check needs a maxAge (a number)".to_string())?;
+    let unit = string_prop(props, "maxAgeUnit").unwrap_or_else(|| "hours".into());
+    let (diff_unit, suffix) = match unit.as_str() {
+        "minutes" => ("minute", "minutes"),
+        "hours" => ("hour", "hours"),
+        "days" => ("day", "days"),
+        other => return Err(format!("Freshness Check: unknown maxAgeUnit '{}' (use minutes | hours | days)", other)),
+    };
+    let age = format!("date_diff('{unit}', MAX(CAST({col} AS TIMESTAMP)), CURRENT_TIMESTAMP)", unit = diff_unit, col = col);
+    let mode = string_prop(props, "mode").unwrap_or_else(|| "gate".into());
+    match mode.as_str() {
+        "gate" => {
+            let msg_prefix = sql_escape("Data is stale: ");
+            let msg_suffix = sql_escape(&format!(" {} old, threshold {} {}", suffix, max_age, suffix));
+            Ok(format!(
+                "WITH _duckle_freshness AS MATERIALIZED (\
+                   SELECT CASE \
+                     WHEN MAX(CAST({col} AS TIMESTAMP)) IS NULL THEN 'ok' \
+                     WHEN {age} <= {max_age} THEN 'ok' \
+                     ELSE error('{prefix}' || {age} || '{suffix}') \
+                   END AS result FROM {from}) \
+                 SELECT u.* FROM {from} u WHERE (SELECT result FROM _duckle_freshness) IS NOT NULL",
+                col = col, age = age, max_age = max_age, prefix = msg_prefix, suffix = msg_suffix, from = from
+            ))
+        }
+        "report" => Ok(format!(
+            "SELECT MAX(CAST({col} AS TIMESTAMP)) AS max_timestamp, {age} AS age_{suffix}, \
+                    {max_age} AS threshold_{suffix}, ({age} <= {max_age}) AS is_fresh FROM {from}",
+            col = col, age = age, suffix = suffix, max_age = max_age, from = from
+        )),
+        other => Err(format!("Freshness Check: unknown mode '{}' (use gate | report)", other)),
+    }
+}
+
 /// qa.contract: a DATA CONTRACT enforcement gate. Holds the same rule suite as
 /// qa.expect ({column, check, args}: not_null / unique / in_set / in_range /
 /// regex / non_negative), but instead of a scorecard it passes EVERY upstream
@@ -2826,6 +3000,8 @@ pub(crate) fn build_reject_sql(
         }
         // Orphan rows (main key absent from the reference) go to the reject port.
         "qa.refintegrity" => Ok(Some(build_refintegrity(inputs, props, true)?)),
+        // Statistical outliers go to the reject port; inliers pass.
+        "qa.outlier" => Ok(Some(build_outlier(inputs, props, true)?)),
         _ => Ok(None),
     }
 }

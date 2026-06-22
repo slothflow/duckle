@@ -1,6 +1,6 @@
 {
   "version": "1",
-  "componentCount": 344,
+  "componentCount": 348,
   "components": [
     {
       "id": "src.csv",
@@ -16137,6 +16137,130 @@
       }
     },
     {
+      "id": "xf.sessionize",
+      "label": "Sessionize",
+      "kind": "transform",
+      "availability": "available",
+      "summary": "Assign a session id to event rows by inactivity gap (clickstream / analytics prep): a new session starts when the time gap from the previous event in the partition exceeds the threshold. Emits session_id (per-partition running integer) and optionally session_seq (event index within the session).",
+      "ports": {
+        "inputs": [
+          {
+            "id": "main",
+            "label": "main",
+            "type": "main"
+          }
+        ],
+        "outputs": [
+          {
+            "id": "main",
+            "label": "main",
+            "type": "main"
+          },
+          {
+            "id": "reject",
+            "label": "reject",
+            "type": "reject",
+            "optional": true
+          }
+        ]
+      },
+      "manifest": {
+        "id": "xf.sessionize",
+        "kind": "transform",
+        "label": "Sessionize",
+        "description": "Assign a session id to event rows by inactivity gap (clickstream / analytics prep): a new session starts when the time gap from the previous event in the partition exceeds the threshold. Emits session_id (per-partition running integer) and optionally session_seq (event index within the session).",
+        "schemaSource": "declared",
+        "sections": [
+          {
+            "label": "Sessionize",
+            "fields": [
+              {
+                "key": "partitionBy",
+                "label": "Partition by",
+                "kind": "columns",
+                "description": "The entity the sessions belong to, e.g. the user id column(s). Leave empty to sessionize the whole input as one stream."
+              },
+              {
+                "key": "orderBy",
+                "label": "Order by (timestamp)",
+                "kind": "column",
+                "required": true,
+                "description": "The event timestamp / order column. Sessions are computed in this order within each partition."
+              },
+              {
+                "key": "gap",
+                "label": "Inactivity gap",
+                "kind": "number",
+                "required": true,
+                "defaultValue": 30,
+                "description": "A new session starts when the gap from the previous event exceeds this threshold."
+              },
+              {
+                "key": "gapUnit",
+                "label": "Gap unit",
+                "kind": "select",
+                "defaultValue": "minutes",
+                "options": [
+                  {
+                    "label": "seconds",
+                    "value": "seconds"
+                  },
+                  {
+                    "label": "minutes",
+                    "value": "minutes"
+                  },
+                  {
+                    "label": "hours",
+                    "value": "hours"
+                  }
+                ]
+              },
+              {
+                "key": "sessionColumn",
+                "label": "Session id column",
+                "kind": "text",
+                "placeholder": "session_id"
+              },
+              {
+                "key": "emitSeq",
+                "label": "Add session_seq (event index within session)",
+                "kind": "bool",
+                "defaultValue": true
+              },
+              {
+                "key": "seqColumn",
+                "label": "Session seq column",
+                "kind": "text",
+                "placeholder": "session_seq"
+              }
+            ]
+          }
+        ],
+        "ports": {
+          "inputs": [
+            {
+              "id": "main",
+              "label": "main",
+              "type": "main"
+            }
+          ],
+          "outputs": [
+            {
+              "id": "main",
+              "label": "main",
+              "type": "main"
+            },
+            {
+              "id": "reject",
+              "label": "reject",
+              "type": "reject",
+              "optional": true
+            }
+          ]
+        }
+      }
+    },
+    {
       "id": "xf.regex",
       "label": "Regex Replace",
       "kind": "transform",
@@ -21939,6 +22063,115 @@
                 "label": "Is-current flag column",
                 "kind": "text",
                 "defaultValue": "is_current"
+              }
+            ]
+          }
+        ],
+        "ports": {
+          "inputs": [
+            {
+              "id": "main",
+              "label": "new",
+              "type": "main"
+            },
+            {
+              "id": "lookup",
+              "label": "previous",
+              "type": "lookup"
+            }
+          ],
+          "outputs": [
+            {
+              "id": "main",
+              "label": "changed",
+              "type": "main"
+            },
+            {
+              "id": "filter",
+              "label": "unchanged",
+              "type": "filter",
+              "optional": true
+            },
+            {
+              "id": "reject",
+              "label": "reject",
+              "type": "reject",
+              "optional": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "xf.cdc.scd3",
+      "label": "SCD Type 3",
+      "kind": "transform",
+      "availability": "available",
+      "summary": "Keep the PREVIOUS value of each tracked attribute in a sibling previous_<col> column. Main input is the current rows; connect the prior snapshot to the previous (lookup) port. Per tracked column, outputs current + previous_<col> joined on the key (NULL for new keys). Optional effective-date stamp.",
+      "ports": {
+        "inputs": [
+          {
+            "id": "main",
+            "label": "new",
+            "type": "main"
+          },
+          {
+            "id": "lookup",
+            "label": "previous",
+            "type": "lookup"
+          }
+        ],
+        "outputs": [
+          {
+            "id": "main",
+            "label": "changed",
+            "type": "main"
+          },
+          {
+            "id": "filter",
+            "label": "unchanged",
+            "type": "filter",
+            "optional": true
+          },
+          {
+            "id": "reject",
+            "label": "reject",
+            "type": "reject",
+            "optional": true
+          }
+        ]
+      },
+      "manifest": {
+        "id": "xf.cdc.scd3",
+        "kind": "transform",
+        "label": "SCD Type 3",
+        "description": "Keep the PREVIOUS value of each tracked attribute in a sibling previous_<col> column. Main input is the current rows; connect the prior snapshot to the previous (lookup) port. Per tracked column, outputs current + previous_<col> joined on the key (NULL for new keys). Optional effective-date stamp.",
+        "schemaSource": "declared",
+        "sections": [
+          {
+            "label": "Keys",
+            "fields": [
+              {
+                "key": "naturalKey",
+                "label": "Natural key columns",
+                "kind": "columns",
+                "required": true
+              },
+              {
+                "key": "compareColumns",
+                "label": "Columns to compare",
+                "kind": "columns"
+              }
+            ]
+          },
+          {
+            "label": "Behavior",
+            "fields": [
+              {
+                "key": "rejectUnchanged",
+                "label": "Drop unchanged rows",
+                "kind": "bool",
+                "defaultValue": true
               }
             ]
           }
@@ -33464,6 +33697,117 @@
       }
     },
     {
+      "id": "qa.outlier",
+      "label": "Outlier Detection",
+      "kind": "quality",
+      "availability": "available",
+      "summary": "Pass in-distribution rows; route statistical outliers (IQR or z-score over the chosen numeric column) to the reject port. NULLs and zero-spread data always pass.",
+      "ports": {
+        "inputs": [
+          {
+            "id": "main",
+            "label": "main",
+            "type": "main"
+          }
+        ],
+        "outputs": [
+          {
+            "id": "main",
+            "label": "pass",
+            "type": "main"
+          },
+          {
+            "id": "reject",
+            "label": "reject",
+            "type": "reject"
+          }
+        ]
+      },
+      "manifest": {
+        "id": "qa.outlier",
+        "kind": "transform",
+        "label": "Outlier Detection",
+        "description": "Pass in-distribution rows; route statistical outliers (IQR or z-score over the chosen numeric column) to the reject port. NULLs and zero-spread data always pass.",
+        "schemaSource": "upstream",
+        "sections": [
+          {
+            "label": "Outlier detection",
+            "fields": [
+              {
+                "key": "column",
+                "label": "Numeric column",
+                "kind": "column",
+                "required": true
+              },
+              {
+                "key": "method",
+                "label": "Method",
+                "kind": "select",
+                "defaultValue": "iqr",
+                "options": [
+                  {
+                    "label": "IQR (Tukey fences)",
+                    "value": "iqr"
+                  },
+                  {
+                    "label": "Z-score (standard deviations)",
+                    "value": "zscore"
+                  }
+                ]
+              },
+              {
+                "key": "sensitivity",
+                "label": "Sensitivity",
+                "kind": "number",
+                "description": "IQR: k multiplier (default 1.5; outside [Q1 - k*IQR, Q3 + k*IQR]). Z-score: threshold (default 3; abs((x - mean) / stddev) above this)."
+              },
+              {
+                "key": "onFail",
+                "label": "On failure",
+                "kind": "select",
+                "defaultValue": "reject",
+                "options": [
+                  {
+                    "label": "Send to reject port",
+                    "value": "reject"
+                  },
+                  {
+                    "label": "Log warning, keep row",
+                    "value": "warn"
+                  },
+                  {
+                    "label": "Fail pipeline",
+                    "value": "fail"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "ports": {
+          "inputs": [
+            {
+              "id": "main",
+              "label": "main",
+              "type": "main"
+            }
+          ],
+          "outputs": [
+            {
+              "id": "main",
+              "label": "pass",
+              "type": "main"
+            },
+            {
+              "id": "reject",
+              "label": "reject",
+              "type": "reject"
+            }
+          ]
+        }
+      }
+    },
+    {
       "id": "qa.profile",
       "label": "Column Profile",
       "kind": "quality",
@@ -34424,6 +34768,120 @@
                 "kind": "key-value",
                 "required": true,
                 "description": "column -> check. Checks: not_null, unique, non_negative, or with args after a colon: in_set:a,b,c | in_range:min,max | regex:pattern. If any rule is violated the run fails with a message naming the failed rule(s); otherwise all rows pass through unchanged."
+              }
+            ]
+          }
+        ],
+        "ports": {
+          "inputs": [
+            {
+              "id": "main",
+              "label": "main",
+              "type": "main"
+            }
+          ],
+          "outputs": [
+            {
+              "id": "main",
+              "label": "pass",
+              "type": "main"
+            },
+            {
+              "id": "reject",
+              "label": "reject",
+              "type": "reject"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "qa.freshness",
+      "label": "Freshness Check (SLA Gate)",
+      "kind": "quality",
+      "availability": "available",
+      "summary": "Assert the data is recent enough: computes data age = now - max(timestamp column) and checks it against a maxAge (in minutes / hours / days). Gate mode passes every row through unchanged when the freshest row is within the SLA and fails the run with a clear message when it is not. Report mode emits a one-row scorecard (max_timestamp, age, threshold, is_fresh) for dashboards or CI.",
+      "ports": {
+        "inputs": [
+          {
+            "id": "main",
+            "label": "main",
+            "type": "main"
+          }
+        ],
+        "outputs": [
+          {
+            "id": "main",
+            "label": "pass",
+            "type": "main"
+          },
+          {
+            "id": "reject",
+            "label": "reject",
+            "type": "reject"
+          }
+        ]
+      },
+      "manifest": {
+        "id": "qa.freshness",
+        "kind": "transform",
+        "label": "Freshness Check (SLA Gate)",
+        "description": "Assert the data is recent enough: computes data age = now - max(timestamp column) and checks it against a maxAge (in minutes / hours / days). Gate mode passes every row through unchanged when the freshest row is within the SLA and fails the run with a clear message when it is not. Report mode emits a one-row scorecard (max_timestamp, age, threshold, is_fresh) for dashboards or CI.",
+        "schemaSource": "upstream",
+        "sections": [
+          {
+            "label": "Freshness",
+            "fields": [
+              {
+                "key": "column",
+                "label": "Timestamp column",
+                "kind": "column",
+                "required": true,
+                "description": "A timestamp or date column. Data age is computed as now - max(this column)."
+              },
+              {
+                "key": "maxAge",
+                "label": "Max age",
+                "kind": "number",
+                "required": true,
+                "defaultValue": 24,
+                "description": "The freshness SLA: the newest row must be no older than this."
+              },
+              {
+                "key": "maxAgeUnit",
+                "label": "Unit",
+                "kind": "select",
+                "defaultValue": "hours",
+                "options": [
+                  {
+                    "label": "Minutes",
+                    "value": "minutes"
+                  },
+                  {
+                    "label": "Hours",
+                    "value": "hours"
+                  },
+                  {
+                    "label": "Days",
+                    "value": "days"
+                  }
+                ]
+              },
+              {
+                "key": "mode",
+                "label": "Mode",
+                "kind": "select",
+                "defaultValue": "gate",
+                "options": [
+                  {
+                    "label": "Gate (fail the run if stale)",
+                    "value": "gate"
+                  },
+                  {
+                    "label": "Report (emit a one-row scorecard)",
+                    "value": "report"
+                  }
+                ]
               }
             ]
           }

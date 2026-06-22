@@ -307,6 +307,7 @@ export const PALETTE: Category[] = [
                     xf('first', 'First Value', 'available'),
                     xf('last', 'Last Value', 'available'),
                     xf('ntile', 'NTile', 'available'),
+                    xf('sessionize', 'Sessionize', 'available', 'Assign a session id to event rows by inactivity gap (clickstream / analytics prep): a new session starts when the time gap from the previous event in the partition exceeds the threshold. Emits session_id (per-partition running integer) and optionally session_seq (event index within the session).'),
                 ],
             },
             {
@@ -414,6 +415,7 @@ export const PALETTE: Category[] = [
                     xf('diffsummary', 'Diff Summary', 'available', 'Reduce a change feed (a change_type column, e.g. from DuckLake Data Diff) to a single summary row: added / removed / updated / total_changes counts plus a ready-made summary text. Feed it into LLM Transform for an AI narrative, or into a validator to assert expected counts in CI.'),
                     xf('cdc.scd1', 'SCD Type 1', 'available', 'Resolved current state: cur + prev rows whose key is not in cur'),
                     xf('cdc.scd2', 'SCD Type 2', 'available', 'Maintain versioned history: close changed rows, insert new versions'),
+                    xf('cdc.scd3', 'SCD Type 3', 'available', 'Keep the PREVIOUS value of each tracked attribute in a sibling previous_<col> column. Main input is the current rows; connect the prior snapshot to the previous (lookup) port. Per tracked column, outputs current + previous_<col> joined on the key (NULL for new keys). Optional effective-date stamp.'),
                     xf('cdc.upsert', 'Merge / Upsert', 'available', 'Emit the upsert payload: new + changed rows from cur'),
                     xf('row_hash', 'Row Hash (fingerprint)', 'available', 'Hash N columns into one fingerprint column. md5 / sha1 / sha256. Stable across runs - feed downstream diff / dedup / change detection'),
                     xf('audit', 'Audit Stamp', 'available', 'Append _loaded_at / _loaded_date / _source / _batch_id columns to every row. Standard warehouse provenance pattern'),
@@ -645,6 +647,7 @@ export const PALETTE: Category[] = [
                     qa('range', 'Range Check', 'available', 'Pass in-range rows; rest to reject'),
                     qa('notnull', 'Not-Null Check', 'available', 'Pass rows with no nulls; rest to reject'),
                     qa('unique', 'Uniqueness Check', 'available', 'Pass first per key; duplicates to reject'),
+                    qa('outlier', 'Outlier Detection', 'available', 'Pass in-distribution rows; route statistical outliers (IQR or z-score over the chosen numeric column) to the reject port. NULLs and zero-spread data always pass.'),
                 ],
             },
             {
@@ -669,6 +672,7 @@ export const PALETTE: Category[] = [
                     qa('matchgroup', 'Match Grouping (Cluster IDs)', 'available', 'Turn a list of matched record pairs into one stable cluster id per record. Walks the transitive closure of the matches (a~b and b~c put a, b, c in one cluster) and assigns each id the cluster representative (the smallest reachable id). Pairs with Record Match. Output: id, cluster_id.'),
                     qa('expect', 'Expectations', 'available', 'Run a reusable suite of data-quality expectations (not-null, unique, in-set, in-range, regex, non-negative) and emit a scorecard: one row per rule with total, failed, pass_rate, and passed. The native, no-Python answer to declarative data contracts.'),
                     qa('contract', 'Data Contract', 'available', 'Enforce a data contract: the same rule suite as Expectations (not-null, unique, in-set, in-range, regex, non-negative), but as a GATE. Passes every row through unchanged when all rules hold, and fails the run with a clear error naming the violated rule(s) when any rule breaks. Drop it before a sink or scheduled load to block bad data in CI.'),
+                    qa('freshness', 'Freshness Check (SLA Gate)', 'available', 'Assert the data is recent enough: computes data age = now - max(timestamp column) and checks it against a maxAge (in minutes / hours / days). Gate mode passes every row through unchanged when the freshest row is within the SLA and fails the run with a clear message when it is not. Report mode emits a one-row scorecard (max_timestamp, age, threshold, is_fresh) for dashboards or CI.'),
                     qa('sample.adv', 'Sample (Reproducible %)', 'available', 'Take a percentage sample of rows. Reservoir (even per-row probability) or Bernoulli (independent per row); set a seed to make the draw reproducible so the same rows are picked every run. All columns are preserved.'),
                     qa('refintegrity', 'Referential Integrity', 'available', 'Check a foreign key against a reference input (connect it to the lookup port): rows whose key exists in the reference pass through, orphan rows (key missing) route to the reject port. Pure semi-join / anti-join, no row fan-out on duplicate reference keys.'),
                     qa('link', 'Record Linkage', 'available', 'Fuzzy-link records across TWO inputs: the main input against a reference on the lookup port. Cross-compares the chosen key columns by string similarity (Jaro-Winkler or Levenshtein) and emits every candidate pair at or above the threshold as left_key, right_key, score. Unlike Record Match (self-join), this links two separate datasets.'),

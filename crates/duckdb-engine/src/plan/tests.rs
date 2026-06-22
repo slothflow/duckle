@@ -1395,6 +1395,77 @@
     }
 
     #[test]
+    fn scd3_keeps_previous_value_in_sibling_column() {
+        let mut ni = NodeInputs::default();
+        ni.ports.insert("main".into(), vec!["c1".into()]);
+        ni.ports.insert("lookup".into(), vec!["p1".into()]);
+        let props = serde_json::json!({ "keyColumns": ["id"], "trackColumns": ["v"], "effectiveDateColumn": "effective_date" });
+        let sql = build_scd3(&ni, &props).unwrap();
+        assert_eq!(
+            sql,
+            "SELECT c.*, p.\"v\" AS \"previous_v\", CURRENT_TIMESTAMP AS \"effective_date\" FROM \"c1\" c LEFT JOIN \"p1\" p ON p.\"id\" = c.\"id\"",
+            "got: {}", sql
+        );
+        let multi = build_scd3(&ni, &serde_json::json!({ "keyColumns": ["region", "id"], "trackColumns": ["name", "score"] })).unwrap();
+        assert!(multi.contains("p.\"name\" AS \"previous_name\"") && multi.contains("p.\"score\" AS \"previous_score\""), "got: {}", multi);
+        assert!(multi.contains("p.\"region\" = c.\"region\" AND p.\"id\" = c.\"id\""), "got: {}", multi);
+        assert!(!multi.contains("CURRENT_TIMESTAMP"), "no effective date when unset: {}", multi);
+        assert!(build_scd3(&ni, &serde_json::json!({ "trackColumns": ["v"] })).is_err());
+        let mut no_prev = NodeInputs::default();
+        no_prev.ports.insert("main".into(), vec!["c1".into()]);
+        assert!(build_scd3(&no_prev, &props).is_err());
+    }
+
+    #[test]
+    fn qa_outlier_emits_iqr_and_zscore_pass_reject_sql() {
+        let mk = || { let mut ni = NodeInputs::default(); ni.ports.insert("main".into(), vec!["up".into()]); ni };
+        let iqr_pass = build_outlier(&mk(), &serde_json::json!({"column": "amount", "method": "iqr"}), false).unwrap();
+        assert!(iqr_pass.contains("quantile_cont") && iqr_pass.contains("1.5"), "got: {}", iqr_pass);
+        assert!(iqr_pass.contains("\"amount\" IS NULL"), "got: {}", iqr_pass);
+        assert!(iqr_pass.contains("EXCLUDE (__dq_q1, __dq_q3)"), "got: {}", iqr_pass);
+        assert!(iqr_pass.contains("COALESCE") && !iqr_pass.contains("NOT COALESCE"), "got: {}", iqr_pass);
+        let iqr_rej = build_outlier(&mk(), &serde_json::json!({"column": "amount", "method": "iqr"}), true).unwrap();
+        assert!(iqr_rej.contains("NOT COALESCE"), "got: {}", iqr_rej);
+        let z_pass = build_outlier(&mk(), &serde_json::json!({"column": "amount", "method": "zscore"}), false).unwrap();
+        assert!(z_pass.contains("stddev_pop") && z_pass.contains("__dq_sd = 0") && z_pass.contains("<= 3"), "got: {}", z_pass);
+        assert!(build_outlier(&mk(), &serde_json::json!({"method": "iqr"}), false).is_err());
+        assert!(build_outlier(&mk(), &serde_json::json!({"column": "amount", "sensitivity": 0}), false).is_err());
+    }
+
+    #[test]
+    fn sessionize_builds_gap_window_sql() {
+        let mut ni = NodeInputs::default();
+        ni.ports.insert("main".into(), vec!["up".into()]);
+        let sql = build_sessionize(&ni, &serde_json::json!({"partitionBy": ["user_id"], "orderBy": "ts", "gap": 30})).unwrap();
+        assert!(sql.starts_with("WITH __flag AS ("), "got: {}", sql);
+        assert!(sql.contains("epoch(CAST(\"ts\" AS TIMESTAMP)) - epoch(CAST(lag(\"ts\") OVER w AS TIMESTAMP))) > 1800"), "got: {}", sql);
+        assert!(sql.contains("WINDOW w AS (PARTITION BY \"user_id\" ORDER BY \"ts\")"), "got: {}", sql);
+        assert!(sql.contains("SUM(__new_sess) OVER (PARTITION BY \"user_id\" ORDER BY \"ts\") AS \"session_id\""), "got: {}", sql);
+        assert!(sql.contains("ROW_NUMBER() OVER (PARTITION BY \"user_id\", \"session_id\" ORDER BY \"ts\") AS \"session_seq\""), "got: {}", sql);
+        let hrs = build_sessionize(&ni, &serde_json::json!({ "orderBy": "ts", "gap": 1, "gapUnit": "hours", "emitSeq": false })).unwrap();
+        assert!(hrs.contains("> 3600") && hrs.ends_with("SELECT * FROM __sid") && !hrs.contains("session_seq"), "got: {}", hrs);
+        assert!(build_sessionize(&ni, &serde_json::json!({ "gap": 5 })).is_err());
+        assert!(build_sessionize(&ni, &serde_json::json!({ "orderBy": "ts", "gap": 0 })).is_err());
+        assert!(build_sessionize(&ni, &serde_json::json!({ "orderBy": "ts", "gap": 5, "gapUnit": "weeks" })).is_err());
+    }
+
+    #[test]
+    fn freshness_builds_gate_and_report() {
+        let mut ni = NodeInputs::default();
+        ni.ports.insert("main".into(), vec!["up".into()]);
+        let gate = build_freshness(&ni, &serde_json::json!({ "column": "ts", "maxAge": 24, "maxAgeUnit": "hours" })).unwrap();
+        assert!(gate.contains("WITH _duckle_freshness AS MATERIALIZED") && gate.contains("SELECT u.* FROM \"up\" u"), "got: {}", gate);
+        assert!(gate.contains("date_diff('hour', MAX(CAST(\"ts\" AS TIMESTAMP)), CURRENT_TIMESTAMP) <= 24 THEN 'ok'"), "got: {}", gate);
+        assert!(gate.contains("error('Data is stale: '"), "got: {}", gate);
+        let report = build_freshness(&ni, &serde_json::json!({ "column": "ts", "maxAge": 2, "maxAgeUnit": "days", "mode": "report" })).unwrap();
+        assert!(report.contains("date_diff('day', MAX(CAST(\"ts\" AS TIMESTAMP)), CURRENT_TIMESTAMP) AS age_days"), "got: {}", report);
+        assert!(report.contains("2 AS threshold_days") && report.contains("<= 2) AS is_fresh"), "got: {}", report);
+        assert!(build_freshness(&ni, &serde_json::json!({ "maxAge": 1 })).is_err());
+        assert!(build_freshness(&ni, &serde_json::json!({ "column": "ts" })).is_err());
+        assert!(build_freshness(&ni, &serde_json::json!({ "column": "ts", "maxAge": 1, "mode": "bogus" })).is_err());
+    }
+
+    #[test]
     fn attach_prelude_loads_spatial_for_sql_template() {
         // #84: spatial loads on opt-in OR when the SQL references an ST_ function,
         // but not for unrelated SQL (and `list_` must not false-fire).

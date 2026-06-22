@@ -10564,3 +10564,159 @@ fn src_rest_single_object_response_yields_one_row() {
     assert!(Path::new(&out).exists(), "sink file missing (issue #13)");
     assert_eq!(count(&format!("read_json_auto('{}')", out)), 1);
 }
+
+/// xf.cdc.scd3: current rows + previous_<col> from the prior snapshot.
+#[test]
+fn scd3_keeps_previous_value_live() {
+    let engine = engine_or_skip!();
+    let tmp = tempfile::tempdir().unwrap();
+    let cur = write_file(tmp.path(), "cur.csv", "id,v\n1,a\n2,b2\n3,c\n");
+    let prev = write_file(tmp.path(), "prev.csv", "id,v\n1,a\n2,b\n4,d\n");
+    let out = out_path(tmp.path(), "out.csv");
+    let d = doc(
+        json!([
+            node("c", "src.csv", json!({ "path": cur, "hasHeader": true })),
+            node("p", "src.csv", json!({ "path": prev, "hasHeader": true })),
+            node("h", "xf.cdc.scd3", json!({ "keyColumns": ["id"], "trackColumns": ["v"] })),
+            node("k", "snk.csv", json!({ "path": out, "hasHeader": true })),
+        ]),
+        json!([main_edge("e1", "c", "h"), lookup_edge("e2", "p", "h"), main_edge("e3", "h", "k")]),
+    );
+    let result = engine.execute_pipeline(&d);
+    assert_eq!(result.status, "ok", "scd3 failed: {:?}", result.error);
+    assert_eq!(count(&format!("read_csv_auto('{}')", out)), 3);
+    assert_eq!(scalar_string(&format!("SELECT v FROM read_csv_auto('{}') WHERE id = 2", out)), "b2");
+    assert_eq!(scalar_string(&format!("SELECT previous_v FROM read_csv_auto('{}') WHERE id = 2", out)), "b");
+    assert_eq!(scalar_string(&format!("SELECT previous_v FROM read_csv_auto('{}') WHERE id = 1", out)), "a");
+    assert_eq!(count(&format!("read_csv_auto('{}') WHERE id = 3 AND previous_v IS NULL", out)), 1);
+}
+
+/// qa.outlier IQR: the lone 1000 routes to reject, normals + NULL pass.
+#[test]
+fn quality_outlier_iqr_splits_pass_and_reject() {
+    let engine = engine_or_skip!();
+    let tmp = tempfile::tempdir().unwrap();
+    let csv = write_file(tmp.path(), "in.csv", "id,amount\n1,10\n2,11\n3,12\n4,13\n5,1000\n6,\n");
+    let pass = out_path(tmp.path(), "pass.csv");
+    let rej = out_path(tmp.path(), "reject.csv");
+    let d = doc(
+        json!([
+            node("s1", "src.csv", json!({ "path": csv, "hasHeader": true })),
+            node("v1", "qa.outlier", json!({ "column": "amount", "method": "iqr" })),
+            node("kp", "snk.csv", json!({ "path": pass, "hasHeader": true })),
+            node("kr", "snk.csv", json!({ "path": rej, "hasHeader": true })),
+        ]),
+        json!([main_edge("e1", "s1", "v1"), port_edge("e2", "v1", "main", "kp"), port_edge("e3", "v1", "reject", "kr")]),
+    );
+    let result = engine.execute_pipeline(&d);
+    assert_eq!(result.status, "ok", "run failed: {:?}", result.error);
+    assert_eq!(count(&format!("read_csv_auto('{}')", pass)), 5);
+    assert_eq!(count(&format!("read_csv_auto('{}')", rej)), 1);
+    assert_eq!(scalar_string(&format!("SELECT CAST(amount AS VARCHAR) FROM read_csv_auto('{}')", rej)), "1000");
+}
+
+/// qa.outlier z-score: the extreme value beyond 3 sigma routes to reject.
+#[test]
+fn quality_outlier_zscore_splits_pass_and_reject() {
+    let engine = engine_or_skip!();
+    let tmp = tempfile::tempdir().unwrap();
+    let mut body = String::from("id,amount\n");
+    for i in 1..=20 {
+        body.push_str(&format!("{},{}\n", i, 50 + (i % 5)));
+    }
+    body.push_str("21,1000\n22,\n");
+    let csv = write_file(tmp.path(), "in.csv", &body);
+    let pass = out_path(tmp.path(), "pass.csv");
+    let rej = out_path(tmp.path(), "reject.csv");
+    let d = doc(
+        json!([
+            node("s1", "src.csv", json!({ "path": csv, "hasHeader": true })),
+            node("v1", "qa.outlier", json!({ "column": "amount", "method": "zscore", "sensitivity": 3 })),
+            node("kp", "snk.csv", json!({ "path": pass, "hasHeader": true })),
+            node("kr", "snk.csv", json!({ "path": rej, "hasHeader": true })),
+        ]),
+        json!([main_edge("e1", "s1", "v1"), port_edge("e2", "v1", "main", "kp"), port_edge("e3", "v1", "reject", "kr")]),
+    );
+    let result = engine.execute_pipeline(&d);
+    assert_eq!(result.status, "ok", "run failed: {:?}", result.error);
+    assert_eq!(count(&format!("read_csv_auto('{}')", rej)), 1);
+    assert_eq!(count(&format!("read_csv_auto('{}')", pass)), 21);
+    assert_eq!(scalar_string(&format!("SELECT CAST(amount AS VARCHAR) FROM read_csv_auto('{}')", rej)), "1000");
+}
+
+/// xf.sessionize: events within the gap share a session; a gap over the
+/// threshold starts a new one; partitions are independent.
+#[test]
+fn sessionize_assigns_sessions_by_gap() {
+    let engine = engine_or_skip!();
+    let tmp = tempfile::tempdir().unwrap();
+    let csv = write_file(
+        tmp.path(),
+        "events.csv",
+        "user_id,ts\nu1,2026-01-01 10:00:00\nu1,2026-01-01 10:05:00\nu1,2026-01-01 10:40:00\nu1,2026-01-01 10:42:00\nu2,2026-01-01 10:01:00\nu2,2026-01-01 10:02:00\n",
+    );
+    let out = out_path(tmp.path(), "out.csv");
+    let r = engine.execute_pipeline(&doc(
+        json!([
+            node("s", "src.csv", json!({ "path": csv, "hasHeader": true })),
+            node("z", "xf.sessionize", json!({ "partitionBy": ["user_id"], "orderBy": "ts", "gap": 30, "gapUnit": "minutes" })),
+            node("k", "snk.csv", json!({ "path": out, "hasHeader": true })),
+        ]),
+        json!([main_edge("e1", "s", "z"), main_edge("e2", "z", "k")]),
+    ));
+    assert_eq!(r.status, "ok", "sessionize failed: {:?}", r.error);
+    assert_eq!(scalar_string(&format!("SELECT CAST(session_id AS VARCHAR) FROM read_csv_auto('{}') WHERE user_id = 'u1' AND ts = TIMESTAMP '2026-01-01 10:05:00'", out)), "1");
+    assert_eq!(scalar_string(&format!("SELECT CAST(session_id AS VARCHAR) FROM read_csv_auto('{}') WHERE user_id = 'u1' AND ts = TIMESTAMP '2026-01-01 10:40:00'", out)), "2");
+    assert_eq!(scalar_string(&format!("SELECT CAST(session_seq AS VARCHAR) FROM read_csv_auto('{}') WHERE user_id = 'u1' AND ts = TIMESTAMP '2026-01-01 10:42:00'", out)), "2");
+    assert_eq!(scalar_string(&format!("SELECT CAST(COUNT(DISTINCT session_id) AS VARCHAR) FROM read_csv_auto('{}') WHERE user_id = 'u2'", out)), "1");
+}
+
+/// qa.freshness: fresh data passes the gate; stale fails the run; report mode
+/// emits is_fresh=false instead of gating.
+#[test]
+fn freshness_gate_and_report() {
+    let engine = engine_or_skip!();
+    let tmp = tempfile::tempdir().unwrap();
+    let fresh = out_path(tmp.path(), "fresh.parquet");
+    let stale = out_path(tmp.path(), "stale.parquet");
+    duckdb_exec(":memory:", &format!(
+        "COPY (SELECT * FROM (VALUES (1, CURRENT_TIMESTAMP - INTERVAL '2 hour'), (2, CURRENT_TIMESTAMP - INTERVAL '3 hour')) t(id, ts)) TO '{}' (FORMAT PARQUET)", fresh));
+    duckdb_exec(":memory:", &format!(
+        "COPY (SELECT * FROM (VALUES (1, CURRENT_TIMESTAMP - INTERVAL '10 day'), (2, CURRENT_TIMESTAMP - INTERVAL '12 day')) t(id, ts)) TO '{}' (FORMAT PARQUET)", stale));
+
+    let out_pass = out_path(tmp.path(), "gate_pass.csv");
+    let d = doc(
+        json!([
+            node("s", "src.parquet", json!({ "path": fresh })),
+            node("g", "qa.freshness", json!({ "column": "ts", "maxAge": 24, "maxAgeUnit": "hours", "mode": "gate" })),
+            node("k", "snk.csv", json!({ "path": out_pass, "hasHeader": true })),
+        ]),
+        json!([main_edge("e1", "s", "g"), main_edge("e2", "g", "k")]),
+    );
+    assert_eq!(engine.execute_pipeline(&d).status, "ok");
+    assert_eq!(count(&format!("read_csv_auto('{}')", out_pass)), 2);
+
+    let d2 = doc(
+        json!([
+            node("s", "src.parquet", json!({ "path": stale })),
+            node("g", "qa.freshness", json!({ "column": "ts", "maxAge": 24, "maxAgeUnit": "hours", "mode": "gate" })),
+            node("k", "snk.csv", json!({ "path": out_path(tmp.path(), "gate_fail.csv"), "hasHeader": true })),
+        ]),
+        json!([main_edge("e1", "s", "g"), main_edge("e2", "g", "k")]),
+    );
+    let r2 = engine.execute_pipeline(&d2);
+    assert_eq!(r2.status, "error", "stale gate must fail the run");
+    assert!(r2.error.as_deref().unwrap_or("").contains("stale"), "error should name staleness, got {:?}", r2.error);
+
+    let out_rep = out_path(tmp.path(), "report.csv");
+    let d3 = doc(
+        json!([
+            node("s", "src.parquet", json!({ "path": stale })),
+            node("g", "qa.freshness", json!({ "column": "ts", "maxAge": 2, "maxAgeUnit": "days", "mode": "report" })),
+            node("k", "snk.csv", json!({ "path": out_rep, "hasHeader": true })),
+        ]),
+        json!([main_edge("e1", "s", "g"), main_edge("e2", "g", "k")]),
+    );
+    assert_eq!(engine.execute_pipeline(&d3).status, "ok");
+    assert_eq!(scalar_string(&format!("SELECT is_fresh FROM read_csv_auto('{}')", out_rep)), "false");
+}

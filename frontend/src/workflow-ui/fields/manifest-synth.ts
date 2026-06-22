@@ -2882,6 +2882,28 @@ function synthSetTransform(comp: ComponentDef): ComponentManifest {
 }
 
 function synthWindowTransform(comp: ComponentDef): ComponentManifest {
+    if (comp.id === 'xf.sessionize') {
+        return base(comp, [
+            {
+                label: 'Sessionize',
+                fields: [
+                    { key: 'partitionBy', label: 'Partition by', kind: 'columns', description: 'The entity the sessions belong to, e.g. the user id column(s). Leave empty to sessionize the whole input as one stream.' },
+                    { key: 'orderBy', label: 'Order by (timestamp)', kind: 'column', required: true, description: 'The event timestamp / order column. Sessions are computed in this order within each partition.' },
+                    { key: 'gap', label: 'Inactivity gap', kind: 'number', required: true, defaultValue: 30, description: 'A new session starts when the gap from the previous event exceeds this threshold.' },
+                    {
+                        key: 'gapUnit',
+                        label: 'Gap unit',
+                        kind: 'select',
+                        defaultValue: 'minutes',
+                        options: ['seconds', 'minutes', 'hours'].map(u => ({ label: u, value: u })),
+                    },
+                    { key: 'sessionColumn', label: 'Session id column', kind: 'text', placeholder: 'session_id' },
+                    { key: 'emitSeq', label: 'Add session_seq (event index within session)', kind: 'bool', defaultValue: true },
+                    { key: 'seqColumn', label: 'Session seq column', kind: 'text', placeholder: 'session_seq' },
+                ],
+            },
+        ], 'declared');
+    }
     const fn = comp.id.split('.').pop() ?? 'rownum';
     return base(comp, [
         {
@@ -3858,6 +3880,33 @@ function synthQualityValidation(comp: ComponentDef): ComponentManifest {
             { label: 'Fail pipeline', value: 'fail' },
         ],
     };
+    if (id === 'qa.outlier') {
+        return base(comp, [
+            {
+                label: 'Outlier detection',
+                fields: [
+                    { key: 'column', label: 'Numeric column', kind: 'column', required: true },
+                    {
+                        key: 'method',
+                        label: 'Method',
+                        kind: 'select',
+                        defaultValue: 'iqr',
+                        options: [
+                            { label: 'IQR (Tukey fences)', value: 'iqr' },
+                            { label: 'Z-score (standard deviations)', value: 'zscore' },
+                        ],
+                    },
+                    {
+                        key: 'sensitivity',
+                        label: 'Sensitivity',
+                        kind: 'number',
+                        description: 'IQR: k multiplier (default 1.5; outside [Q1 - k*IQR, Q3 + k*IQR]). Z-score: threshold (default 3; abs((x - mean) / stddev) above this).',
+                    },
+                    onFail,
+                ],
+            },
+        ], 'upstream');
+    }
     if (id === 'qa.schemavalidate') {
         return base(comp, [
             {
@@ -4108,6 +4157,38 @@ function synthQualityCleanse(comp: ComponentDef): ComponentManifest {
                         kind: 'key-value',
                         required: true,
                         description: 'column -> check. Checks: not_null, unique, non_negative, or with args after a colon: in_set:a,b,c | in_range:min,max | regex:pattern. Emits one scorecard row per rule (total, failed, pass_rate, passed).',
+                    },
+                ],
+            },
+        ], 'upstream');
+    }
+    if (id === 'qa.freshness') {
+        return base(comp, [
+            {
+                label: 'Freshness',
+                fields: [
+                    { key: 'column', label: 'Timestamp column', kind: 'column', required: true, description: 'A timestamp or date column. Data age is computed as now - max(this column).' },
+                    { key: 'maxAge', label: 'Max age', kind: 'number', required: true, defaultValue: 24, description: 'The freshness SLA: the newest row must be no older than this.' },
+                    {
+                        key: 'maxAgeUnit',
+                        label: 'Unit',
+                        kind: 'select',
+                        defaultValue: 'hours',
+                        options: [
+                            { label: 'Minutes', value: 'minutes' },
+                            { label: 'Hours', value: 'hours' },
+                            { label: 'Days', value: 'days' },
+                        ],
+                    },
+                    {
+                        key: 'mode',
+                        label: 'Mode',
+                        kind: 'select',
+                        defaultValue: 'gate',
+                        options: [
+                            { label: 'Gate (fail the run if stale)', value: 'gate' },
+                            { label: 'Report (emit a one-row scorecard)', value: 'report' },
+                        ],
                     },
                 ],
             },
