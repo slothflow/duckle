@@ -48,7 +48,7 @@ RUN apt-get update \
     && rm /tmp/duckdb.zip \
     && apt-get purge -y unzip && apt-get autoremove -y && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
-COPY --from=runner /app/target/release/duckle-runner /usr/local/bin/duckle-runner
+COPY --from=runner /usr/local/bin/duckle-runner /usr/local/bin/duckle-runner
 COPY --from=frontend /app/frontend/dist-web /app/dist-web
 ENV DUCKLE_DUCKDB_BIN=/usr/local/bin/duckdb
 VOLUME ["/workspace"]
