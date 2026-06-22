@@ -3025,9 +3025,108 @@ pub(crate) fn rename_pairs(props: &JsonValue) -> Vec<(String, String)> {
     out
 }
 
+/// Parse a bulk column-rename mapping file (#82): old -> new pairs from a JSON
+/// object {"old":"new"} or array [{from,to}/{source,target}/{old,new}], a CSV
+/// (two columns old,new with an optional header), or simple YAML `old: new`
+/// lines. Dispatch by file extension; unknown extensions try JSON then CSV.
+fn parse_rename_map_file(path: &str) -> Result<Vec<(String, String)>, String> {
+    let content = std::fs::read_to_string(path)
+        .map_err(|e| format!("Rename: could not read mapping file '{}': {}", path, e))?;
+    let ext = std::path::Path::new(path)
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    let from_json = |v: &JsonValue| -> Option<Vec<(String, String)>> {
+        match v {
+            JsonValue::Object(m) => Some(
+                m.iter()
+                    .filter_map(|(k, val)| val.as_str().map(|s| (k.clone(), s.to_string())))
+                    .collect(),
+            ),
+            JsonValue::Array(a) => Some(
+                a.iter()
+                    .filter_map(|e| {
+                        let from = e.get("from").or_else(|| e.get("source")).or_else(|| e.get("old")).and_then(JsonValue::as_str);
+                        let to = e.get("to").or_else(|| e.get("target")).or_else(|| e.get("new")).and_then(JsonValue::as_str);
+                        match (from, to) {
+                            (Some(f), Some(t)) => Some((f.to_string(), t.to_string())),
+                            _ => None,
+                        }
+                    })
+                    .collect(),
+            ),
+            _ => None,
+        }
+    };
+    let parse_csv = |text: &str| -> Vec<(String, String)> {
+        let mut out = Vec::new();
+        for (i, line) in text.lines().enumerate() {
+            let line = line.trim();
+            if line.is_empty() {
+                continue;
+            }
+            let cols: Vec<&str> = line.splitn(2, ',').map(|s| s.trim().trim_matches('"')).collect();
+            if cols.len() != 2 || cols[0].is_empty() || cols[1].is_empty() {
+                continue;
+            }
+            // Skip a header row like old,new / from,to / source,target.
+            if i == 0 && matches!(cols[0].to_ascii_lowercase().as_str(), "old" | "from" | "source")
+            {
+                continue;
+            }
+            out.push((cols[0].to_string(), cols[1].to_string()));
+        }
+        out
+    };
+    let pairs = match ext.as_str() {
+        "json" => serde_json::from_str::<JsonValue>(&content)
+            .ok()
+            .and_then(|v| from_json(&v))
+            .ok_or_else(|| "Rename: JSON mapping must be an object {old:new} or array of {from,to}".to_string())?,
+        "csv" => parse_csv(&content),
+        "yaml" | "yml" => content
+            .lines()
+            .filter_map(|l| {
+                let l = l.trim();
+                if l.is_empty() || l.starts_with('#') {
+                    return None;
+                }
+                let (k, v) = l.split_once(':')?;
+                let (k, v) = (k.trim().trim_matches('"'), v.trim().trim_matches('"'));
+                if k.is_empty() || v.is_empty() {
+                    None
+                } else {
+                    Some((k.to_string(), v.to_string()))
+                }
+            })
+            .collect(),
+        // Unknown extension: try JSON, fall back to CSV.
+        _ => serde_json::from_str::<JsonValue>(&content)
+            .ok()
+            .and_then(|v| from_json(&v))
+            .unwrap_or_else(|| parse_csv(&content)),
+    };
+    if pairs.is_empty() {
+        return Err(format!("Rename: mapping file '{}' yielded no old->new pairs", path));
+    }
+    Ok(pairs)
+}
+
 pub(crate) fn build_rename(inputs: &NodeInputs, props: &JsonValue) -> Result<String, String> {
     let upstream = inputs.main().ok_or_else(|| "missing main input".to_string())?;
-    let pairs = rename_pairs(props);
+    let mut pairs = rename_pairs(props);
+    // #82: a bulk mapping file (JSON / CSV / YAML) of old -> new names. File
+    // entries extend the inline pairs; the first mapping for a column wins.
+    if let Some(map_file) = string_prop(props, "mappingFile").filter(|s| !s.trim().is_empty()) {
+        let mut seen: std::collections::HashSet<String> =
+            pairs.iter().map(|(f, _)| f.clone()).collect();
+        for (f, t) in parse_rename_map_file(map_file.trim())? {
+            if seen.insert(f.clone()) {
+                pairs.push((f, t));
+            }
+        }
+    }
     let mut excludes = Vec::new();
     let mut aliases = Vec::new();
     for (from, to) in &pairs {
@@ -3611,6 +3710,20 @@ fn csv_read_args_base(props: &JsonValue) -> Vec<String> {
         };
         args.push(format!("encoding='{}'", sql_escape(&enc)));
     }
+    // #83: expose DuckDB's read_csv options that the Basic tab doesn't surface.
+    // `filename=true` adds a `filename` column (extract data from the path when
+    // globbing a folder); `readOptions` is a passthrough key-value list of any
+    // other read_csv argument (e.g. union_by_name=true, sample_size=-1) written
+    // verbatim, for power users who want full control of the reader.
+    if props.get("filename").and_then(JsonValue::as_bool).unwrap_or(false) {
+        args.push("filename=true".to_string());
+    }
+    for (k, v) in kv_pairs(props, "readOptions") {
+        let (k, v) = (k.trim(), v.trim());
+        if !k.is_empty() && !v.is_empty() {
+            args.push(format!("{}={}", k, v));
+        }
+    }
     args
 }
 
@@ -3933,7 +4046,35 @@ pub(crate) fn build_duckdb_source(props: &JsonValue) -> String {
 /// ATTACH statements for external-database nodes. The aliases are fixed
 /// (`duckle_src` / `duckle_dst`) - safe because each stage is its own
 /// CLI process.
+/// True when the SQL text references a spatial function (an `st_` token not
+/// preceded by an identifier char, so `list_`, `first_`, etc. don't false-fire).
+fn references_spatial(sql: &str) -> bool {
+    let lower = sql.to_ascii_lowercase();
+    let bytes = lower.as_bytes();
+    let mut i = 0;
+    while let Some(pos) = lower[i..].find("st_") {
+        let at = i + pos;
+        let prev_ok = at == 0
+            || !matches!(bytes[at - 1], b'a'..=b'z' | b'0'..=b'9' | b'_');
+        if prev_ok {
+            return true;
+        }
+        i = at + 3;
+    }
+    false
+}
+
 pub(crate) fn attach_prelude(component_id: &str, props: &JsonValue) -> String {
+    // #84: SQL Template / Custom SQL can use spatial functions (ST_Point etc)
+    // over any source (e.g. lon/lat from a CSV). Load the spatial extension when
+    // the user opts in (loadSpatial) or the SQL references an ST_ function.
+    if matches!(component_id, "code.sql" | "code.sqltemplate") {
+        let opt_in = props.get("loadSpatial").and_then(JsonValue::as_bool).unwrap_or(false);
+        let auto = string_prop(props, "sql").map(|s| references_spatial(&s)).unwrap_or(false);
+        if opt_in || auto {
+            return "INSTALL spatial; LOAD spatial; ".into();
+        }
+    }
     // Network DBs use host/port + libpq-style fields, not the
     // file-style `database` path the file-based ATTACH connectors use.
     // Cockroach speaks PG wire so it rides the postgres extension;

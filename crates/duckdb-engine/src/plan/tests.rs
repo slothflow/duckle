@@ -1297,6 +1297,60 @@
     }
 
     #[test]
+    fn rename_from_mapping_file_json_csv() {
+        use std::io::Write;
+        let mut ni = NodeInputs::default();
+        ni.ports.insert("main".into(), vec!["up".into()]);
+        let dir = std::env::temp_dir().join(format!("duckle_rentest_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        // JSON object form.
+        let jpath = dir.join("map.json");
+        std::fs::File::create(&jpath).unwrap().write_all(br#"{"a":"alpha","b":"beta"}"#).unwrap();
+        let sql = build_rename(&ni, &serde_json::json!({ "mappingFile": jpath.to_string_lossy() })).unwrap();
+        assert!(sql.contains("\"a\" AS \"alpha\"") && sql.contains("\"b\" AS \"beta\""), "got: {}", sql);
+        // CSV form with a header row (skipped).
+        let cpath = dir.join("map.csv");
+        std::fs::File::create(&cpath).unwrap().write_all(b"old,new\nx,ex\ny,why\n").unwrap();
+        let csv = build_rename(&ni, &serde_json::json!({ "mappingFile": cpath.to_string_lossy() })).unwrap();
+        assert!(csv.contains("\"x\" AS \"ex\"") && csv.contains("\"y\" AS \"why\""), "got: {}", csv);
+        // Missing file is a loud error.
+        assert!(build_rename(&ni, &serde_json::json!({ "mappingFile": "/no/such/file.json" })).is_err());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn csv_extra_read_options_and_filename() {
+        // #83: filename=true + a readOptions passthrough land in read_csv args.
+        let sql = build_csv_source(
+            &serde_json::json!({
+                "path": "data/*.csv",
+                "hasHeader": true,
+                "filename": true,
+                "readOptions": [{ "key": "union_by_name", "value": "true" }, { "key": "sample_size", "value": "-1" }]
+            }),
+            None,
+        );
+        assert!(sql.contains("filename=true"), "got: {}", sql);
+        assert!(sql.contains("union_by_name=true"), "got: {}", sql);
+        assert!(sql.contains("sample_size=-1"), "got: {}", sql);
+        // Default: neither appears.
+        let plain = build_csv_source(&serde_json::json!({ "path": "d.csv", "hasHeader": true }), None);
+        assert!(!plain.contains("filename="), "got: {}", plain);
+    }
+
+    #[test]
+    fn attach_prelude_loads_spatial_for_sql_template() {
+        // #84: spatial loads on opt-in OR when the SQL references an ST_ function,
+        // but not for unrelated SQL (and `list_` must not false-fire).
+        let opt = attach_prelude("code.sql", &serde_json::json!({ "loadSpatial": true }));
+        assert!(opt.contains("LOAD spatial"), "opt-in: {}", opt);
+        let auto = attach_prelude("code.sqltemplate", &serde_json::json!({ "sql": "SELECT ST_Point(lon,lat) FROM input" }));
+        assert!(auto.contains("LOAD spatial"), "auto-detect: {}", auto);
+        let none = attach_prelude("code.sql", &serde_json::json!({ "sql": "SELECT list_value(a), first_name FROM input" }));
+        assert!(!none.contains("spatial"), "must not false-fire on list_/first_: {}", none);
+    }
+
+    #[test]
     fn csv_declared_schema_overrides_autodetect() {
         // Regression for issue #3: when the user sets a column to
         // VARCHAR in the Schema panel (typical fix for dd/mm/yy dates

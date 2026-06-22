@@ -847,6 +847,19 @@ function fileFormatSection(comp: ComponentDef): FormSection[] {
                             placeholder: '%d/%m/%Y %H:%M:%S',
                             description: 'strptime tokens, same as date format plus %H:%M:%S. Leave empty for auto-detect.',
                         },
+                        {
+                            key: 'filename',
+                            label: 'Add filename column',
+                            kind: 'bool' as const,
+                            defaultValue: false,
+                            description: 'When reading a folder glob (e.g. data/*.csv), add a `filename` column so you can extract data from the source path.',
+                        },
+                        {
+                            key: 'readOptions',
+                            label: 'Extra read options',
+                            kind: 'key-value' as const,
+                            description: 'Any other DuckDB read_csv option, passed through verbatim as key=value (e.g. union_by_name=true, sample_size=-1, ignore_errors=true). For power users who need full control of the reader.',
+                        },
                     ] : []),
                 ],
             },
@@ -2499,7 +2512,10 @@ function synthFieldsTransform(comp: ComponentDef): ComponentManifest {
     }
     if (id === 'xf.rename') {
         return base(comp, [
-            { label: 'Rename', fields: [{ key: 'mapping', label: 'Old → New', kind: 'key-value', description: 'old column name → new column name' }] },
+            { label: 'Rename', fields: [
+                { key: 'mapping', label: 'Old -> New', kind: 'key-value', description: 'old column name -> new column name' },
+                { key: 'mappingFile', label: 'Mapping file (optional)', kind: 'file-path', description: 'Bulk rename from a file of old -> new pairs: a JSON object {"old":"new"} or array of {from,to}, a CSV (old,new), or YAML (old: new). Ideal for renaming many columns from an externally generated map. Inline pairs above take precedence.' },
+            ] },
         ], schemaSource);
     }
     if (id === 'xf.addcol' || id === 'xf.coalesce') {
@@ -4147,6 +4163,13 @@ function synthCustomCode(comp: ComponentDef): ComponentManifest {
                         rows: 10,
                         placeholder: 'SELECT *, upper(status) AS status FROM input',
                         description: 'The upstream rows are available as `input`.',
+                    },
+                    {
+                        key: 'loadSpatial',
+                        label: 'Load spatial extension',
+                        kind: 'bool',
+                        defaultValue: false,
+                        description: 'Load the DuckDB spatial extension so ST_* functions (ST_Point, ST_AsText, ...) work over any source, including CSV lat/lon. Auto-loads when the SQL references an ST_ function; enable this to force it.',
                     },
                 ],
             },

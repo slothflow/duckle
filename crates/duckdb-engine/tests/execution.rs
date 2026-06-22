@@ -8466,6 +8466,84 @@ fn classify_detects_email_and_ssn_live() {
     assert_eq!(pii_cols, 2, "email + ssn are PII; note is not");
 }
 
+/// #82: bulk column rename driven by an external JSON mapping file.
+#[test]
+fn rename_via_mapping_file_live() {
+    let engine = engine_or_skip!();
+    let tmp = tempfile::tempdir().unwrap();
+    let csv = write_file(tmp.path(), "in.csv", "a,b,c\n1,2,3\n");
+    let map = write_file(tmp.path(), "map.json", "{\"a\":\"alpha\",\"c\":\"gamma\"}");
+    let out = out_path(tmp.path(), "out.csv");
+    let d = doc(
+        json!([
+            node("s", "src.csv", json!({ "path": csv, "hasHeader": true })),
+            node("r", "xf.rename", json!({ "mappingFile": map })),
+            node("k", "snk.csv", json!({ "path": out, "hasHeader": true })),
+        ]),
+        json!([main_edge("e1", "s", "r"), main_edge("e2", "r", "k")]),
+    );
+    let res = engine.execute_pipeline(&d);
+    assert_eq!(res.status, "ok", "rename failed: {:?}", res.error);
+    // a->alpha, c->gamma renamed; b untouched.
+    let cols = count(&format!(
+        "(SELECT column_name FROM (DESCRIBE SELECT * FROM read_csv_auto('{}')) WHERE column_name IN ('alpha','gamma','b'))",
+        out
+    ));
+    assert_eq!(cols, 3, "alpha, gamma, b must all be present");
+    assert_eq!(scalar_string(&format!("SELECT CAST(alpha AS VARCHAR) FROM read_csv_auto('{}')", out)), "1");
+}
+
+/// #84: spatial functions in a SQL Template over a CSV source - the spatial
+/// extension auto-loads because the SQL references ST_Point.
+#[test]
+fn sql_template_spatial_over_csv_live() {
+    let engine = engine_or_skip!();
+    let tmp = tempfile::tempdir().unwrap();
+    let csv = write_file(tmp.path(), "geo.csv", "lon,lat\n10,20\n");
+    let out = out_path(tmp.path(), "out.csv");
+    let d = doc(
+        json!([
+            node("s", "src.csv", json!({ "path": csv, "hasHeader": true })),
+            node("q", "code.sql", json!({ "sql": "SELECT lon, lat, ST_AsText(ST_Point(lon, lat)) AS geom FROM input" })),
+            node("k", "snk.csv", json!({ "path": out, "hasHeader": true })),
+        ]),
+        json!([main_edge("e1", "s", "q"), main_edge("e2", "q", "k")]),
+    );
+    let res = engine.execute_pipeline(&d);
+    assert_eq!(res.status, "ok", "spatial SQL template failed: {:?}", res.error);
+    let geom = scalar_string(&format!("SELECT geom FROM read_csv_auto('{}')", out));
+    assert_eq!(geom, "POINT (10 20)", "ST_Point should compute a geometry, got {}", geom);
+}
+
+/// #83: extra CSV read options - filename=true adds a filename column when
+/// globbing a folder.
+#[test]
+fn csv_filename_option_live() {
+    let engine = engine_or_skip!();
+    let tmp = tempfile::tempdir().unwrap();
+    // Inputs live in a subdir so the output CSV (written to tmp root) is not
+    // matched by the source glob (which would circularly re-read it).
+    let indir = tmp.path().join("in");
+    std::fs::create_dir_all(&indir).unwrap();
+    write_file(&indir, "p1.csv", "id\n1\n");
+    write_file(&indir, "p2.csv", "id\n2\n");
+    let glob = format!("{}/*.csv", indir.to_string_lossy().replace('\\', "/"));
+    let out = out_path(tmp.path(), "out.csv");
+    let d = doc(
+        json!([
+            node("s", "src.csv", json!({ "path": glob, "hasHeader": true, "filename": true })),
+            node("k", "snk.csv", json!({ "path": out, "hasHeader": true })),
+        ]),
+        json!([main_edge("e1", "s", "k")]),
+    );
+    let res = engine.execute_pipeline(&d);
+    assert_eq!(res.status, "ok", "csv filename option failed: {:?}", res.error);
+    assert_eq!(count(&format!("read_csv_auto('{}')", out)), 2, "both files read");
+    // A filename column exists and is non-null.
+    let with_fn = count(&format!("read_csv_auto('{}') WHERE filename IS NOT NULL", out));
+    assert_eq!(with_fn, 2, "filename column should be populated for every row");
+}
+
 /// qa.matchgroup: transitive-closure clustering of matched record pairs. a~b
 /// and b~c collapse a, b, c into one cluster (rep = MIN id); a self-matched d
 /// stays its own cluster.
