@@ -43,7 +43,7 @@
 **Get started**
 
 - [What is Duckle?](#what-is-duckle)
-- [What's new in v0.5.0](#whats-new-in-v050)
+- [What's new in v0.6.0](#whats-new-in-v060)
 - [Quickstart (60 s)](#quickstart-60-seconds)
 - [Download / Install](#download--install)
 - [Build from source](#build-from-source)
@@ -123,20 +123,20 @@ Three things make Duckle different from the heavyweights and the toy ETL tools:
 
 ---
 
-## What's new in v0.5.0
+## What's new in v0.6.0
 
-The biggest release since Duckle went cross-OS: a governance-grade studio with a data-quality / MDM pack, time-travel diffing, lineage, a web console, and bulk SQL Server writes. The component catalog now stands at 348.
+Duckle goes to the browser. v0.6.0 adds a self-hosted **web edition**: run the full Duckle studio - canvas, palette, properties, run, plan - entirely from a browser, served by `duckle-runner`, with your pipelines and data staying on your own server. Built for teams whose data is only reachable from a server or web IDE and who can't install a desktop app. It is local-first and self-hosted: a binary / Docker image you run on your own infrastructure, never a Duckle-hosted service.
 
-- **Web Management Console (#75).** Run `duckle-runner serve` (or click the green "Open web dashboard" button) to operate every pipeline from a browser: a job-grouped overview with last status, schedule, duration, success-rate and per-job run history + logs, a runs timeline, and a built-in interval scheduler. No extra binary, no server, no auth.
-- **Time-travel + Data Diff.** Read any DuckLake table "AS OF" a snapshot or timestamp, browse snapshots, diff two snapshots (`src.ducklake.diff`) to see exactly what changed, and get a readable change summary (`xf.diffsummary`).
-- **Data Quality, Governance & MDM pack.** 17 new components: masking, survivorship, match groups, expectations, referential integrity, advanced profiling, record linkage, reconciliation, classification, data contracts, surrogate keys, labeled bucketize, SCD3, outlier detection, sessionization, and freshness checks. No external service or LLM.
-- **Bulk SQL Server writes (#86).** `snk.sqlserver` / `snk.synapse` now bulk-load through the DuckDB `mssql` community extension (TDS COPY) instead of row-by-row inserts. On by default; set `bulk: false` for the fully offline driver.
-- **Column-level lineage.** A whole-pipeline lineage resolver that stitches columns back to their root sources.
-- **Guided tour + redesigned console**, and a fix for the Windows startup console flash (Duckle no longer shells `git` at launch).
+- **Run the full editor in a browser (#75).** `duckle-runner web --workspace <dir>` serves the studio over HTTP; open, edit and save pipelines straight from the mounted workspace.
+- **Docker image.** `docker compose -f docker-compose.web.yml up --build` brings the editor up on `:8080` with DuckDB bundled and your workspace on a mounted volume. Single-tenant, no auth - put it behind your own reverse proxy / IdP.
+- **Run and run-to-here with live progress.** Pipelines execute on the server engine and stream per-node progress back over Server-Sent Events, so the browser shows the same live run animation as the desktop. Per-stage compiled SQL (Plan tab) too.
+- **Server-side file browser.** Pick input / output files from a workspace-confined directory browser instead of a native OS dialog.
+- **Portable `${workspace}` paths.** `${workspace}` / `${projectroot}` now resolve in headless and web runs (not only the desktop), so a workspace folder is drop-in portable: zip it and run it anywhere, no absolute-path editing.
+- **`duckle serve`** one-line terminal command to launch the web management console.
 
-Fixes: #7, #10, #39, #76, #82, #83, #84, and the #85 zh-CN update; set-operation `INTERSECT`/`EXCEPT`, secret redaction in logs, and 64-bit integer preservation in `code.javascript`.
+The desktop app is unchanged and the web edition is opt-in (the `web` subcommand). The component catalog stays at 348.
 
-Full notes: see the [v0.5.0 release](https://github.com/ducklelabs/duckle/releases/tag/v0.5.0).
+Full notes: see the [v0.6.0 release](https://github.com/ducklelabs/duckle/releases/tag/v0.6.0).
 
 ---
 
@@ -422,7 +422,7 @@ When the installer downloads the DuckDB CLI it also pre-fetches the extensions D
 
 ## Download / Install
 
-Pick the binary for your OS from the [latest release](https://github.com/ducklelabs/duckle/releases/tag/v0.5.0):
+Pick the binary for your OS from the [latest release](https://github.com/ducklelabs/duckle/releases/tag/v0.6.0):
 
 | OS | Asset | How to run |
 |---|---|---|
