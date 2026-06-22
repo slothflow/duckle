@@ -26795,6 +26795,13 @@
                 "label": "Trust TLS cert (dev / self-signed)",
                 "kind": "bool",
                 "defaultValue": false
+              },
+              {
+                "key": "bulk",
+                "label": "Bulk write (fast)",
+                "kind": "bool",
+                "defaultValue": true,
+                "description": "Fast bulk load via the DuckDB mssql extension (TDS COPY, ~1.2M rows/s). Turn off to use the row-by-row driver (works fully offline; no extension fetch)."
               }
             ]
           },
@@ -26816,7 +26823,7 @@
               },
               {
                 "key": "batchSize",
-                "label": "Insert batch size (max 1000)",
+                "label": "Insert batch size (driver mode only)",
                 "kind": "integer",
                 "defaultValue": 1000
               },

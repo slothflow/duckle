@@ -705,6 +705,31 @@
     }
 
     #[test]
+    fn sqlserver_sink_bulk_uses_mssql_extension() {
+        // #86: snk.sqlserver default (bulk) -> ATTACH via the mssql community
+        // extension + pure-SQL CREATE/INSERT through duckle_dst (fast bulk load),
+        // not the row-by-row driver.
+        let mk = |bulk: &str| pipeline_from_json(&format!(
+            r#"{{"nodes":[
+                {{"id":"s","position":{{"x":0,"y":0}},"data":{{"label":"Src","componentId":"src.csv","properties":{{"path":"/tmp/in.csv"}}}}}},
+                {{"id":"k","position":{{"x":0,"y":0}},"data":{{"label":"MSSQL","componentId":"snk.sqlserver","properties":{{"host":"h","database":"db","user":"u","password":"p","tableName":"orders"{}}}}}}}
+              ],"edges":[{{"id":"e1","source":"s","target":"k","data":{{"connectionType":"main"}}}}]}}"#,
+            bulk));
+        // Default (no bulk prop) -> bulk path.
+        let c = compile(&mk("")).unwrap();
+        let k = c.stages.iter().find(|s| s.node_id == "k").unwrap();
+        assert!(k.sql.contains("INSTALL mssql FROM community") && k.sql.contains("AS duckle_dst (TYPE mssql)"),
+            "bulk sink must ATTACH via mssql: {}", k.sql);
+        assert!(k.sql.contains("duckle_dst.\"dbo\".\"orders\""), "writes to dbo.orders via duckle_dst: {}", k.sql);
+        assert!(k.runtime.is_none(), "bulk sink is pure SQL (no driver spec)");
+        // bulk=false -> the tiberius driver runtime spec, empty stage SQL.
+        let c2 = compile(&mk(r#","bulk":false"#)).unwrap();
+        let k2 = c2.stages.iter().find(|s| s.node_id == "k").unwrap();
+        assert!(matches!(k2.runtime.as_ref(), Some(RuntimeSpec::SqlserverSink(_))), "bulk=false uses the driver");
+        assert!(!k2.sql.contains("mssql"), "driver path has no mssql ATTACH: {}", k2.sql);
+    }
+
+    #[test]
     fn relational_source_infers_custom_sql_without_mode() {
         // issue #77: a filled SQL box wins even when the Read-mode dropdown is
         // left at its default (no "mode" prop), mirroring src.duckdb. A

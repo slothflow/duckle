@@ -1090,7 +1090,13 @@ fn build_stage(
             batch_size: props.get("batchSize").and_then(|v| v.as_u64()).filter(|n| *n > 0).unwrap_or(1000) as usize,
         });
         (String::new(), StageKind::Sink, Some(from_view.to_string()))
-    } else if component_id == "snk.sqlserver" || component_id == "snk.synapse" {
+    } else if (component_id == "snk.sqlserver" || component_id == "snk.synapse")
+        && !props.get("bulk").and_then(|v| v.as_bool()).unwrap_or(true)
+    {
+        // bulk=false: the row-by-row tiberius driver path (works offline, no
+        // extension). The DEFAULT (bulk=true, #86) instead falls through to the
+        // generic attach-sink path below, which ATTACHes via the DuckDB mssql
+        // community extension and bulk-writes through COPY/INSERT (~1.2M rows/s).
         // Synapse rides the SQL Server wire; same tiberius path.
         let from_view = inputs.main().ok_or_else(|| missing_input(node, "main"))?;
         let host = string_prop(&props, "host")

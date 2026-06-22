@@ -4341,6 +4341,15 @@ pub(crate) fn attach_prelude(component_id: &str, props: &JsonValue) -> String {
     // file-style `database` path the file-based ATTACH connectors use.
     // Cockroach speaks PG wire so it rides the postgres extension;
     // MariaDB speaks MySQL wire so it rides the mysql extension.
+    // #86: SQL Server / Synapse sink via the DuckDB mssql community extension
+    // (pure TDS, bulk COPY/INSERT). Only the bulk path emits this ATTACH; when
+    // the user sets bulk=false the tiberius driver handles the write instead
+    // (no prelude, see plan/mod.rs), so emit nothing here in that case.
+    if matches!(component_id, "snk.sqlserver" | "snk.synapse")
+        && props.get("bulk").and_then(JsonValue::as_bool).unwrap_or(true)
+    {
+        return mssql_attach(props);
+    }
     match component_id {
         "src.postgres" | "src.cockroach" | "src.pgvector" | "src.redshift" => {
             // Redshift speaks the Postgres wire protocol with a different
@@ -4419,6 +4428,43 @@ pub(crate) fn attach_prelude(component_id: &str, props: &JsonValue) -> String {
 /// the MySQL driver) is handled here. INSTALL+LOAD is prepended so a
 /// fresh user without the extension cache still attaches successfully,
 /// though the first-launch installer already pre-fetches both.
+/// #86: ATTACH a SQL Server (or Synapse) target via the DuckDB `mssql` community
+/// extension for high-throughput bulk writes (TDS protocol, no ODBC/JDBC). The
+/// connection string is the extension's `key=value;...` form; the alias is the
+/// standard `duckle_dst` so build_relational_sink writes through it with plain
+/// CREATE/INSERT. Empty when no host (the caller then errors clearly downstream).
+fn mssql_attach(props: &JsonValue) -> String {
+    let host = string_prop(props, "host").unwrap_or_default();
+    if host.is_empty() {
+        return String::new();
+    }
+    let port = props
+        .get("port")
+        .and_then(|v| v.as_u64())
+        .filter(|p| *p > 0)
+        .unwrap_or(1433);
+    let mut parts = vec![format!("server={},{}", host, port)];
+    if let Some(db) = string_prop(props, "database").filter(|s| !s.is_empty()) {
+        parts.push(format!("database={}", db));
+    }
+    if let Some(u) = string_prop(props, "user")
+        .or_else(|| string_prop(props, "username"))
+        .filter(|s| !s.is_empty())
+    {
+        parts.push(format!("user={}", u));
+    }
+    if let Some(p) = string_prop(props, "password").filter(|s| !s.is_empty()) {
+        parts.push(format!("password={}", p));
+    }
+    // Self-signed dev/test certs are common; mirror the driver's trust default.
+    parts.push("TrustServerCertificate=true".to_string());
+    let connstr = parts.join(";");
+    format!(
+        "INSTALL mssql FROM community; LOAD mssql; ATTACH '{}' AS duckle_dst (TYPE mssql); ",
+        sql_escape(&connstr)
+    )
+}
+
 pub(crate) fn db_attach(props: &JsonValue, extension: &str, default_port: u64, read_only: bool) -> String {
     let host = string_prop(props, "host").unwrap_or_default();
     if host.is_empty() {
@@ -4678,7 +4724,11 @@ pub(crate) fn build_relational_sink(
     let table = string_prop(props, "tableName")
         .filter(|s| !s.is_empty())
         .ok_or_else(|| EngineError::Config(format!("{}: table name is required", component_id)))?;
-    let schema = string_prop(props, "schemaName").filter(|s| !s.is_empty());
+    // `schemaName` is the standard prop; the SQL Server sink form uses `schema`,
+    // so accept it too (#86 bulk path).
+    let schema = string_prop(props, "schemaName")
+        .or_else(|| string_prop(props, "schema"))
+        .filter(|s| !s.is_empty());
     let mode = string_prop(props, "mode").unwrap_or_else(|| "overwrite".into());
     let qual = relational_qualified("duckle_dst", component_id, schema.as_deref(), &table);
     match mode.as_str() {
@@ -4796,6 +4846,9 @@ pub(crate) fn relational_qualified(alias: &str, component_id: &str, schema: Opti
         Some("public")
     } else if component_id.ends_with(".motherduck") || component_id.ends_with(".ducklake") {
         Some("main")
+    } else if component_id.ends_with(".sqlserver") || component_id.ends_with(".synapse") {
+        // SQL Server / Synapse default schema (#86, mssql extension bulk path).
+        Some("dbo")
     } else if component_id.ends_with(".bigquery") {
         // BigQuery's first level is a "dataset" - same shape as schema.
         // Caller can supply dataset via either prop name; we leave the
@@ -6761,7 +6814,11 @@ pub(crate) fn build_sink_sql(
         "snk.sqlite" | "snk.duckdb" => build_db_sink(component_id, props, from_view, cols),
         "snk.postgres" | "snk.cockroach" | "snk.mysql" | "snk.mariadb"
         | "snk.motherduck" | "snk.ducklake" | "snk.pgvector"
-        | "snk.redshift" | "snk.bigquery" | "snk.quack" => build_relational_sink(component_id, props, from_view, cols),
+        | "snk.redshift" | "snk.bigquery" | "snk.quack"
+        // #86: SQL Server / Synapse bulk path via the DuckDB mssql extension
+        // (ATTACH + COPY/INSERT). Reached only in the bulk path; bulk=false
+        // routes to the tiberius driver instead (see plan/mod.rs).
+        | "snk.sqlserver" | "snk.synapse" => build_relational_sink(component_id, props, from_view, cols),
         "snk.excel" => Ok(build_excel_sink(props, from_view)),
         "snk.spatial" => Ok(build_spatial_sink(props, from_view)),
         "snk.iceberg" => Ok(build_iceberg_sink(props, from_view)),

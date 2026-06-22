@@ -1267,6 +1267,8 @@ function synthDbSink(comp: ComponentDef): ComponentManifest {
                     { key: 'password', label: 'Password', kind: 'text', placeholder: '••••••••' },
                     { key: 'database', label: 'Database', kind: 'text', required: true },
                     { key: 'trustCert', label: 'Trust TLS cert (dev / self-signed)', kind: 'bool', defaultValue: false },
+                    { key: 'bulk', label: 'Bulk write (fast)', kind: 'bool', defaultValue: true,
+                      description: 'Fast bulk load via the DuckDB mssql extension (TDS COPY, ~1.2M rows/s). Turn off to use the row-by-row driver (works fully offline; no extension fetch).' },
                 ],
             },
             {
@@ -1274,7 +1276,7 @@ function synthDbSink(comp: ComponentDef): ComponentManifest {
                 fields: [
                     { key: 'schema', label: 'Schema', kind: 'text', defaultValue: 'dbo' },
                     { key: 'tableName', label: 'Table', kind: 'text', required: true, placeholder: 'orders' },
-                    { key: 'batchSize', label: 'Insert batch size (max 1000)', kind: 'integer', defaultValue: 1000 },
+                    { key: 'batchSize', label: 'Insert batch size (driver mode only)', kind: 'integer', defaultValue: 1000 },
                     ...upsertModeFields(),
                 ],
             },
