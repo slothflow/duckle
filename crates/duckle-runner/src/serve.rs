@@ -421,6 +421,13 @@ fn run_stream(stream: &mut TcpStream, state: &WebState, body: &[u8]) -> Result<(
     };
     duckle_duckdb_engine::context::apply_workspace_context(&mut doc, &state.workspace);
     let name = args.get("pipelineName").and_then(|v| v.as_str()).unwrap_or("web").to_string();
+    // Optional run-to-here target: when set, the engine runs only the subgraph
+    // up to and including this node (partial run).
+    let target = args
+        .get("targetNodeId")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string());
     // SSE response head (no Content-Length; we stream until the run ends).
     let head = "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nCache-Control: no-cache\r\nConnection: close\r\n\r\n";
     stream.write_all(head.as_bytes()).map_err(|e| e.to_string())?;
@@ -431,7 +438,7 @@ fn run_stream(stream: &mut TcpStream, state: &WebState, body: &[u8]) -> Result<(
     // synchronous, so events stream first, the result line follows).
     let mut ev = stream.try_clone().map_err(|e| e.to_string())?;
     let engine = DuckdbEngine::new(state.duckdb.clone());
-    let result = engine.execute_pipeline_with_events(&doc, None, Some(&name), |evt| {
+    let result = engine.execute_pipeline_with_events(&doc, target.as_deref(), Some(&name), |evt| {
         if let Ok(j) = serde_json::to_string(&evt) {
             let _ = ev.write_all(format!("data: {}\n\n", j).as_bytes());
             let _ = ev.flush();

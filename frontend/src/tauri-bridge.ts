@@ -94,6 +94,7 @@ async function runViaSse(
     pipelineId?: string,
     pipelineName?: string | null,
     workspacePath?: string | null,
+    targetNodeId?: string,
 ): Promise<RunResult | null> {
     const fail = (error: string): RunResult => ({
         status: 'error',
@@ -111,6 +112,8 @@ async function runViaSse(
                 pipelineId: pipelineId ?? null,
                 pipelineName: pipelineName ?? null,
                 workspacePath: workspacePath ?? null,
+                // Present for run-to-here (partial); omitted/null = full run.
+                targetNodeId: targetNodeId ?? null,
             }),
         });
         if (!res.ok || !res.body) return fail('run failed: HTTP ' + res.status);
@@ -194,7 +197,12 @@ export async function runPipelinePartial(
     workspacePath?: string | null,
     pipelineName?: string | null,
 ): Promise<RunResult | null> {
-    if (!isTauri()) return null;
+    if (!isTauri() && !isWebBackend()) return null;
+    // Web edition: run-to-here streams over SSE like a full run, passing the
+    // target node so the server runs only the subgraph up to it.
+    if (isWebBackend()) {
+        return runViaSse({ nodes, edges }, onEvent, pipelineId, pipelineName, workspacePath, targetNodeId);
+    }
     const channel = new Channel<PipelineEvent>();
     if (onEvent) channel.onmessage = onEvent;
     try {
