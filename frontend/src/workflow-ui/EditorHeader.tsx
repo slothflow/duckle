@@ -147,6 +147,7 @@ export default function EditorHeader({
                     <button
                         type="button"
                         className="toolbar-button toolbar-run"
+                        data-tour="run"
                         onClick={onRun}
                         title={t('header.runTooltip')}
                     >

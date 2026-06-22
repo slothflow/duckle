@@ -52,7 +52,7 @@ export default function LeftSidebar({
     const [tab, setTab] = useState<SideTab>('palette');
 
     return (
-        <aside className="left-sidebar">
+        <aside className="left-sidebar" data-tour="palette">
             <div className="left-sidebar-tabs" role="tablist" aria-label={t('sidebar.ariaLabel')}>
                 <button
                     type="button"

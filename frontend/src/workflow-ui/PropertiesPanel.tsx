@@ -192,7 +192,7 @@ export default function PropertiesPanel({
 
     if (!selected) {
         return (
-            <aside className="properties">
+            <aside className="properties" data-tour="properties">
                 <button
                     type="button"
                     className="properties-collapse-toggle properties-collapse-toggle-float"

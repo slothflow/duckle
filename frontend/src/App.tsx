@@ -76,6 +76,7 @@ import {
     WorkspaceLoadError,
 } from './workspace';
 import { openExternal } from './tauri-io';
+import { GuidedTour } from './GuidedTour';
 import LeftSidebar from './workflow-ui/LeftSidebar';
 import PropertiesPanel from './workflow-ui/PropertiesPanel';
 import BottomPanel from './workflow-ui/BottomPanel';
@@ -1857,7 +1858,8 @@ export default function App() {
                 {workspacePathState && isInTauri() ? (
                     <button
                         type="button"
-                        className="topbar-theme-toggle"
+                        className="topbar-theme-toggle dashboard-glow-btn"
+                        data-tour="dashboard"
                         onClick={async () => {
                             try {
                                 const url = await invoke<string>('open_web_panel', {
@@ -1871,12 +1873,13 @@ export default function App() {
                         title="Open the web dashboard (run + monitor pipelines in a browser)"
                         aria-label="Open web dashboard"
                     >
-                        <LayoutDashboard size={14} />
+                        <LayoutDashboard size={14} className="dashboard-icon-glow" />
                     </button>
                 ) : null}
                 <button
                     type="button"
                     className="topbar-theme-toggle"
+                    data-tour="topbar"
                     onClick={() => setShowMcpModal(true)}
                     title="Connect to Claude"
                     aria-label="Connect Duckle to Claude"
@@ -1987,6 +1990,7 @@ export default function App() {
                 </div>
             ) : null}
 
+            <GuidedTour />
             <main className="workspace">
                 <LeftSidebar
                     repoItems={repo}
@@ -2008,7 +2012,7 @@ export default function App() {
                     onBackfillPipeline={handleBackfillPipeline}
                     onBuildPipeline={handleBuildPipeline}
                 />
-                <section className="canvas-shell">
+                <section className="canvas-shell" data-tour="canvas">
                     <EditorHeader
                         jobs={jobs}
                         activeJobId={activeJobId}

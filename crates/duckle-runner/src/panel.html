@@ -4,6 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Duckle - Management Console</title>
+<link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQAAAAEACAYAAABccqhmAAAE7klEQVR4nO3dYY4aRxSFUYiyxywk68hCskqsRIpi4cFuoJuq6u+c32PTMNLVfa+anssFAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA+NH1chK3v/64XRZw/fPv6wrv7ZXrZD2/jb4AYBwBAGECAMJ+H30BzLnTeOX17Q3WowFAmACAMCPAREbX/iOv33gwJw0AwgQAhBkBGDoeGA3G0gAgTABAmBGAoZwcjKUBQJgAgDAjAEuMB8aBY2gAECYAIEwAQJgdAEuwDziGBgBhAgDCjAAsx92D+9EAIEwAQJgAgDABAGECAMKcAixopk33bE8ydsPQczQACBMAECYAIMwOYAEzz7I/u7bR+wH7gF/TACBMAEDYaWrR6Lq5VbWKzvT7qf4OvqIBQJgAgDCnACd1ZOV+pUI/+jczjQZFGgCECQAIO802dJUqufcGeqb3vcd7G/F+ruFTAQ0AwgQAhDkFWNBMtX/vp/V+/3Ozvs8z0QAgTABAmACAMDuABZxhFp75u/m3ia/taBoAhAkACDMCTOoMtf/dyu1I8HgaAIQJAAg7zcZzlYq4dcu8yvsZ8fl86rO5Bk4ENAAIEwAQ5hRgIlur7SvVdM/afOQYU74pZwQNAMIEAIQZASY1W/1990nAR40g1dOSvWgAECYAIEwAQJgdwIIezb0j9gZHfrFn9JHgLXAkqQFAmACAMCPARF55dPYjI47H7l/z0XXueYx3/xqOBZ+jAUCYAIAwI8CJ7PGXeR79X4824u9ux1X4sTQACBMAEGYEWNDomjziRqTCTTkjaAAQJgAgzAgQqfxbavu7r7P1RqAV3U763jQACBMAECYAIMwOIGLLzPqzn1nlEd+eF/gcDQDCBACEGQEmtXd9VYf5igYAYQIAwowAk7LNfswXg/ajAUCYAIAwI8ACVn1s1qxPL+Z/GgCECQAIMwIsaNYTgq0b+ZmuuU4DgDABAGECAMLsABb3aO4+cs5+5e47c/+cNAAIEwAQZgTY0UxfTJnhWtT++WkAECYAIMwIsGC1nomavzYNAMIEAIQZATZw48tcjGH70QAgTABAmACAMDuAN5n1WZkGAGECAMKMABN9z573+f08RwOAMAEAYUYACN99qAFAmACAMAEAYQIAwgQAhDkFYAln3cKPpgFAmACAMAEAYXYALM2Xf96jAUCYAIAwI8CGavn9EdT9cZQKel7XwNGjBgBhAgDCjAA71kTjwL4KFXw0DQDCBACEnaZifap++0Oh534y8zU2dmgAECYAIMwpwJPu6+eWyjhDrVxlDJnhsyrRACBMAECYAIAwO4APzNbm2vc/m1V2GKvRACBMAECYEWCwYrWdrfZfwyOaBgBhAgDCBACECQAIEwAQ5hSA3LMTylv/exoAhAkACDMCcPrK/w+1/2saAIQJAAgTABBmB8DH52lz/zw0AAgTABBmBOCw+lx81sFqNAAIEwAQZgQ46d1zn9qAz1bzbf6fowFAmACAMCPAgkbU3Nmq/n9U/vdoABAmACBMAECYHcBgnzrSm3WG38qsfwwNAMIEAIQZARawen1/ldp/PA0AwgQAhBkBGErNH0sDgDABAGFGAD5C1Z+TBgBhAgDCjAA8TZ0/Dw0AwgQAhAkAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAC4/Osbgl6kmQ4usGMAAAAASUVORK5CYII=">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   :root {
     --bg: #0f1320; --surface: #161b2b; --surface-2: #1d2335; --surface-3: #252c42;
@@ -16,7 +19,8 @@
   * { box-sizing: border-box; }
   html, body { height: 100%; }
   body { margin: 0; background: var(--bg); color: var(--ink);
-    font: 14px/1.55 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; display: flex; }
+    font: 14px/1.55 "Inter", -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; display: flex;
+    -webkit-font-smoothing: antialiased; }
   ::-webkit-scrollbar { width: 10px; height: 10px; }
   ::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: 6px; }
   a { color: var(--maya); text-decoration: none; }
@@ -24,9 +28,9 @@
   /* Sidebar */
   aside { width: 230px; flex-shrink: 0; background: var(--surface); border-right: 1px solid var(--line);
     display: flex; flex-direction: column; height: 100vh; position: sticky; top: 0; }
-  .brand { display: flex; align-items: center; gap: 11px; padding: 18px 18px 14px; }
-  .logo { width: 30px; height: 30px; border-radius: 8px; flex-shrink: 0;
-    background: linear-gradient(135deg, var(--lemon), var(--orange)); box-shadow: 0 2px 10px rgba(255,138,61,.35); }
+  .brand { display: flex; align-items: center; gap: 11px; padding: 20px 18px 16px; }
+  .logo { width: 34px; height: 34px; flex-shrink: 0; object-fit: contain;
+    filter: drop-shadow(0 0 6px rgba(255,138,61,.45)); image-rendering: pixelated; }
   .brand b { font-size: 16px; letter-spacing: .2px; display: block; }
   .brand span { font-size: 11px; color: var(--muted); }
   nav { padding: 8px; flex: 1; }
@@ -51,9 +55,12 @@
 
   /* Metric cards */
   .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin: 18px 0 22px; }
-  .metric { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 15px 17px; }
-  .metric .k { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
-  .metric .v { font-size: 26px; font-weight: 680; margin-top: 4px; }
+  .metric { background: linear-gradient(180deg, var(--surface-2), var(--surface)); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 16px 18px; position: relative; overflow: hidden; box-shadow: var(--shadow); }
+  .metric::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    background: linear-gradient(90deg, var(--lemon), var(--orange)); opacity: .8; }
+  .metric .k { font-size: 11.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; font-weight: 500; }
+  .metric .v { font-size: 28px; font-weight: 700; margin-top: 5px; letter-spacing: -.5px; }
 
   /* Toolbar */
   .toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
@@ -135,7 +142,7 @@
 </head>
 <body>
 <aside>
-  <div class="brand"><span class="logo"></span><div><b>Duckle</b><span>Management Console</span></div></div>
+  <div class="brand"><img class="logo" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQAAAAEACAYAAABccqhmAAAE7klEQVR4nO3dYY4aRxSFUYiyxywk68hCskqsRIpi4cFuoJuq6u+c32PTMNLVfa+anssFAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA+NH1chK3v/64XRZw/fPv6wrv7ZXrZD2/jb4AYBwBAGECAMJ+H30BzLnTeOX17Q3WowFAmACAMCPAREbX/iOv33gwJw0AwgQAhBkBGDoeGA3G0gAgTABAmBGAoZwcjKUBQJgAgDAjAEuMB8aBY2gAECYAIEwAQJgdAEuwDziGBgBhAgDCjAAsx92D+9EAIEwAQJgAgDABAGECAMKcAixopk33bE8ydsPQczQACBMAECYAIMwOYAEzz7I/u7bR+wH7gF/TACBMAEDYaWrR6Lq5VbWKzvT7qf4OvqIBQJgAgDCnACd1ZOV+pUI/+jczjQZFGgCECQAIO802dJUqufcGeqb3vcd7G/F+ruFTAQ0AwgQAhDkFWNBMtX/vp/V+/3Ozvs8z0QAgTABAmACAMDuABZxhFp75u/m3ia/taBoAhAkACDMCTOoMtf/dyu1I8HgaAIQJAAg7zcZzlYq4dcu8yvsZ8fl86rO5Bk4ENAAIEwAQ5hRgIlur7SvVdM/afOQYU74pZwQNAMIEAIQZASY1W/1990nAR40g1dOSvWgAECYAIEwAQJgdwIIezb0j9gZHfrFn9JHgLXAkqQFAmACAMCPARF55dPYjI47H7l/z0XXueYx3/xqOBZ+jAUCYAIAwI8CJ7PGXeR79X4824u9ux1X4sTQACBMAEGYEWNDomjziRqTCTTkjaAAQJgAgzAgQqfxbavu7r7P1RqAV3U763jQACBMAECYAIMwOIGLLzPqzn1nlEd+eF/gcDQDCBACEGQEmtXd9VYf5igYAYQIAwowAk7LNfswXg/ajAUCYAIAwI8ACVn1s1qxPL+Z/GgCECQAIMwIsaNYTgq0b+ZmuuU4DgDABAGECAMLsABb3aO4+cs5+5e47c/+cNAAIEwAQZgTY0UxfTJnhWtT++WkAECYAIMwIsGC1nomavzYNAMIEAIQZATZw48tcjGH70QAgTABAmACAMDuAN5n1WZkGAGECAMKMABN9z573+f08RwOAMAEAYUYACN99qAFAmACAMAEAYQIAwgQAhDkFYAln3cKPpgFAmACAMAEAYXYALM2Xf96jAUCYAIAwI8CGavn9EdT9cZQKel7XwNGjBgBhAgDCjAA71kTjwL4KFXw0DQDCBACEnaZifap++0Oh534y8zU2dmgAECYAIMwpwJPu6+eWyjhDrVxlDJnhsyrRACBMAECYAIAwO4APzNbm2vc/m1V2GKvRACBMAECYEWCwYrWdrfZfwyOaBgBhAgDCBACECQAIEwAQ5hSA3LMTylv/exoAhAkACDMCcPrK/w+1/2saAIQJAAgTABBmB8DH52lz/zw0AAgTABBmBOCw+lx81sFqNAAIEwAQZgQ46d1zn9qAz1bzbf6fowFAmACAMCPAgkbU3Nmq/n9U/vdoABAmACBMAECYHcBgnzrSm3WG38qsfwwNAMIEAIQZARawen1/ldp/PA0AwgQAhBkBGErNH0sDgDABAGFGAD5C1Z+TBgBhAgDCjAA8TZ0/Dw0AwgQAhAkAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAC4/Osbgl6kmQ4usGMAAAAASUVORK5CYII=" alt="Duckle"><div><b>Duckle</b><span>Management Console</span></div></div>
   <nav>
     <button data-tab="overview" class="active"><span class="ico">▦</span> Overview</button>
     <button data-tab="runs"><span class="ico">≡</span> Runs</button>
@@ -297,7 +304,7 @@ function renderJobs(){
     return `<div class="job ${open}" data-id="${esc(p.id)}">
       <div class="job-head" onclick="toggleJob('${esc(p.id)}')">
         ${dot(p.lastStatus)}
-        <div><div class="job-name">${esc(p.name||p.id)}</div><div class="job-file">${esc(p.file)} · ${p.nodeCount} nodes</div></div>
+        <div><div class="job-name">${esc(p.name||p.id)} ${pill(p.lastStatus)}</div><div class="job-file">${esc(p.file)} · ${p.nodeCount} nodes</div></div>
         <div>${schedHtml}</div>
         <div><div class="col-k">Last run</div><div class="col-v">${relTime(p.lastAt)}</div></div>
         <div><div class="col-k">Duration</div><div class="col-v">${fmtDur(p.lastDurationMs)}</div></div>

@@ -7470,6 +7470,58 @@ html[dir='rtl'] .topbar-lang {
     0%, 100% { filter: drop-shadow(0 0 1px rgba(217, 119, 87, 0.45)); }
     50% { filter: drop-shadow(0 0 5px rgba(217, 119, 87, 0.95)); }
 }
+/* Web-dashboard button: green glow (live-console affordance), pulsing like the
+   Claude button. Green is intentional here per request - reads as "a live
+   console is available", distinct from the lemon brand chrome. */
+.dashboard-glow-btn {
+    border-color: rgba(62, 207, 142, 0.5) !important;
+}
+.dashboard-glow-btn:hover {
+    border-color: rgba(62, 207, 142, 0.95) !important;
+    background: rgba(62, 207, 142, 0.12) !important;
+}
+.dashboard-icon-glow {
+    color: #3ecf8e;
+    animation: dashboard-glow 2.2s ease-in-out infinite;
+}
+@keyframes dashboard-glow {
+    0%, 100% { filter: drop-shadow(0 0 1px rgba(62, 207, 142, 0.5)); }
+    50% { filter: drop-shadow(0 0 6px rgba(62, 207, 142, 1)); }
+}
+
+/* ---- Guided tour (first-run walkthrough) ---- */
+.tour-root { position: fixed; inset: 0; z-index: 99999; pointer-events: none; }
+.tour-dim { position: absolute; inset: 0; background: rgba(7, 9, 15, 0.72); pointer-events: auto; }
+.tour-spotlight {
+    position: absolute; border-radius: 10px; pointer-events: none;
+    box-shadow: 0 0 0 9999px rgba(7, 9, 15, 0.72), 0 0 0 2px var(--lemon, #ffd84d), 0 0 22px 4px rgba(255, 216, 77, 0.45);
+    transition: top .25s ease, left .25s ease, width .25s ease, height .25s ease;
+}
+.tour-tip {
+    position: absolute; pointer-events: auto; box-sizing: border-box;
+    background: var(--panel, #161b2b); color: var(--text, #eef1f8);
+    border: 1px solid var(--border, #2c3349); border-radius: 14px; padding: 18px 18px 14px;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5); max-width: calc(100vw - 24px);
+    animation: tour-pop .2s ease;
+}
+@keyframes tour-pop { from { opacity: 0; transform: translateY(6px) scale(.98); } }
+.tour-progress { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--text-dim, #9aa4bd); font-weight: 600; }
+.tour-title { margin: 6px 0 8px; font-size: 16px; font-weight: 700; }
+.tour-body { margin: 0 0 14px; font-size: 13px; line-height: 1.6; color: var(--text-dim, #c2cae0); }
+.tour-dots { display: flex; gap: 5px; margin-bottom: 14px; }
+.tour-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--border, #3a4360); transition: .15s; }
+.tour-dot.on { background: var(--lemon, #ffd84d); width: 18px; border-radius: 4px; }
+.tour-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.tour-nav { display: flex; gap: 8px; }
+.tour-skip { background: none; border: none; color: var(--text-dim, #9aa4bd); cursor: pointer; font-size: 13px; padding: 6px 4px; }
+.tour-skip:hover { color: var(--text, #eef1f8); text-decoration: underline; }
+.tour-btn {
+    background: var(--surface-2, #1d2335); color: var(--text, #eef1f8);
+    border: 1px solid var(--border, #2c3349); border-radius: 9px; padding: 7px 16px; font-size: 13px; cursor: pointer;
+}
+.tour-btn:hover { border-color: var(--border-strong, #3a4360); }
+.tour-btn.primary { background: var(--lemon, #ffd84d); border-color: var(--lemon, #ffd84d); color: #20242e; font-weight: 600; }
+.tour-btn.primary:hover { background: var(--orange, #ff8a3d); border-color: var(--orange, #ff8a3d); }
 /* Primary action buttons in the MCP popup use Claude's orange (not the Duckle
    lemon) so the "connect to Claude" flow reads in Claude's color scheme. */
 .btn-claude {
