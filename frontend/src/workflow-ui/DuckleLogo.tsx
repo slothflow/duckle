@@ -14,16 +14,16 @@ export function DuckleLogo({ size = 24, className }: { size?: number; className?
         >
             <defs>
                 <clipPath id="duckle-logo-bowl">
-                    <circle cx="32" cy="38" r="16" />
+                    <circle cx="31.5" cy="39.5" r="20.5" />
                 </clipPath>
             </defs>
             <path
                 fill="#F6BA78"
                 fillRule="evenodd"
-                d="M16,38 A16,16 0 1,0 48,38 A16,16 0 1,0 16,38 Z M24,38 A7,7 0 1,0 38,38 A7,7 0 1,0 24,38 Z"
+                d="M11,39.5 A20.5,20.5 0 1,0 52,39.5 A20.5,20.5 0 1,0 11,39.5 Z M20.4,39.5 A11.1,11.1 0 1,0 42.6,39.5 A11.1,11.1 0 1,0 20.4,39.5 Z"
             />
-            <rect x="40" y="10" width="8" height="44" rx="4" fill="#EA7E42" />
-            <rect x="40" y="10" width="8" height="44" rx="4" fill="#D9742F" clipPath="url(#duckle-logo-bowl)" />
+            <rect x="42.6" y="4" width="10.4" height="56" rx="5.2" fill="#EA7E42" />
+            <rect x="42.6" y="4" width="10.4" height="56" rx="5.2" fill="#D9742F" fillOpacity="0.45" clipPath="url(#duckle-logo-bowl)" />
         </svg>
     );
 }
