@@ -482,7 +482,7 @@ pre code { background: none; border: none; padding: 0; color: var(--code-ink); }
 .hgraph .lines line { stroke: var(--border-2); stroke-width: 1.4; }
 .hgraph .lines circle { fill: var(--gold); }
 .hg-el { position: absolute; transform: translate(-50%, -50%); }
-.hg-center { width: 156px; height: 156px; border-radius: 50%; background: transparent; border: none; box-shadow: 0 18px 44px rgba(0, 0, 0, .35); display: flex; align-items: center; justify-content: center; z-index: 4; animation: hgpulse 3.4s ease-in-out infinite; }
+.hg-center { width: 156px; height: 156px; border-radius: 50%; background: var(--panel); border: 1px solid var(--border); box-shadow: 0 18px 44px rgba(0, 0, 0, .35); display: flex; align-items: center; justify-content: center; z-index: 4; animation: hgpulse 3.4s ease-in-out infinite; }
 .hg-center img { width: 116px; height: auto; }
 @media (max-width: 760px) { .hg-center { width: 120px; height: 120px; } .hg-center img { width: 90px; } }
 @keyframes hgpulse {
