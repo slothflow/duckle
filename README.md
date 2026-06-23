@@ -1,10 +1,8 @@
 <div align="center">
 
-<img src="docs/assets/duckle-wordmark.png" alt="Duckle" width="300"/>
+<img src="docs/assets/duckle-readme.png" alt="Duckle" width="460"/>
 
 <h3>The local-first data studio with a built-in AI assistant.</h3>
-
-<p><sub><b>Duckle</b> by <b>SlothFlowLabs</b></sub></p>
 
 <p><b>Duckle</b> is an open-source desktop ETL / ELT studio. Drag a pipeline onto the canvas, describe what you need in plain English to <b>Duckie</b> (the on-device AI assistant), and execute at native speed through DuckDB. 290+ connectors, 50+ transforms, a built-in scheduler, and a chat assistant that runs entirely on your CPU. Ships as a ~65 MB single-file desktop app. No cloud, no servers, no lock-in.</p>
 
