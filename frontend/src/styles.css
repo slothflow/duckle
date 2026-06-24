@@ -7895,3 +7895,16 @@ html[dir='rtl'] .topbar-lang {
 .share-title { font-size: 20px; font-weight: 650; color: var(--text-1); margin: 4px 0 16px; }
 .share-msg { padding: 24px; color: var(--text-2); font-size: 14px; }
 .share-err { color: var(--danger, #f0556b); white-space: pre-wrap; font-family: Consolas, monospace; }
+
+/* Dives gallery (top-bar entry point) */
+.dives-gallery { background: var(--bg-1); border: 1px solid var(--border); border-radius: 12px; width: min(720px, 94vw); max-height: 88vh; overflow: auto; padding: 18px 20px; }
+.dives-gallery-head { display: flex; align-items: center; justify-content: space-between; }
+.dives-gallery-title { font-size: 18px; font-weight: 650; color: var(--text-1); margin: 0; }
+.dives-gallery-sub { color: var(--text-2); font-size: 13px; margin: 4px 0 14px; }
+.dives-gallery-section { margin-top: 14px; }
+.dives-gallery-section-head { display: flex; align-items: center; justify-content: space-between; font-size: 12px; font-weight: 650; text-transform: uppercase; letter-spacing: .04em; color: var(--text-2); margin-bottom: 8px; }
+.dives-gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.dives-gallery-card { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; padding: 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-2); color: var(--text-1); cursor: pointer; text-align: left; transition: border-color .12s, background .12s; }
+.dives-gallery-card:hover { border-color: var(--accent, #f5b301); background: var(--bg-3, var(--bg-2)); }
+.dives-gallery-card-icon { color: var(--accent, #f5b301); }
+.dives-gallery-card-name { font-size: 13px; font-weight: 550; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }

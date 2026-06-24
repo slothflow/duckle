@@ -12,7 +12,7 @@ import {
     type OnSelectionChangeParams,
 } from '@xyflow/react';
 import type { ConnectionType } from './canvas/connection-types';
-import { Braces, FolderOpen, GitBranch, LayoutDashboard, Moon, RotateCw, Sparkles, Sun } from 'lucide-react';
+import { BarChart3, Braces, FolderOpen, GitBranch, LayoutDashboard, Moon, RotateCw, Sparkles, Sun } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import LanguageSelector from './i18n/LanguageSelector';
 import { UpdateBanner } from './UpdateBanner';
@@ -111,6 +111,7 @@ import { DiveModal } from './dives/DiveModal';
 import type { Dive } from './dives/dive-types';
 import { DashboardModal } from './dives/DashboardModal';
 import type { Dashboard } from './dives/dashboard-types';
+import { DivesGallery } from './dives/DivesGallery';
 
 type RuntimeState = 'connecting' | 'ready' | 'offline';
 
@@ -1866,6 +1867,8 @@ export default function App() {
         [upsertRepoItem],
     );
     const diveItems = useMemo(() => repo.filter((r) => r.type === 'dive'), [repo]);
+    const dashboardItems = useMemo(() => repo.filter((r) => r.type === 'dashboard'), [repo]);
+    const [showDivesGallery, setShowDivesGallery] = useState(false);
 
     const openJobIds = useMemo(() => new Set(jobs.map(j => j.id)), [jobs]);
 
@@ -1955,6 +1958,15 @@ export default function App() {
                         <LayoutDashboard size={14} className="dashboard-icon-glow" />
                     </button>
                 ) : null}
+                <button
+                    type="button"
+                    className="topbar-theme-toggle"
+                    onClick={() => setShowDivesGallery(true)}
+                    title="Dives - live data views & dashboards"
+                    aria-label="Open dives"
+                >
+                    <BarChart3 size={14} />
+                </button>
                 <button
                     type="button"
                     className="topbar-theme-toggle"
@@ -2244,6 +2256,29 @@ export default function App() {
                 />
             ) : null}
 
+            {showDivesGallery ? (
+                <DivesGallery
+                    dives={diveItems}
+                    dashboards={dashboardItems}
+                    onOpenDive={(id) => {
+                        setShowDivesGallery(false);
+                        setRepoEditor({ kind: 'dive', itemId: id, parentId: 'dives' });
+                    }}
+                    onOpenDashboard={(id) => {
+                        setShowDivesGallery(false);
+                        setRepoEditor({ kind: 'dashboard', itemId: id, parentId: 'dashboards' });
+                    }}
+                    onNewDive={() => {
+                        setShowDivesGallery(false);
+                        handleNewDive('dives');
+                    }}
+                    onNewDashboard={() => {
+                        setShowDivesGallery(false);
+                        handleNewDashboard('dashboards');
+                    }}
+                    onClose={() => setShowDivesGallery(false)}
+                />
+            ) : null}
             {showMcpModal ? <McpModal onClose={() => setShowMcpModal(false)} /> : null}
             {showSettings ? (
                 <SettingsModal workspace={workspacePathState} onClose={() => setShowSettings(false)} />
