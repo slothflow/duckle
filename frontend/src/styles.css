@@ -7842,3 +7842,16 @@ html[dir='rtl'] .topbar-lang {
     background: none; border: none; color: var(--text-3); font-size: 12px; cursor: pointer; padding: 6px 4px;
 }
 .review-prompt-link:hover { color: var(--text-1); }
+
+/* Dives - live data views */
+.dive-panel { display: flex; flex-direction: column; gap: 12px; padding: 14px; height: 100%; overflow: auto; }
+.dive-panel-head { font-size: 14px; font-weight: 650; color: var(--text-1); }
+.dive-panel-msg { padding: 16px; color: var(--text-2); font-size: 13px; }
+.dive-panel-err { color: var(--danger, #f0556b); white-space: pre-wrap; font-family: Consolas, monospace; }
+.dive-chart { min-height: 260px; }
+.dive-table-wrap { border: 1px solid var(--border); border-radius: 8px; overflow: auto; max-height: 320px; }
+.dive-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.dive-table th, .dive-table td { text-align: left; padding: 5px 9px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.dive-table th { position: sticky; top: 0; background: var(--bg-elevated); color: var(--text-2); font-weight: 600; }
+.dive-table td { color: var(--text-1); }
+.dive-table-more { padding: 6px 9px; font-size: 11px; color: var(--text-3); }
