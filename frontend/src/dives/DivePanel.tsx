@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react';
 import type { Dive } from './dive-types';
 import { runDive, type DiveResult } from './dive-run';
 import { VegaChart } from './VegaChart';
+import { suggestChart } from './suggest-chart';
 
 interface DivePanelProps {
     dive: Dive;
@@ -57,13 +58,19 @@ export function DivePanel({ dive, workspacePath, theme = 'dark' }: DivePanelProp
     if (!result) return null;
 
     const cols = result.columns.map((c) => c.name);
-    const fields = encodingFields(dive.chart);
-    const chartRenderable = fields.length > 0 && fields.every((f) => cols.includes(f));
+    const declared = encodingFields(dive.chart);
+    const declaredOk = declared.length > 0 && declared.every((f) => cols.includes(f));
+    // Use the dive's own chart when its fields resolve against the result, else
+    // auto-pick one from the result shape; null means nothing sensible to chart.
+    const spec = declaredOk ? dive.chart : suggestChart(result.columns);
+    const chartRenderable = spec !== null && encodingFields(spec).every((f) => cols.includes(f));
 
     return (
         <div className="dive-panel">
             <div className="dive-panel-head">{dive.title}</div>
-            {chartRenderable ? <VegaChart spec={dive.chart} rows={result.rows} theme={theme} /> : null}
+            {chartRenderable && spec ? (
+                <VegaChart spec={spec} rows={result.rows} theme={theme} />
+            ) : null}
             <DiveTable columns={cols} rows={result.rows} />
         </div>
     );
