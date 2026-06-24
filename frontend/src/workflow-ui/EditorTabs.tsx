@@ -26,6 +26,8 @@ const TAB_IDS: TabId[] = ['canvas', 'plan', 'run', 'history'];
 type Props = {
     engine: EngineId;
     nodes: Node<DuckleNodeData>[];
+    /** Nodes with ${...} placeholders resolved, for the Plan preview (#105). */
+    planNodes: Node<DuckleNodeData>[];
     edges: Edge[];
     runResult: RunResult | null;
     isRunning: boolean;
@@ -52,6 +54,7 @@ export default function EditorTabs({
     edges,
     runResult,
     isRunning,
+    planNodes,
     nodeLabels,
     workspacePath,
     pipelineId,
@@ -110,7 +113,7 @@ export default function EditorTabs({
                     />
                 </div>
                 <div className={'tab-panel' + (active === 'plan' ? ' tab-panel-active' : '')}>
-                    <PlanView nodes={nodes} edges={edges} />
+                    <PlanView nodes={planNodes} edges={edges} />
                 </div>
                 <div className={'tab-panel' + (active === 'run' ? ' tab-panel-active' : '')}>
                     <RunView

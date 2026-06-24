@@ -1867,6 +1867,14 @@ export default function App() {
         (name: string, payload: Dashboard) => upsertRepoItem('dashboard', name, payload),
         [upsertRepoItem],
     );
+    // #105: the Plan tab compiles the RESOLVED nodes (context vars / ${...}
+    // placeholders substituted, like a run does), so the preview matches what
+    // executes instead of showing raw ${VAR} the run would have replaced. The
+    // canvas keeps the un-substituted, editable `nodes`.
+    const planNodes = useMemo(
+        () => resolveForRun(nodes, repo, workspacePathState),
+        [nodes, repo, workspacePathState],
+    );
     const diveItems = useMemo(() => repo.filter((r) => r.type === 'dive'), [repo]);
     const dashboardItems = useMemo(() => repo.filter((r) => r.type === 'dashboard'), [repo]);
     const [showDivesGallery, setShowDivesGallery] = useState(false);
@@ -2135,6 +2143,7 @@ export default function App() {
                     <EditorTabs
                         engine={engine}
                         nodes={nodes}
+                        planNodes={planNodes}
                         edges={edges}
                         runResult={runResult}
                         isRunning={isRunning}
