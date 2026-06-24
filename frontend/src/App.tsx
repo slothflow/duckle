@@ -12,7 +12,7 @@ import {
     type OnSelectionChangeParams,
 } from '@xyflow/react';
 import type { ConnectionType } from './canvas/connection-types';
-import { BarChart3, Braces, FolderOpen, GitBranch, LayoutDashboard, Moon, RotateCw, Sparkles, Sun } from 'lucide-react';
+import { BarChart3, Braces, FolderOpen, GitBranch, LayoutDashboard, Moon, RotateCw, Sparkles, Sun, Waypoints } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import LanguageSelector from './i18n/LanguageSelector';
 import { UpdateBanner } from './UpdateBanner';
@@ -112,6 +112,7 @@ import type { Dive } from './dives/dive-types';
 import { DashboardModal } from './dives/DashboardModal';
 import type { Dashboard } from './dives/dashboard-types';
 import { DivesGallery } from './dives/DivesGallery';
+import { LineageModal } from './workflow-ui/LineageModal';
 
 type RuntimeState = 'connecting' | 'ready' | 'offline';
 
@@ -1869,6 +1870,7 @@ export default function App() {
     const diveItems = useMemo(() => repo.filter((r) => r.type === 'dive'), [repo]);
     const dashboardItems = useMemo(() => repo.filter((r) => r.type === 'dashboard'), [repo]);
     const [showDivesGallery, setShowDivesGallery] = useState(false);
+    const [showLineage, setShowLineage] = useState(false);
 
     const openJobIds = useMemo(() => new Set(jobs.map(j => j.id)), [jobs]);
 
@@ -1966,6 +1968,15 @@ export default function App() {
                     aria-label="Open dives"
                 >
                     <BarChart3 size={14} />
+                </button>
+                <button
+                    type="button"
+                    className="topbar-theme-toggle"
+                    onClick={() => setShowLineage(true)}
+                    title="Column lineage - trace each column back to its sources"
+                    aria-label="Open column lineage"
+                >
+                    <Waypoints size={14} />
                 </button>
                 <button
                     type="button"
@@ -2278,6 +2289,9 @@ export default function App() {
                     }}
                     onClose={() => setShowDivesGallery(false)}
                 />
+            ) : null}
+            {showLineage ? (
+                <LineageModal nodes={nodes} edges={edges} onClose={() => setShowLineage(false)} />
             ) : null}
             {showMcpModal ? <McpModal onClose={() => setShowMcpModal(false)} /> : null}
             {showSettings ? (

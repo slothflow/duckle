@@ -7937,3 +7937,19 @@ html[dir='rtl'] .topbar-lang {
 .run-node-sql { margin-top: 4px; font-size: 12px; }
 .run-node-sql summary { cursor: pointer; color: var(--text-2); }
 .run-node-sql pre { margin: 4px 0 0; padding: 8px; background: var(--bg-2); border: 1px solid var(--border); border-radius: 6px; overflow: auto; max-height: 220px; white-space: pre-wrap; font-family: Consolas, monospace; }
+
+/* Column lineage viewer (#103) */
+.lineage-modal { background: var(--bg-1); border: 1px solid var(--border); border-radius: 12px; width: min(820px, 94vw); max-height: 88vh; overflow: auto; padding: 18px 20px; }
+.lineage-head { display: flex; align-items: center; justify-content: space-between; }
+.lineage-title { font-size: 18px; font-weight: 650; margin: 0; color: var(--text-1); }
+.lineage-sub { color: var(--text-2); font-size: 13px; margin: 4px 0 14px; }
+.lineage-body { display: flex; flex-direction: column; gap: 14px; }
+.lineage-node { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.lineage-node-name { font-weight: 650; font-size: 13px; padding: 8px 12px; background: var(--bg-2); color: var(--text-1); }
+.lineage-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.lineage-table th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-2); padding: 6px 12px; }
+.lineage-table td { padding: 6px 12px; border-top: 1px solid var(--border); vertical-align: top; }
+.lineage-col { font-weight: 550; color: var(--text-1); white-space: nowrap; }
+.lineage-roots { display: flex; flex-wrap: wrap; gap: 6px; }
+.lineage-root { background: var(--bg-2); border: 1px solid var(--border); border-radius: 6px; padding: 1px 7px; font-family: Consolas, monospace; font-size: 12px; color: var(--text-1); }
+.lineage-none { color: var(--text-2); }

@@ -555,6 +555,21 @@ export async function compilePipelineSql(
     });
 }
 
+/** A resolved origin column for lineage (#103). */
+export type LineageRoot = { node: string; column: string };
+/** node id -> [output column name, root source columns][]. */
+export type PipelineLineage = Record<string, Array<[string, LineageRoot[]]>>;
+
+export async function pipelineColumnLineage(
+    nodes: Node<DuckleNodeData>[],
+    edges: Edge[],
+): Promise<PipelineLineage | null> {
+    if (!isTauri() && !isWebBackend()) return null;
+    return await invoke<PipelineLineage>('pipeline_column_lineage', {
+        pipeline: { nodes, edges },
+    });
+}
+
 // ---- Schedules ---------------------------------------------------------
 
 export type ScheduleKind =

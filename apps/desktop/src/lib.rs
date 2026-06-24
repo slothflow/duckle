@@ -142,6 +142,7 @@ pub fn run() {
             watermark_clear,
             cancel_pipeline,
             compile_pipeline,
+            pipeline_column_lineage,
             schedule_set_workspace,
             schedule_list,
             schedule_upsert,
@@ -449,6 +450,20 @@ fn cancel_pipeline() -> Result<(), String> {
 #[tauri::command]
 fn compile_pipeline(pipeline: PipelineDoc) -> Result<Vec<StageSql>, String> {
     compile_pipeline_sql(&pipeline).map_err(|e| e.to_string())
+}
+
+/// Column-level lineage for the whole pipeline: each node's output columns
+/// mapped to the root source columns they trace back to (#103). Read-only.
+#[tauri::command]
+fn pipeline_column_lineage(
+    pipeline: PipelineDoc,
+) -> Result<
+    std::collections::HashMap<String, Vec<(String, Vec<duckle_duckdb_engine::lineage::RootColumn>)>>,
+    String,
+> {
+    engine()?
+        .pipeline_column_lineage(&pipeline)
+        .map_err(|e| e.to_string())
 }
 
 // ---- Scheduler commands ------------------------------------------------

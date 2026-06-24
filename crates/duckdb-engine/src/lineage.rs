@@ -120,7 +120,7 @@ fn collect_column_refs(expr: &JsonValue, out: &mut Vec<ColumnSource>) {
 
 /// A resolved origin: the column at the node where it enters the pipeline (a
 /// source node with no upstream, or the deepest node the trace could reach).
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct RootColumn {
     pub node: String,
     pub column: String,
