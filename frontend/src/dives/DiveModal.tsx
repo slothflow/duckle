@@ -8,6 +8,7 @@ import { loadDive } from './dive-io';
 import { DivePanel } from './DivePanel';
 import { runDive } from './dive-run';
 import { buildDiveHtml } from './dive-export';
+import { generateDive } from './dive-generate';
 import { saveTextFile } from '../tauri-io';
 import { DIVE_SCHEMA_VERSION, type Dive } from './dive-types';
 
@@ -37,14 +38,15 @@ export function DiveModal({ item, workspacePath, theme, onClose, onSave }: DiveM
     const [title, setTitle] = useState(existing?.title ?? item?.name ?? 'New dive');
     const [sql, setSql] = useState(existing?.query.sql ?? '');
     const [preview, setPreview] = useState<Dive | null>(existing ?? null);
+    const [genChart, setGenChart] = useState<Dive['chart'] | null>(null);
 
     const draft = (): Dive => ({
         diveSchemaVersion: DIVE_SCHEMA_VERSION,
         id: existing?.id ?? newId(),
         title: title.trim() || 'Untitled dive',
         query: { sql },
-        chart: existing?.chart ?? {},
-        meta: { ...(existing?.meta ?? {}), generator: 'manual' },
+        chart: genChart ?? existing?.chart ?? {},
+        meta: { ...(existing?.meta ?? {}), generator: genChart ? 'duckie' : 'manual' },
     });
 
     const canRun = sql.trim().length > 0;
@@ -64,6 +66,35 @@ export function DiveModal({ item, workspacePath, theme, onClose, onSave }: DiveM
             console.error('dive export failed', e);
         } finally {
             setExporting(false);
+        }
+    };
+
+    const [fromExpr, setFromExpr] = useState('');
+    const [question, setQuestion] = useState('');
+    const [generating, setGenerating] = useState(false);
+    const [genError, setGenError] = useState<string | null>(null);
+    const generate = async () => {
+        if (!fromExpr.trim() || !question.trim()) return;
+        setGenerating(true);
+        setGenError(null);
+        try {
+            const gen = await generateDive(fromExpr.trim(), question.trim(), workspacePath);
+            setSql(gen.sql);
+            setGenChart(gen.chart);
+            const t = title.trim() && title !== 'New dive' ? title.trim() : question.trim().slice(0, 60);
+            setTitle(t);
+            setPreview({
+                diveSchemaVersion: DIVE_SCHEMA_VERSION,
+                id: existing?.id ?? newId(),
+                title: t || 'Untitled dive',
+                query: { sql: gen.sql },
+                chart: gen.chart,
+                meta: { generator: 'duckie' },
+            });
+        } catch (e) {
+            setGenError(e instanceof Error ? e.message : String(e));
+        } finally {
+            setGenerating(false);
         }
     };
 
@@ -96,6 +127,35 @@ export function DiveModal({ item, workspacePath, theme, onClose, onSave }: DiveM
                         <div className="dive-panel-msg dive-panel-err">{loadError}</div>
                     ) : editing ? (
                         <div className="dive-editor">
+                            <div className="dive-gen">
+                                <div className="dive-gen-title">Generate with Duckie (optional)</div>
+                                <label className="dive-field">
+                                    <span>Source - a table or read_X(...)</span>
+                                    <input
+                                        value={fromExpr}
+                                        onChange={(e) => setFromExpr(e.target.value)}
+                                        placeholder="read_parquet('data/sales.parquet')"
+                                    />
+                                </label>
+                                <label className="dive-field">
+                                    <span>Question</span>
+                                    <input
+                                        value={question}
+                                        onChange={(e) => setQuestion(e.target.value)}
+                                        placeholder="total revenue by region this year"
+                                    />
+                                </label>
+                                <button
+                                    className="dive-btn"
+                                    onClick={() => void generate()}
+                                    disabled={generating || !fromExpr.trim() || !question.trim()}
+                                >
+                                    {generating ? 'Generating…' : 'Generate'}
+                                </button>
+                                {genError ? (
+                                    <div className="dive-panel-msg dive-panel-err">{genError}</div>
+                                ) : null}
+                            </div>
                             <label className="dive-field">
                                 <span>Title</span>
                                 <input value={title} onChange={(e) => setTitle(e.target.value)} />

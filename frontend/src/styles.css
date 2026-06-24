@@ -7878,3 +7878,7 @@ html[dir='rtl'] .topbar-lang {
 .dive-btn.primary { background: var(--accent); color: #20242e; border-color: var(--accent); font-weight: 600; }
 .dive-btn.primary:hover { background: var(--accent-strong); }
 .dive-btn:disabled { opacity: .5; cursor: default; }
+
+/* Dive AI generation */
+.dive-gen { border: 1px solid var(--border); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 10px; background: var(--bg-2); }
+.dive-gen-title { font-size: 12px; font-weight: 600; color: var(--text-2); }
