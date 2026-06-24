@@ -108,6 +108,7 @@ import type { DropPosition, NodeAction, PaneAction } from './canvas/Canvas';
 import { useUndoRedo, type CanvasSnapshot } from './useUndoRedo';
 import type { RepoItem } from './repo-types';
 import { DiveModal } from './dives/DiveModal';
+import type { Dive } from './dives/dive-types';
 
 type RuntimeState = 'connecting' | 'ready' | 'offline';
 
@@ -186,6 +187,7 @@ const INITIAL_REPO: RepoItem[] = [
     { id: 'contexts', name: 'Contexts', type: 'folder', parentId: 'root' },
     { id: 'routines', name: 'Routines', type: 'folder', parentId: 'root' },
     { id: 'docs', name: 'Documentation', type: 'folder', parentId: 'root' },
+    { id: 'dives', name: 'Dives', type: 'folder', parentId: 'root' },
     { id: 'j1', name: 'orders_etl', type: 'pipeline', parentId: 'pipelines' },
 ];
 
@@ -1744,6 +1746,10 @@ export default function App() {
         (parentId: string) => setRepoEditor({ kind: 'routine', itemId: null, parentId }),
         [],
     );
+    const handleNewDive = useCallback(
+        (parentId: string) => setRepoEditor({ kind: 'dive', itemId: null, parentId }),
+        [],
+    );
 
     const handleOpenRepoItem = useCallback((item: RepoItem) => {
         if (item.type === 'connection')
@@ -1785,7 +1791,7 @@ export default function App() {
 
     const upsertRepoItem = useCallback(
         (
-            type: 'connection' | 'context' | 'doc' | 'routine',
+            type: 'connection' | 'context' | 'doc' | 'routine' | 'dive',
             name: string,
             payload: unknown,
         ) => {
@@ -1835,6 +1841,10 @@ export default function App() {
     );
     const handleSaveRoutine = useCallback(
         (name: string, payload: RoutinePayload) => upsertRepoItem('routine', name, payload),
+        [upsertRepoItem],
+    );
+    const handleSaveDive = useCallback(
+        (name: string, payload: Dive) => upsertRepoItem('dive', name, payload),
         [upsertRepoItem],
     );
 
@@ -2052,6 +2062,7 @@ export default function App() {
                     onNewContext={handleNewContext}
                     onNewDocument={handleNewDocument}
                     onNewRoutine={handleNewRoutine}
+                    onNewDive={handleNewDive}
                     onRenameRepoItem={handleRenameRepoItem}
                     onDuplicateRepoItem={handleDuplicateRepoItem}
                     onDeleteRepoItem={handleDeleteRepoItem}
@@ -2251,6 +2262,7 @@ export default function App() {
                     item={editingRepoItem}
                     workspacePath={workspacePathState}
                     theme={theme === 'light' ? 'light' : 'dark'}
+                    onSave={handleSaveDive}
                     onClose={() => setRepoEditor(null)}
                 />
             ) : null}

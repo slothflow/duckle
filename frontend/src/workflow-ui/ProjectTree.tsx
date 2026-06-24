@@ -38,6 +38,7 @@ type Props = {
     onNewContext: (parentId: string) => void;
     onNewDocument: (parentId: string) => void;
     onNewRoutine: (parentId: string) => void;
+    onNewDive: (parentId: string) => void;
     onRename: (id: string, newName: string) => void;
     onDuplicate: (id: string) => void;
     onDelete: (id: string) => void;
@@ -49,7 +50,7 @@ type Props = {
 
 // Built-in top-level containers. They anchor the tree, so they cannot be
 // dragged (they stay put), but they are still valid drop targets.
-const SYSTEM_IDS = new Set(['root', 'pipelines', 'connections', 'contexts', 'routines', 'docs']);
+const SYSTEM_IDS = new Set(['root', 'pipelines', 'connections', 'contexts', 'routines', 'docs', 'dives']);
 
 // MIME used to carry the dragged repo-item id for a tree reparent. Distinct
 // from `application/duckle-context` (drag a context onto the canvas), so both
@@ -100,6 +101,7 @@ export default function ProjectTree(props: Props) {
         onNewContext,
         onNewDocument,
         onNewRoutine,
+        onNewDive,
         onRename,
         onDuplicate,
         onDelete,
@@ -209,6 +211,7 @@ export default function ProjectTree(props: Props) {
         const isContextsScope = item.id === 'contexts' || root === 'contexts';
         const isRoutinesScope = item.id === 'routines' || root === 'routines';
         const isDocsScope = item.id === 'docs' || root === 'docs';
+        const isDivesScope = item.id === 'dives' || root === 'dives';
 
         const newItems: MenuItem[] = [];
         if (item.type === 'project' || isPipelinesScope) {
@@ -254,6 +257,15 @@ export default function ProjectTree(props: Props) {
                 label: 'New document…',
                 icon: <FileCog size={ICON_SIZE} />,
                 onClick: () => onNewDocument(item.id),
+            });
+        }
+        if (item.type === 'project' || isDivesScope) {
+            newItems.push({
+                kind: 'item',
+                key: 'new-dive',
+                label: 'New dive…',
+                icon: <FileCog size={ICON_SIZE} />,
+                onClick: () => onNewDive(item.id),
             });
         }
         newItems.push({

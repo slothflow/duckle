@@ -65,7 +65,9 @@ export interface Dive {
     title: string;
     description?: string;
     question?: string;
-    source: DiveSource;
+    // Optional in v1: a self-contained SQL dive reads its source inline (e.g.
+    // read_parquet('...')). Set for the duckdb-attach case (a later phase).
+    source?: DiveSource;
     query: DiveQuery;
     chart: DiveChart;
     state?: DiveState;
@@ -77,8 +79,6 @@ export interface DiveParseResult {
     dive?: Dive;
     error?: string;
 }
-
-const SOURCE_KINDS = ['duckdb', 'parquet', 'csv'] as const;
 
 /**
  * Validate and narrow an unknown (parsed JSON) into a Dive. Rejects an unknown
@@ -99,10 +99,6 @@ export function parseDive(raw: unknown): DiveParseResult {
     }
     if (typeof d.id !== 'string' || !d.id) return { ok: false, error: 'Dive is missing "id".' };
     if (typeof d.title !== 'string' || !d.title) return { ok: false, error: 'Dive is missing "title".' };
-    const src = d.source as Record<string, unknown> | undefined;
-    if (!src || typeof src !== 'object' || !SOURCE_KINDS.includes(src.kind as never)) {
-        return { ok: false, error: 'Dive "source" must be one of: duckdb, parquet, csv.' };
-    }
     const q = d.query as Record<string, unknown> | undefined;
     if (!q || typeof q !== 'object' || typeof q.sql !== 'string' || !q.sql.trim()) {
         return { ok: false, error: 'Dive "query.sql" is required.' };

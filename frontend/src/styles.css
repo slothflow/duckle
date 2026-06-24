@@ -7863,3 +7863,18 @@ html[dir='rtl'] .topbar-lang {
 .dive-modal-x { background: none; border: none; color: var(--text-3); font-size: 18px; cursor: pointer; padding: 0 4px; }
 .dive-modal-x:hover { color: var(--text-1); }
 .dive-modal-body { flex: 1; overflow: auto; }
+
+/* Dive editor (create / edit) */
+.dive-modal-actions { display: flex; align-items: center; gap: 8px; }
+.dive-editor { display: flex; flex-direction: column; gap: 12px; padding: 14px; }
+.dive-field { display: flex; flex-direction: column; gap: 5px; font-size: 12px; color: var(--text-2); }
+.dive-field code { background: var(--bg-2); padding: 1px 5px; border-radius: 4px; color: var(--lemon); }
+.dive-field input, .dive-field textarea { background: var(--surface-2, var(--bg-2)); color: var(--text-1); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; font-size: 13px; outline: none; }
+.dive-field textarea { font-family: Consolas, monospace; resize: vertical; }
+.dive-field input:focus, .dive-field textarea:focus { border-color: var(--border-bright); }
+.dive-editor-actions { display: flex; gap: 8px; }
+.dive-btn { background: var(--bg-3); color: var(--text-1); border: 1px solid var(--border); border-radius: 8px; padding: 6px 14px; font-size: 13px; cursor: pointer; }
+.dive-btn:hover { border-color: var(--border-bright); }
+.dive-btn.primary { background: var(--accent); color: #20242e; border-color: var(--accent); font-weight: 600; }
+.dive-btn.primary:hover { background: var(--accent-strong); }
+.dive-btn:disabled { opacity: .5; cursor: default; }
