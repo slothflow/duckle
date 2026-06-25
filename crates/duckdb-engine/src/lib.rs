@@ -48,7 +48,8 @@ use plan::{
     FormatFileSinkSpec,
     FormatFileSourceSpec, FormatKind, FtpSinkSpec, FtpSourceSpec, GitSourceSpec,
     GizmoSqlSinkSpec, GizmoSqlSourceSpec, JavaScriptSpec,
-    KafkaSinkSpec, KafkaSourceSpec, KinesisSourceSpec, MilvusSourceSpec, MongoSinkSpec,
+    KafkaSinkSpec, KafkaSourceSpec, KinesisSourceSpec, LanceSinkSpec, LanceSourceSpec,
+    MilvusSourceSpec, MongoSinkSpec,
     MongoSourceSpec,
     NatsSinkSpec, NatsSourceSpec, OracleSinkSpec, OracleSourceSpec, PubSubSinkSpec,
     PubSubSourceSpec, QdrantSourceSpec, QvdSinkSpec, QvdSourceSpec, RabbitSinkSpec,
@@ -970,6 +971,8 @@ impl DuckdbEngine {
                     }
                     Some(RuntimeSpec::MongoSink(spec)) => self.run_mongo_sink(&db_path, spec),
                     Some(RuntimeSpec::MongoSource(spec)) => self.run_mongo_source(&db_path, spec),
+                    Some(RuntimeSpec::LanceSink(spec)) => self.run_lance_sink(&db_path, spec),
+                    Some(RuntimeSpec::LanceSource(spec)) => self.run_lance_source(&db_path, spec),
                     Some(RuntimeSpec::ClickhouseSink(spec)) => {
                         self.run_clickhouse_sink(&db_path, spec)
                     }

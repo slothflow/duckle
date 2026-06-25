@@ -117,6 +117,8 @@ pub enum RuntimeSpec {
     ElasticSource(ElasticSourceSpec),
     MongoSink(MongoSinkSpec),
     MongoSource(MongoSourceSpec),
+    LanceSink(LanceSinkSpec),
+    LanceSource(LanceSourceSpec),
     ClickhouseSink(ClickHouseSinkSpec),
     ClickhouseSource(ClickHouseSourceSpec),
     SqlserverSink(SqlServerSinkSpec),
@@ -715,6 +717,8 @@ fn build_stage(
     let mut elastic_source: Option<ElasticSourceSpec> = None;
     let mut mongo_sink: Option<MongoSinkSpec> = None;
     let mut mongo_source: Option<MongoSourceSpec> = None;
+    let mut lance_sink: Option<LanceSinkSpec> = None;
+    let mut lance_source: Option<LanceSourceSpec> = None;
     let mut clickhouse_sink: Option<ClickHouseSinkSpec> = None;
     let mut clickhouse_source: Option<ClickHouseSourceSpec> = None;
     let mut sqlserver_sink: Option<SqlServerSinkSpec> = None;
@@ -1207,6 +1211,23 @@ fn build_stage(
             upsert_keys: upsert_keys_from(&props),
             delete_column: delete_column_from(&props),
             delete_value: delete_value_from(&props),
+        });
+        (String::new(), StageKind::Sink, Some(from_view.to_string()))
+    } else if component_id == "snk.lancedb" {
+        let from_view = inputs.main().ok_or_else(|| missing_input(node, "main"))?;
+        let uri = string_prop(&props, "uri")
+            .filter(|s| !s.is_empty())
+            .ok_or_else(|| EngineError::Config(format!("{}: uri required", component_id)))?;
+        let table = string_prop(&props, "table")
+            .filter(|s| !s.is_empty())
+            .ok_or_else(|| EngineError::Config(format!("{}: table required", component_id)))?;
+        lance_sink = Some(LanceSinkSpec {
+            from_view: from_view.to_string(),
+            uri,
+            table,
+            mode: string_prop(&props, "mode").unwrap_or_else(|| "create".into()),
+            api_key: string_prop(&props, "apiKey").filter(|s| !s.is_empty()),
+            region: string_prop(&props, "region").filter(|s| !s.is_empty()),
         });
         (String::new(), StageKind::Sink, Some(from_view.to_string()))
     } else if component_id == "snk.snowflake" {
@@ -2706,6 +2727,22 @@ fn build_stage(
             pipeline: string_prop(&props, "pipeline").filter(|s| !s.trim().is_empty()),
         });
         (String::new(), StageKind::View, None)
+    } else if component_id == "src.lancedb" {
+        let uri = string_prop(&props, "uri")
+            .filter(|s| !s.is_empty())
+            .ok_or_else(|| EngineError::Config(format!("{}: uri required", component_id)))?;
+        let table = string_prop(&props, "table")
+            .filter(|s| !s.is_empty())
+            .ok_or_else(|| EngineError::Config(format!("{}: table required", component_id)))?;
+        lance_source = Some(LanceSourceSpec {
+            node_id: node.id.clone(),
+            uri,
+            table,
+            api_key: string_prop(&props, "apiKey").filter(|s| !s.is_empty()),
+            region: string_prop(&props, "region").filter(|s| !s.is_empty()),
+            limit: props.get("limit").and_then(|v| v.as_i64()).filter(|n| *n > 0),
+        });
+        (String::new(), StageKind::View, None)
     } else if matches!(component_id, "src.graphql" | "src.linear" | "src.monday") {
         // GraphQL source + Linear alias: POST {query, variables} to
         // the endpoint, walk the response data path. Rides
@@ -3538,6 +3575,8 @@ fn build_stage(
         .or_else(|| elastic_source.map(RuntimeSpec::ElasticSource))
         .or_else(|| mongo_sink.map(RuntimeSpec::MongoSink))
         .or_else(|| mongo_source.map(RuntimeSpec::MongoSource))
+        .or_else(|| lance_sink.map(RuntimeSpec::LanceSink))
+        .or_else(|| lance_source.map(RuntimeSpec::LanceSource))
         .or_else(|| clickhouse_sink.map(RuntimeSpec::ClickhouseSink))
         .or_else(|| clickhouse_source.map(RuntimeSpec::ClickhouseSource))
         .or_else(|| sqlserver_sink.map(RuntimeSpec::SqlserverSink))

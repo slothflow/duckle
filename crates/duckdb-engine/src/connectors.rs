@@ -2390,6 +2390,137 @@ impl DuckdbEngine {
         ))
     }
 
+    /// src.lancedb: run the duckle-lance sidecar to dump the Lance table to a
+    /// Parquet temp file, then materialize it via read_parquet. The sidecar owns
+    /// lancedb (arrow 58 / DataFusion); only Parquet bytes cross the boundary.
+    pub(crate) fn run_lance_source(
+        &self,
+        db: &Path,
+        spec: &LanceSourceSpec,
+    ) -> Result<String, EngineError> {
+        let safe_node: String = spec
+            .node_id
+            .chars()
+            .map(|c| if c.is_ascii_alphanumeric() || c == '_' || c == '-' { c } else { '_' })
+            .collect();
+        let db_name = db
+            .file_name()
+            .map(|s| s.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        let parquet_path = db.with_file_name(format!("{}.lance-{}.parquet", db_name, safe_node));
+        let mut cmd = std::process::Command::new(resolve_lance_bin());
+        cmd.arg("read")
+            .arg("--uri")
+            .arg(&spec.uri)
+            .arg("--table")
+            .arg(&spec.table)
+            .arg("--out")
+            .arg(&parquet_path);
+        if let Some(k) = &spec.api_key {
+            cmd.arg("--api-key").arg(k);
+        }
+        if let Some(r) = &spec.region {
+            cmd.arg("--region").arg(r);
+        }
+        if let Some(l) = spec.limit {
+            cmd.arg("--limit").arg(l.to_string());
+        }
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+        }
+        let out = cmd.output().map_err(|e| {
+            EngineError::Query(format!(
+                "lancedb: cannot run duckle-lance: {} (set DUCKLE_LANCE_BIN or bundle the sidecar)",
+                e
+            ))
+        })?;
+        if !out.status.success() {
+            let _ = std::fs::remove_file(&parquet_path);
+            return Err(EngineError::Query(format!(
+                "lancedb read: {}",
+                String::from_utf8_lossy(&out.stderr).trim()
+            )));
+        }
+        let ppath = parquet_path
+            .to_string_lossy()
+            .replace('\\', "/")
+            .replace('\'', "''");
+        let create = format!(
+            "CREATE OR REPLACE TABLE {} AS SELECT * FROM read_parquet('{}')",
+            plan::quote_ident(&spec.node_id),
+            ppath
+        );
+        self.run(Some(db), &create, false)?;
+        let _ = std::fs::remove_file(&parquet_path);
+        Ok(format!("lancedb: materialized {} into {}", spec.table, spec.node_id))
+    }
+
+    /// snk.lancedb: COPY the upstream view to a Parquet temp file, then run the
+    /// sidecar to create/append the Lance table from it.
+    pub(crate) fn run_lance_sink(
+        &self,
+        db: &Path,
+        spec: &LanceSinkSpec,
+    ) -> Result<String, EngineError> {
+        let safe: String = spec
+            .from_view
+            .chars()
+            .map(|c| if c.is_ascii_alphanumeric() || c == '_' || c == '-' { c } else { '_' })
+            .collect();
+        let db_name = db
+            .file_name()
+            .map(|s| s.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        let parquet_path = db.with_file_name(format!("{}.lance-snk-{}.parquet", db_name, safe));
+        let ppath = parquet_path
+            .to_string_lossy()
+            .replace('\\', "/")
+            .replace('\'', "''");
+        let copy = format!(
+            "COPY (SELECT * FROM {}) TO '{}' (FORMAT parquet)",
+            plan::quote_ident(&spec.from_view),
+            ppath
+        );
+        self.run(Some(db), &copy, false)?;
+        let mut cmd = std::process::Command::new(resolve_lance_bin());
+        cmd.arg("write")
+            .arg("--uri")
+            .arg(&spec.uri)
+            .arg("--table")
+            .arg(&spec.table)
+            .arg("--in")
+            .arg(&parquet_path)
+            .arg("--mode")
+            .arg(&spec.mode);
+        if let Some(k) = &spec.api_key {
+            cmd.arg("--api-key").arg(k);
+        }
+        if let Some(r) = &spec.region {
+            cmd.arg("--region").arg(r);
+        }
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+        }
+        let out = cmd.output().map_err(|e| {
+            EngineError::Query(format!(
+                "lancedb: cannot run duckle-lance: {} (set DUCKLE_LANCE_BIN or bundle the sidecar)",
+                e
+            ))
+        })?;
+        let _ = std::fs::remove_file(&parquet_path);
+        if !out.status.success() {
+            return Err(EngineError::Query(format!(
+                "lancedb write: {}",
+                String::from_utf8_lossy(&out.stderr).trim()
+            )));
+        }
+        Ok(format!("lancedb: wrote {} ({})", spec.table, spec.mode))
+    }
+
     /// snk.gizmosql: CREATE the target table (DuckDB types from the upstream
     /// DESCRIBE) then batched INSERT, all over Flight SQL.
     pub(crate) fn run_gizmosql_sink(
@@ -7604,6 +7735,29 @@ fn resolve_dbt_bin(explicit: Option<&str>) -> String {
         }
     }
     "dbt".to_string()
+}
+
+/// Resolve the duckle-lance sidecar. Order: DUCKLE_LANCE_BIN env -> a binary
+/// bundled next to the running executable (the shipped sidecar) -> `duckle-lance`
+/// on PATH. The sidecar owns lancedb so its arrow 58 / DataFusion / protoc cost
+/// stays out of the engine.
+fn resolve_lance_bin() -> String {
+    if let Ok(env) = std::env::var("DUCKLE_LANCE_BIN") {
+        if !env.is_empty() && Path::new(&env).exists() {
+            return env;
+        }
+    }
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            for name in ["duckle-lance", "duckle-lance.exe"] {
+                let p = dir.join(name);
+                if p.exists() {
+                    return p.to_string_lossy().into_owned();
+                }
+            }
+        }
+    }
+    "duckle-lance".to_string()
 }
 
 /// Last `max` characters of `s` (UTF-8-safe) - used to keep the useful end

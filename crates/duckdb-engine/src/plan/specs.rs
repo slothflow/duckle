@@ -1059,6 +1059,33 @@ pub struct MongoSourceSpec {
     pub pipeline: Option<String>,
 }
 
+/// src.lancedb: read a Lance table via the duckle-lance sidecar (which owns the
+/// lancedb crate); the sidecar writes a Parquet file the engine ingests through
+/// read_parquet, so lancedb's deps never enter the engine.
+#[derive(Debug, Clone)]
+pub struct LanceSourceSpec {
+    pub node_id: String,
+    /// Dataset URI: a local dir, db:// (LanceDB Cloud), or s3:// / gs:// / az://.
+    pub uri: String,
+    pub table: String,
+    pub api_key: Option<String>,
+    pub region: Option<String>,
+    pub limit: Option<i64>,
+}
+
+/// snk.lancedb: write the upstream rows to a Lance table via the sidecar (the
+/// engine COPYs the upstream view to a Parquet temp file the sidecar reads).
+#[derive(Debug, Clone)]
+pub struct LanceSinkSpec {
+    pub from_view: String,
+    pub uri: String,
+    pub table: String,
+    /// "create" (overwrite the table) or "append".
+    pub mode: String,
+    pub api_key: Option<String>,
+    pub region: Option<String>,
+}
+
 /// Elasticsearch / OpenSearch pagination strategy.
 #[derive(Debug, Clone)]
 pub enum ElasticPagination {
