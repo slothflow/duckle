@@ -3589,6 +3589,33 @@ fn build_stage(
             // A source a reject-wired filter reads twice must stay materialized
             // once (parquet / table); a live VIEW would re-scan it per arm.
             && !feeds_reject.contains(node.id.as_str());
+        // #117: custom SQL against an attach-backed catalog source (ducklake,
+        // postgres, motherduck, ...) references that catalog's OWN schemas
+        // (e.g. `data.weights`) without the `duckle_src` prefix - exactly as the
+        // query runs in the source's own CLI. Both a lazy VIEW (#76) and a bare
+        // materialized TABLE re-resolve those names against the run database
+        // (where the schema doesn't exist), so the read failed with "schema
+        // does not exist". Fix: materialize once via COPY to a temp parquet with
+        // the attached catalog on the search_path (so the unqualified names
+        // resolve), then downstream reads the parquet by path - no duckle_src
+        // and no re-resolution. The #76 live-VIEW pushdown is disabled for this
+        // source (custom SQL is opaque to predicate pushdown anyway). Qualified
+        // `duckle_src.schema.table` queries keep working (fully-qualified names
+        // resolve regardless of search_path).
+        let custom_sql_attach_source = attach.contains("AS duckle_src")
+            && ATTACH_PARQUET_SOURCES.contains(&component_id)
+            && reject_sql.is_none()
+            && (matches!(string_prop(&props, "mode").as_deref(), Some("sql"))
+                || string_prop(&props, "sql").map(|s| !s.trim().is_empty()).unwrap_or(false)
+                || string_prop(&props, "query").map(|s| !s.trim().is_empty()).unwrap_or(false));
+        if custom_sql_attach_source {
+            attach_view = false;
+            attach_parquet_source = Some(AttachParquetSourceSpec {
+                node_id: node.id.clone(),
+                attach: format!("{}SET search_path='duckle_src'; ", attach),
+                body: body.to_string(),
+            });
+        }
         // Materialize = "disk": stream this stage through a temp parquet file
         // (COPY ... TO parquet, then a read_parquet VIEW) instead of inserting
         // into the run-db table - minimal RAM, built for huge intermediates.

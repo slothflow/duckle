@@ -328,6 +328,60 @@
     }
 
     #[test]
+    fn ducklake_custom_sql_resolves_catalog_schemas_via_search_path() {
+        // #117: custom SQL on a ducklake source references the lake's OWN schemas
+        // (e.g. data.weights) without the duckle_src prefix, exactly as the query
+        // runs in the DuckLake CLI. The source must materialize once via
+        // COPY-to-parquet with the attached catalog on the search_path (so the
+        // unqualified names resolve), NOT a lazy VIEW or bare TABLE that would
+        // re-resolve the names against the run database and fail with
+        // "schema does not exist".
+        let p = pipeline_from_json(
+            r#"{
+              "nodes": [
+                {"id":"src","position":{"x":0,"y":0},"data":{
+                  "label":"lake","componentId":"src.ducklake",
+                  "properties":{"path":"x.ducklake","mode":"sql","sql":"SELECT * FROM data.weights"}}},
+                {"id":"out","position":{"x":0,"y":0},"data":{
+                  "label":"out","componentId":"snk.csv",
+                  "properties":{"path":"/tmp/o.csv"}}}
+              ],
+              "edges": [
+                {"id":"e1","source":"src","target":"out","data":{"connectionType":"main"}}
+              ]
+            }"#,
+        );
+        let stage = compile(&p)
+            .unwrap()
+            .stages
+            .into_iter()
+            .find(|s| s.node_id == "src")
+            .unwrap();
+        assert!(
+            !stage.attach_view,
+            "custom-sql ducklake must not be a live VIEW (it would re-resolve names downstream)"
+        );
+        match stage.runtime {
+            Some(RuntimeSpec::AttachParquetSource(spec)) => {
+                assert!(
+                    spec.attach.contains("SET search_path='duckle_src'"),
+                    "custom-sql ducklake must put the attached catalog on the search_path, got: {}",
+                    spec.attach
+                );
+                assert!(
+                    spec.body.contains("data.weights"),
+                    "the user's SQL is preserved verbatim, got: {}",
+                    spec.body
+                );
+            }
+            other => panic!(
+                "expected an AttachParquetSource runtime for custom-sql ducklake, got: {:?}",
+                other
+            ),
+        }
+    }
+
+    #[test]
     fn compiles_csv_filter_parquet() {
         let p = pipeline_from_json(
             r#"{

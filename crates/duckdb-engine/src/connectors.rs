@@ -1243,8 +1243,14 @@ impl DuckdbEngine {
             .to_string_lossy()
             .replace('\\', "/")
             .replace('\'', "''");
+        // RESET search_path after the COPY: a custom-SQL attach source (#117)
+        // sets `search_path='duckle_src'` in its prelude so the body's
+        // unqualified catalog names resolve during the COPY; the run-db VIEW
+        // that follows must be created back in the default (writable) catalog,
+        // not the read-only attached one. A no-op for every other spec (none
+        // touch search_path), so it is unconditional.
         let sql = format!(
-            "{}COPY ({}) TO '{}' (FORMAT PARQUET); \
+            "{}COPY ({}) TO '{}' (FORMAT PARQUET); RESET search_path; \
              CREATE OR REPLACE VIEW {} AS SELECT * FROM read_parquet('{}')",
             spec.attach,
             spec.body,
