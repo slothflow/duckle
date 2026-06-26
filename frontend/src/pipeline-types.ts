@@ -43,6 +43,10 @@ export type DuckleNodeData = {
     label: string;
     subtitle?: string;
     componentId?: string;
+    // Optional user-defined SQL name for this node's output relation. When set,
+    // raw / pure SQL nodes can reference this node by a friendly name instead of
+    // the auto-generated node id (#102). Must be unique across the pipeline.
+    alias?: string;
     properties?: Record<string, unknown>;
     schema?: Column[];
     sampleRows?: Record<string, unknown>[];

@@ -1122,12 +1122,30 @@ impl DuckdbEngine {
 
             match result {
                 Ok(_) => {
+                    // #102: expose this node's output under its user alias so a
+                    // downstream raw / pure SQL stage (run later in this loop
+                    // against the same db file) can reference it by a friendly
+                    // name. The node-id relation was just created by the stage,
+                    // so this view binds against it. Best-effort: an alias that
+                    // can't be created (e.g. an effect-only node) shouldn't fail
+                    // the run - the downstream reference would surface the error.
+                    if matches!(stage.kind, StageKind::View) && !stage.no_output_relation {
+                        if let Some(alias) = stage.alias.as_deref() {
+                            let av = format!(
+                                "CREATE OR REPLACE VIEW {} AS SELECT * FROM {};",
+                                plan::quote_ident(alias),
+                                plan::quote_ident(&stage.node_id),
+                            );
+                            let _ = self.run(Some(&db_path), &av, false);
+                        }
+                    }
                     // A View stage needs count + schema + preview rows; fetch
                     // all three in ONE duckdb spawn (count_and_preview)
                     // instead of three separate ones - saves ~2 process
                     // spawns/stage of fixed overhead on the per-stage path
                     // (audit B8). Sink stages only need a count of their
-                    // upstream and have no preview.
+                    // upstream and have no preview. A Pure SQL node creates no
+                    // `<node>` relation, so there is nothing to count/preview.
                     let (rows_opt, view_preview) = match stage.kind {
                         StageKind::Sink => (
                             stage
@@ -1136,6 +1154,7 @@ impl DuckdbEngine {
                                 .and_then(|f| self.count_rows(&db_path, f).ok()),
                             None,
                         ),
+                        StageKind::View if stage.no_output_relation => (None, None),
                         StageKind::View => self.count_and_preview(&db_path, &stage.node_id),
                     };
                     nodes.insert(
@@ -1402,6 +1421,21 @@ impl DuckdbEngine {
                 batched_sql.push(';');
             }
             batched_sql.push('\n');
+            // #102: expose this node's output under its user alias so raw / pure
+            // SQL nodes downstream can reference it by a friendly name. The
+            // node-id relation was just created by stage.sql above, so the alias
+            // view binds immediately and is visible to later batched stages.
+            if matches!(stage.kind, plan::StageKind::View)
+                && !stage.no_output_relation
+            {
+                if let Some(alias) = stage.alias.as_deref() {
+                    batched_sql.push_str(&format!(
+                        "CREATE OR REPLACE VIEW {} AS SELECT * FROM {};\n",
+                        plan::quote_ident(alias),
+                        plan::quote_ident(&stage.node_id),
+                    ));
+                }
+            }
             // Two cases where the marker MUST NOT query <node>:
             //   - ctl.switch creates <node>__case_N + <node>__default
             //     tables instead of a <node> view, so querying <node>
@@ -1416,7 +1450,7 @@ impl DuckdbEngine {
             let count_unsafe = matches!(
                 stage.component_id.as_str(),
                 "ctl.switch" | "xf.assert"
-            );
+            ) || stage.no_output_relation;
             let marker = marker_dir.join(format!("{}.json", i));
             let count_target = match stage.kind {
                 plan::StageKind::Sink => Some(stage.from.as_deref().unwrap_or(&stage.node_id)),
@@ -1437,6 +1471,7 @@ impl DuckdbEngine {
             if matches!(stage.kind, plan::StageKind::View)
                 && stage.component_id != "ctl.switch"
                 && stage.component_id != "xf.assert"
+                && !stage.no_output_relation
                 && !extension_node_ids.contains(stage.node_id.as_str())
             {
                 let schema = marker_dir.join(format!("{}_schema.json", i));

@@ -106,6 +106,12 @@ pub struct NodeData {
     pub sample_rows: Option<Vec<JsonValue>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub disabled: Option<bool>,
+    /// Optional user-defined SQL name for this node's output relation. When set,
+    /// the engine also exposes the node's output under this name (a view), so
+    /// raw / pure SQL nodes can reference upstream by a friendly name instead of
+    /// the auto-generated node id (#102). Edge wiring still keys off `id`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub alias: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

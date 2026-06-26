@@ -57,6 +57,35 @@ export function validatePipeline(
 
     const nodeIds = new Set(nodes.map(n => n.id));
 
+    // ---- SQL name (alias) uniqueness (#102) ----
+    // A node alias names its output relation, so two nodes can't share one and
+    // an alias can't shadow another node's id (the engine rejects both at
+    // compile time; surface it here as an inline error first).
+    const aliasOwner = new Map<string, string>();
+    for (const node of nodes) {
+        const alias = typeof node.data.alias === 'string' ? node.data.alias.trim() : '';
+        if (!alias || alias === node.id) continue;
+        if (nodeIds.has(alias)) {
+            push({
+                severity: 'error',
+                code: 'alias-collides-with-id',
+                message: `${node.data.label}: SQL name '${alias}' is already another node's id. Pick a different name.`,
+                nodeId: node.id,
+            });
+        }
+        const prior = aliasOwner.get(alias);
+        if (prior) {
+            push({
+                severity: 'error',
+                code: 'duplicate-alias',
+                message: `${node.data.label}: SQL name '${alias}' is already used by another node. Each must be unique.`,
+                nodeId: node.id,
+            });
+        } else {
+            aliasOwner.set(alias, node.id);
+        }
+    }
+
     // ---- Per-node checks ----
     for (const node of nodes) {
         if (node.data.disabled) continue;

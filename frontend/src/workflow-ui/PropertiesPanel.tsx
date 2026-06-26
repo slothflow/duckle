@@ -305,6 +305,11 @@ export default function PropertiesPanel({
                     />
                     <span className="properties-kind">{KIND_LABEL[kind] ?? kind}</span>
                     <span className="properties-id" title={selected.id}>#{selected.id}</span>
+                    {typeof data.alias === 'string' && data.alias.trim() ? (
+                        <span className="properties-id" title="SQL name (alias)">
+                            as {data.alias.trim()}
+                        </span>
+                    ) : null}
                 </div>
                 <input
                     ref={nameInputRef}
@@ -400,6 +405,45 @@ export default function PropertiesPanel({
                 <div className="properties-content">
                     {tab === 'basic' ? (
                         <div className="properties-section">
+                            <div style={{ marginBottom: 14 }}>
+                                <label
+                                    htmlFor="node-alias"
+                                    style={{ display: 'block', fontWeight: 600, marginBottom: 4 }}
+                                >
+                                    {t('properties.sqlName', { defaultValue: 'SQL name' })}{' '}
+                                    <span style={{ fontWeight: 400, opacity: 0.6 }}>
+                                        {t('properties.optional', { defaultValue: '(optional)' })}
+                                    </span>
+                                </label>
+                                <input
+                                    id="node-alias"
+                                    type="text"
+                                    value={typeof data.alias === 'string' ? data.alias : ''}
+                                    onChange={e =>
+                                        onUpdate(selected.id, {
+                                            alias: e.target.value.trim() ? e.target.value : undefined,
+                                        })
+                                    }
+                                    placeholder={selected.id}
+                                    spellCheck={false}
+                                    autoComplete="off"
+                                    style={{
+                                        width: '100%',
+                                        padding: '8px 10px',
+                                        borderRadius: 8,
+                                        border: '1px solid var(--border)',
+                                        background: 'var(--bg-1)',
+                                        color: 'inherit',
+                                        boxSizing: 'border-box',
+                                    }}
+                                />
+                                <p style={{ margin: '4px 0 0', fontSize: 11, color: 'var(--text-3)' }}>
+                                    {t('properties.sqlNameHelp', {
+                                        defaultValue:
+                                            'Reference this node by this name in Raw / Pure SQL nodes. Defaults to the node id.',
+                                    })}
+                                </p>
+                            </div>
                             {data.componentId === 'xf.map' && onOpenMapper ? (
                                 <button
                                     type="button"

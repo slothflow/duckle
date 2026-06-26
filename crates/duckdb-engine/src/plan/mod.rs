@@ -59,6 +59,16 @@ pub struct Stage {
     /// scan) when the whole pipeline runs in one batched session and it is the
     /// sole `duckle_src` ATTACH; otherwise it stays a TABLE (#76).
     pub attach_view: bool,
+    /// Optional user-defined SQL name for this stage's output relation (#102).
+    /// When set, the executor also creates `CREATE OR REPLACE VIEW "<alias>" AS
+    /// SELECT * FROM "<node_id>"`, so raw / pure SQL nodes downstream can refer
+    /// to this node by a friendly name. Edge wiring still uses the node id.
+    pub alias: Option<String>,
+    /// True for a Pure SQL node: the stage SQL runs verbatim with no CREATE
+    /// wrapper, so it does not produce a `"<node_id>"` relation. The executor
+    /// skips the per-stage count + preview (and the batched count marker) for
+    /// these, the same way it does for nodes that never create a plain relation.
+    pub no_output_relation: bool,
 }
 
 impl Stage {
@@ -286,6 +296,33 @@ fn compile_impl(pipeline: &PipelineDoc, allow_view_upgrade: bool) -> Result<Comp
         .iter()
         .map(|n| (n.id.as_str(), n))
         .collect();
+
+    // #102: a node may carry a user alias used as its output relation's SQL
+    // name. The executor exposes it as a view alongside the node-id relation, so
+    // an alias must be unique and must not shadow another node's id - otherwise
+    // the alias view would clash with a real relation. Validate up front so the
+    // error is clear instead of a cryptic "view already exists" mid-run.
+    {
+        let mut seen: HashSet<String> = HashSet::new();
+        for n in &pipeline.nodes {
+            let alias = match n.data.alias.as_deref().map(str::trim) {
+                Some(a) if !a.is_empty() && a != n.id => a,
+                _ => continue,
+            };
+            if node_index.contains_key(alias) {
+                return Err(EngineError::Config(format!(
+                    "Node '{}' has SQL name '{}', which is already another node's id. Pick a different name.",
+                    n.data.label, alias
+                )));
+            }
+            if !seen.insert(alias.to_string()) {
+                return Err(EngineError::Config(format!(
+                    "SQL name '{}' is used by more than one node. Each node's SQL name must be unique.",
+                    alias
+                )));
+            }
+        }
+    }
 
     let data_edges: Vec<&PipelineEdge> = pipeline
         .edges
@@ -818,6 +855,9 @@ fn build_stage(
     // single-consumer attach-backed source the user marked Materialize=View,
     // making it eligible for the lazy-VIEW upgrade in compile().
     let mut attach_view = false;
+    // Set true by the Pure SQL branch: the stage runs verbatim and creates no
+    // `"<node_id>"` relation, so the executor skips its count + preview (#102).
+    let mut no_output_relation = false;
     let (mut sql, kind, from) = if component_id == "snk.graphql" {
         // GraphQL mutation: POST one request per row with the row's
         // JSON as `variables`. Rides the WebhookSpec pipeline.
@@ -3357,6 +3397,34 @@ fn build_stage(
                 .unwrap_or(100) as usize,
         });
         (String::new(), StageKind::View, None)
+    } else if matches!(component_id, "code.sql" | "code.sqltemplate")
+        && props.get("pureSql").and_then(JsonValue::as_bool).unwrap_or(false)
+    {
+        // Pure SQL (#102 follow-up): run the user's statements verbatim - no
+        // `WITH input AS (...)` wrapper AND no `CREATE OR REPLACE ... AS`
+        // wrapper. This is the escape hatch for advanced users who need full
+        // control: multiple statements, DDL, PRAGMAs, writes into an attached
+        // database, etc. - things that cannot be wrapped in a single CREATE
+        // VIEW. The body is run as-is (after any extension prelude), so it does
+        // NOT produce a `"<node_id>"` relation; the executor treats this as an
+        // effect step and skips its count/preview. To feed rows downstream the
+        // user creates the relation themselves (e.g. CREATE OR REPLACE TABLE
+        // "<node_id>" AS ... - the node id / alias is shown in the panel).
+        let body = build_view_sql(
+            component_id,
+            &props,
+            inputs,
+            node.data.schema.as_deref(),
+            false,
+        )
+        .map_err(|e| {
+            EngineError::Config(format!(
+                "{} ({} / {}): {}",
+                node.data.label, component_id, node.id, e
+            ))
+        })?;
+        no_output_relation = true;
+        (format!("{}{}", attach, body), StageKind::View, None)
     } else {
         // Is the node's reject port actually read downstream? Computed before
         // the body so CSV/TSV sources can switch to the tolerant pass/reject
@@ -3723,6 +3791,20 @@ fn build_stage(
         retry_backoff_ms,
         memory_limit_mb,
         attach_view,
+        // A user alias names the node's output relation. Pure SQL nodes create no
+        // such relation, so they carry no alias view. An alias equal to the node
+        // id is redundant (the relation already has that name), so drop it.
+        alias: if no_output_relation {
+            None
+        } else {
+            node.data
+                .alias
+                .as_deref()
+                .map(str::trim)
+                .filter(|a| !a.is_empty() && *a != node.id)
+                .map(str::to_string)
+        },
+        no_output_relation,
     })
 }
 

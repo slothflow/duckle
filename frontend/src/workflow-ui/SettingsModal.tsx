@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Loader2, Check } from 'lucide-react';
+import { X, Loader2, Check, ChevronDown, ChevronRight, Minus, Plus } from 'lucide-react';
 import {
     settingsGetProxy,
     settingsSetProxy,
@@ -12,12 +12,20 @@ import {
     settingsSetContextFile,
 } from '../tauri-bridge';
 import { loadPersisted, savePersisted } from '../persistence';
+import {
+    DEFAULT_FONT_SIZE,
+    MAX_FONT_SIZE,
+    MIN_FONT_SIZE,
+    getFontSize,
+    setFontSize as applyAndSaveFontSize,
+} from '../font-size';
 
 /**
- * App settings. Currently a single HTTP/HTTPS proxy field, persisted per
- * workspace to .duckle/settings.json and applied to the engine immediately, so
- * a user on a locked-down corporate machine can route REST / cloud connectors
- * and the updater through a proxy without setting a system env var (issue #80).
+ * App settings, grouped into collapsible categories so the panel stays simple
+ * (#102). Workspace settings (proxy, memory cap, context file, AI endpoint) are
+ * persisted per workspace to .duckle/settings.json via the Save button; UI
+ * preferences (font size, Dives button) apply immediately and live in
+ * localStorage.
  */
 export function SettingsModal({
     workspace,
@@ -37,10 +45,16 @@ export function SettingsModal({
     const [contextFile, setContextFile] = useState('');
     // Local UI pref: show/hide the top-bar Dives button.
     const [showDives, setShowDives] = useState(() => !loadPersisted('hideDivesButton', false));
+    // Local UI pref: global font size (applies live, no Save).
+    const [fontSize, setFontSize] = useState(() => getFontSize());
     const [loaded, setLoaded] = useState(false);
     const [saving, setSaving] = useState(false);
     const [saved, setSaved] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    // Which categories are expanded. Persisted so the panel reopens as left.
+    const [expanded, setExpanded] = useState<Set<string>>(
+        () => new Set(loadPersisted<string[]>('settingsExpanded', ['appearance'])),
+    );
 
     useEffect(() => {
         let alive = true;
@@ -106,6 +120,21 @@ export function SettingsModal({
         window.dispatchEvent(new Event('duckle:dives-visibility'));
     };
 
+    // Font size applies live as it changes; clamped + persisted in font-size.ts.
+    const changeFontSize = (next: number) => {
+        setFontSize(applyAndSaveFontSize(next));
+    };
+
+    const toggleSection = (id: string) => {
+        setExpanded(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            savePersisted('settingsExpanded', [...next]);
+            return next;
+        });
+    };
+
     const handleBackdrop = (e: React.MouseEvent) => {
         if (e.target === e.currentTarget) onClose();
     };
@@ -136,6 +165,27 @@ export function SettingsModal({
         color: 'inherit',
         boxSizing: 'border-box',
     };
+    const help: React.CSSProperties = { marginTop: 0, marginBottom: 8, fontSize: 12, opacity: 0.7 };
+
+    const Section = ({ id, title, children }: { id: string; title: string; children: ReactNode }) => {
+        const open = expanded.has(id);
+        return (
+            <div className="settings-section">
+                <button
+                    type="button"
+                    className="settings-section-header"
+                    aria-expanded={open}
+                    onClick={() => toggleSection(id)}
+                >
+                    <span className="settings-cat-chevron" aria-hidden="true">
+                        {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                    </span>
+                    <span className="settings-section-title">{title}</span>
+                </button>
+                {open ? <div className="settings-section-body">{children}</div> : null}
+            </div>
+        );
+    };
 
     return createPortal(
         <div className="modal-backdrop" onClick={handleBackdrop}>
@@ -153,155 +203,176 @@ export function SettingsModal({
                     </button>
                 </div>
                 <div className="modal-body">
-                    <label
-                        htmlFor="settings-proxy"
-                        style={{ display: 'block', fontWeight: 600, marginBottom: 6 }}
-                    >
-                        HTTP / HTTPS proxy
-                    </label>
-                    <p style={{ marginTop: 0, marginBottom: 8, fontSize: 12, opacity: 0.7 }}>
-                        Routes REST and cloud-API connectors and the in-app updater through a proxy, so
-                        Duckle works behind a corporate proxy without setting a system environment
-                        variable. Leave empty for a direct connection.
-                    </p>
-                    <input
-                        id="settings-proxy"
-                        type="text"
-                        value={proxy}
-                        onChange={e => setProxy(e.target.value)}
-                        placeholder="http://user:pass@proxy.company.com:8080"
-                        disabled={!loaded || !workspace}
-                        spellCheck={false}
-                        autoComplete="off"
-                        style={{
-                            width: '100%',
-                            padding: '8px 10px',
-                            borderRadius: 8,
-                            border: '1px solid var(--border-2, #2a2a2a)',
-                            background: 'var(--bg-1, #14161c)',
-                            color: 'inherit',
-                            boxSizing: 'border-box',
-                        }}
-                    />
                     {!workspace ? (
-                        <p style={{ fontSize: 12, color: 'var(--danger, #ff4d6d)', marginBottom: 0 }}>
-                            Open a workspace first to save settings.
+                        <p style={{ fontSize: 12, color: 'var(--danger, #ff4d6d)', margin: '0 0 8px' }}>
+                            Open a workspace first to save workspace settings.
                         </p>
                     ) : null}
                     {error ? (
-                        <p style={{ fontSize: 12, color: 'var(--danger, #ff4d6d)', marginBottom: 0 }}>
+                        <p style={{ fontSize: 12, color: 'var(--danger, #ff4d6d)', margin: '0 0 8px' }}>
                             {error}
                         </p>
                     ) : null}
-                    <div style={{ borderTop: '1px solid var(--border-2, #2a2a2a)', margin: '16px 0 12px' }} />
-                    <label htmlFor="settings-mem" style={{ display: 'block', fontWeight: 600, marginBottom: 6 }}>
-                        Memory limit (MB)
-                    </label>
-                    <p style={{ marginTop: 0, marginBottom: 8, fontSize: 12, opacity: 0.7 }}>
-                        Caps total RAM for every run in this workspace (sets DuckDB's memory_limit for
-                        both batched and per-stage execution). Leave empty for the engine default
-                        (about 80% of system RAM).
-                    </p>
-                    <input
-                        id="settings-mem"
-                        type="number"
-                        min={0}
-                        value={memLimit}
-                        onChange={e => setMemLimit(e.target.value)}
-                        placeholder="e.g. 4096"
-                        disabled={!loaded || !workspace}
-                        style={{
-                            width: '100%',
-                            padding: '8px 10px',
-                            borderRadius: 8,
-                            border: '1px solid var(--border-2, #2a2a2a)',
-                            background: 'var(--bg-1, #14161c)',
-                            color: 'inherit',
-                            boxSizing: 'border-box',
-                        }}
-                    />
-                    <div style={{ borderTop: '1px solid var(--border-2, #2a2a2a)', margin: '16px 0 12px' }} />
-                    <label htmlFor="settings-context-file" style={{ display: 'block', fontWeight: 600, marginBottom: 6 }}>
-                        Global context file
-                    </label>
-                    <p style={{ marginTop: 0, marginBottom: 8, fontSize: 12, opacity: 0.7 }}>
-                        Auto-load context variables from a key/value file before every run, so{' '}
-                        <code>{'${KEY}'}</code> resolves everywhere without wiring a node. Supports .env /
-                        .properties (KEY=VALUE), .csv (key,value) and .json. A relative path is resolved
-                        against the workspace root.
-                    </p>
-                    <input
-                        id="settings-context-file"
-                        type="text"
-                        value={contextFile}
-                        onChange={e => setContextFile(e.target.value)}
-                        placeholder="config/context.env  (or an absolute path)"
-                        disabled={!loaded || !workspace}
-                        spellCheck={false}
-                        autoComplete="off"
-                        style={aiInput}
-                    />
-                    <div style={{ borderTop: '1px solid var(--border-2, #2a2a2a)', margin: '16px 0 12px' }} />
-                    <label style={{ display: 'block', fontWeight: 600, marginBottom: 6 }}>
-                        AI assistant endpoint
-                    </label>
-                    <p style={{ marginTop: 0, marginBottom: 8, fontSize: 12, opacity: 0.7 }}>
-                        Point Duckie at an external OpenAI-compatible API (OpenAI, Ollama, LM Studio,
-                        vLLM, ...) instead of the bundled local model. Leave the base URL empty to use
-                        the local Qwen model.
-                    </p>
-                    <input
-                        type="text"
-                        value={aiBaseUrl}
-                        onChange={e => setAiBaseUrl(e.target.value)}
-                        placeholder="Base URL, e.g. https://api.openai.com"
-                        disabled={!loaded || !workspace}
-                        spellCheck={false}
-                        autoComplete="off"
-                        style={aiInput}
-                    />
-                    <input
-                        type="text"
-                        value={aiModel}
-                        onChange={e => setAiModel(e.target.value)}
-                        placeholder="Model, e.g. gpt-4o-mini"
-                        disabled={!loaded || !workspace}
-                        spellCheck={false}
-                        autoComplete="off"
-                        style={{ ...aiInput, marginTop: 8 }}
-                    />
-                    <input
-                        type="password"
-                        value={aiKey}
-                        onChange={e => setAiKey(e.target.value)}
-                        placeholder="API key (sent as a Bearer token)"
-                        disabled={!loaded || !workspace}
-                        spellCheck={false}
-                        autoComplete="off"
-                        style={{ ...aiInput, marginTop: 8 }}
-                    />
-                    <div style={{ borderTop: '1px solid var(--border-2, #2a2a2a)', margin: '16px 0 12px' }} />
-                    <label style={{ display: 'block', fontWeight: 600, marginBottom: 6 }}>Toolbar</label>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer', marginBottom: 4 }}>
-                        <input type="checkbox" checked={showDives} onChange={e => toggleDives(e.target.checked)} />
-                        Show the Dives button (live data views &amp; dashboards) in the toolbar
-                    </label>
-                    <div style={{ borderTop: '1px solid var(--border-2, #2a2a2a)', margin: '16px 0 12px' }} />
-                    <label style={{ display: 'block', fontWeight: 600, marginBottom: 6 }}>Guided tour</label>
-                    <p style={{ marginTop: 0, marginBottom: 8, fontSize: 12, opacity: 0.7 }}>
-                        Replay the first-run walkthrough of the palette, canvas, properties, Run and the
-                        web dashboard.
-                    </p>
-                    <button
-                        type="button"
-                        style={btn}
-                        onClick={() => {
-                            onClose();
-                            setTimeout(() => window.dispatchEvent(new Event('duckle:start-tour')), 250);
-                        }}
-                    >
-                        Replay guided tour
-                    </button>
+
+                    <Section id="appearance" title="Appearance">
+                        <label style={{ display: 'block', fontWeight: 600, marginBottom: 6 }}>
+                            Font size
+                        </label>
+                        <p style={help}>
+                            Scales the interface text. Affects every view. ({MIN_FONT_SIZE}-{MAX_FONT_SIZE}px)
+                        </p>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                            <button
+                                type="button"
+                                style={{ ...btn, padding: '6px 10px' }}
+                                onClick={() => changeFontSize(fontSize - 1)}
+                                disabled={fontSize <= MIN_FONT_SIZE}
+                                aria-label="Decrease font size"
+                            >
+                                <Minus size={14} />
+                            </button>
+                            <span style={{ minWidth: 56, textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>
+                                {fontSize}px
+                            </span>
+                            <button
+                                type="button"
+                                style={{ ...btn, padding: '6px 10px' }}
+                                onClick={() => changeFontSize(fontSize + 1)}
+                                disabled={fontSize >= MAX_FONT_SIZE}
+                                aria-label="Increase font size"
+                            >
+                                <Plus size={14} />
+                            </button>
+                            {fontSize !== DEFAULT_FONT_SIZE ? (
+                                <button
+                                    type="button"
+                                    style={{ ...btn, padding: '6px 10px', marginLeft: 'auto' }}
+                                    onClick={() => changeFontSize(DEFAULT_FONT_SIZE)}
+                                >
+                                    Reset
+                                </button>
+                            ) : null}
+                        </div>
+                    </Section>
+
+                    <Section id="proxy" title="HTTP / HTTPS proxy">
+                        <p style={help}>
+                            Routes REST and cloud-API connectors and the in-app updater through a proxy, so
+                            Duckle works behind a corporate proxy without setting a system environment
+                            variable. Leave empty for a direct connection.
+                        </p>
+                        <input
+                            id="settings-proxy"
+                            type="text"
+                            value={proxy}
+                            onChange={e => setProxy(e.target.value)}
+                            placeholder="http://user:pass@proxy.company.com:8080"
+                            disabled={!loaded || !workspace}
+                            spellCheck={false}
+                            autoComplete="off"
+                            style={aiInput}
+                        />
+                    </Section>
+
+                    <Section id="memory" title="Memory limit">
+                        <p style={help}>
+                            Caps total RAM for every run in this workspace (sets DuckDB's memory_limit for
+                            both batched and per-stage execution). Leave empty for the engine default
+                            (about 80% of system RAM).
+                        </p>
+                        <input
+                            id="settings-mem"
+                            type="number"
+                            min={0}
+                            value={memLimit}
+                            onChange={e => setMemLimit(e.target.value)}
+                            placeholder="e.g. 4096 (MB)"
+                            disabled={!loaded || !workspace}
+                            style={aiInput}
+                        />
+                    </Section>
+
+                    <Section id="context" title="Global context file">
+                        <p style={help}>
+                            Auto-load context variables from a key/value file before every run, so{' '}
+                            <code>{'${KEY}'}</code> resolves everywhere without wiring a node. Supports .env /
+                            .properties (KEY=VALUE), .csv (key,value) and .json. A relative path is resolved
+                            against the workspace root.
+                        </p>
+                        <input
+                            id="settings-context-file"
+                            type="text"
+                            value={contextFile}
+                            onChange={e => setContextFile(e.target.value)}
+                            placeholder="config/context.env  (or an absolute path)"
+                            disabled={!loaded || !workspace}
+                            spellCheck={false}
+                            autoComplete="off"
+                            style={aiInput}
+                        />
+                    </Section>
+
+                    <Section id="ai" title="AI assistant endpoint">
+                        <p style={help}>
+                            Point Duckie at an external OpenAI-compatible API (OpenAI, Ollama, LM Studio,
+                            vLLM, ...) instead of the bundled local model. Leave the base URL empty to use
+                            the local Qwen model.
+                        </p>
+                        <input
+                            type="text"
+                            value={aiBaseUrl}
+                            onChange={e => setAiBaseUrl(e.target.value)}
+                            placeholder="Base URL, e.g. https://api.openai.com"
+                            disabled={!loaded || !workspace}
+                            spellCheck={false}
+                            autoComplete="off"
+                            style={aiInput}
+                        />
+                        <input
+                            type="text"
+                            value={aiModel}
+                            onChange={e => setAiModel(e.target.value)}
+                            placeholder="Model, e.g. gpt-4o-mini"
+                            disabled={!loaded || !workspace}
+                            spellCheck={false}
+                            autoComplete="off"
+                            style={{ ...aiInput, marginTop: 8 }}
+                        />
+                        <input
+                            type="password"
+                            value={aiKey}
+                            onChange={e => setAiKey(e.target.value)}
+                            placeholder="API key (sent as a Bearer token)"
+                            disabled={!loaded || !workspace}
+                            spellCheck={false}
+                            autoComplete="off"
+                            style={{ ...aiInput, marginTop: 8 }}
+                        />
+                    </Section>
+
+                    <Section id="toolbar" title="Toolbar">
+                        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
+                            <input type="checkbox" checked={showDives} onChange={e => toggleDives(e.target.checked)} />
+                            Show the Dives button (live data views &amp; dashboards) in the toolbar
+                        </label>
+                    </Section>
+
+                    <Section id="tour" title="Guided tour">
+                        <p style={help}>
+                            Replay the first-run walkthrough of the palette, canvas, properties, Run and the
+                            web dashboard.
+                        </p>
+                        <button
+                            type="button"
+                            style={btn}
+                            onClick={() => {
+                                onClose();
+                                setTimeout(() => window.dispatchEvent(new Event('duckle:start-tour')), 250);
+                            }}
+                        >
+                            Replay guided tour
+                        </button>
+                    </Section>
                 </div>
                 <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
                     <button type="button" style={btn} onClick={onClose}>

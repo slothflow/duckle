@@ -1688,6 +1688,77 @@
     }
 
     #[test]
+    fn attach_prelude_loads_user_extensions_for_sql_template() {
+        // #113: loadExtensions installs + loads each named extension. Accepts a
+        // comma/space-separated string or a JSON array; names are sanitized so
+        // they can never inject SQL; spatial is not loaded twice.
+        let s = attach_prelude("code.sql", &serde_json::json!({ "loadExtensions": "h3, a5" }));
+        assert!(s.contains("INSTALL h3; LOAD h3;"), "h3: {}", s);
+        assert!(s.contains("INSTALL a5; LOAD a5;"), "a5: {}", s);
+        let arr = attach_prelude("code.sqltemplate", &serde_json::json!({ "loadExtensions": ["h3", "h3", "INET!"] }));
+        // Dedup + sanitize: "INET!" -> "inet", duplicate h3 collapsed.
+        assert_eq!(arr.matches("LOAD h3;").count(), 1, "dedup: {}", arr);
+        assert!(arr.contains("INSTALL inet; LOAD inet;"), "sanitized: {}", arr);
+        // spatial requested via both loadSpatial and loadExtensions -> once only.
+        let both = attach_prelude("code.sql", &serde_json::json!({ "loadSpatial": true, "loadExtensions": "spatial,h3" }));
+        assert_eq!(both.matches("LOAD spatial;").count(), 1, "spatial once: {}", both);
+        assert!(both.contains("LOAD h3;"), "h3 alongside spatial: {}", both);
+    }
+
+    #[test]
+    fn pure_sql_runs_verbatim_without_create_wrapper() {
+        // #102 follow-up: pureSql=true emits the body verbatim - no `WITH input`
+        // and no `CREATE OR REPLACE ... AS` wrapper - and the stage is flagged
+        // as producing no output relation.
+        let doc = pipeline_from_json(
+            r#"{
+              "nodes": [
+                {"id":"o","position":{"x":0,"y":0},"data":{"label":"orders","componentId":"src.csv","properties":{"path":"/tmp/o.csv","hasHeader":true}}},
+                {"id":"m","position":{"x":0,"y":0},"data":{"label":"Pure","componentId":"code.sql","properties":{
+                  "pureSql":true,
+                  "sql":"CREATE OR REPLACE TABLE final AS SELECT * FROM \"o\""}}}
+              ],
+              "edges":[
+                {"id":"e1","source":"o","target":"m","data":{"connectionType":"main"}}
+              ]
+            }"#,
+        );
+        let stage = compile(&doc).unwrap().stages.into_iter().find(|s| s.node_id == "m").unwrap();
+        assert!(stage.no_output_relation, "pure SQL stage produces no node relation");
+        assert!(!stage.sql.contains("CREATE OR REPLACE VIEW \"m\""), "no CTAS wrapper: {}", stage.sql);
+        assert!(!stage.sql.contains("WITH input AS"), "no input wrapper: {}", stage.sql);
+        assert!(stage.sql.contains("CREATE OR REPLACE TABLE final AS"), "verbatim body: {}", stage.sql);
+    }
+
+    #[test]
+    fn node_alias_is_carried_and_must_be_unique() {
+        // #102: a node alias becomes the stage's alias (exposed as a view by the
+        // executor) so raw / pure SQL can reference upstream by a friendly name.
+        let doc = pipeline_from_json(
+            r#"{
+              "nodes": [
+                {"id":"n_123","position":{"x":0,"y":0},"data":{"label":"Orders","alias":"orders","componentId":"src.csv","properties":{"path":"/tmp/o.csv","hasHeader":true}}}
+              ],
+              "edges":[]
+            }"#,
+        );
+        let stage = compile(&doc).unwrap().stages.into_iter().find(|s| s.node_id == "n_123").unwrap();
+        assert_eq!(stage.alias.as_deref(), Some("orders"), "alias carried to stage");
+        // Two nodes sharing one alias must fail compilation up front.
+        let dup = pipeline_from_json(
+            r#"{
+              "nodes": [
+                {"id":"a","position":{"x":0,"y":0},"data":{"label":"A","alias":"shared","componentId":"src.csv","properties":{"path":"/tmp/a.csv","hasHeader":true}}},
+                {"id":"b","position":{"x":0,"y":0},"data":{"label":"B","alias":"shared","componentId":"src.csv","properties":{"path":"/tmp/b.csv","hasHeader":true}}}
+              ],
+              "edges":[]
+            }"#,
+        );
+        let err = compile(&dup).unwrap_err().to_string();
+        assert!(err.contains("shared") && err.to_lowercase().contains("unique"), "dup alias errors: {}", err);
+    }
+
+    #[test]
     fn csv_declared_schema_overrides_autodetect() {
         // Regression for issue #3: when the user sets a column to
         // VARCHAR in the Schema panel (typical fix for dd/mm/yy dates

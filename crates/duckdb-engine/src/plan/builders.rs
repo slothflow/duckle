@@ -439,8 +439,12 @@ pub(crate) fn build_custom_sql(inputs: &NodeInputs, props: &JsonValue) -> Result
     // AS (...)` wrapper. The wrapper otherwise breaks any query that starts with
     // its own WITH (nested WITH) and blocks multi-CTE / UNION queries. In raw
     // mode the user references each upstream input by its node id (quoted), e.g.
-    // `SELECT * FROM "node_id"`.
-    if props.get("rawSql").and_then(JsonValue::as_bool).unwrap_or(false) {
+    // `SELECT * FROM "node_id"`. Pure mode (#102 follow-up) is a superset: it
+    // also drops the CREATE wrapper in plan/mod.rs, so the body must be verbatim
+    // here too.
+    if props.get("rawSql").and_then(JsonValue::as_bool).unwrap_or(false)
+        || props.get("pureSql").and_then(JsonValue::as_bool).unwrap_or(false)
+    {
         return Ok(sql);
     }
     Ok(match inputs.main() {
@@ -4386,6 +4390,43 @@ pub(crate) fn build_duckdb_source(props: &JsonValue) -> String {
 /// CLI process.
 /// True when the SQL text references a spatial function (an `st_` token not
 /// preceded by an identifier char, so `list_`, `first_`, etc. don't false-fire).
+/// Parse a user-supplied list of DuckDB extension names (#113). Accepts a JSON
+/// array of strings or a single string separated by commas / whitespace /
+/// newlines. Each name is lowercased and stripped to `[a-z0-9_]` (DuckDB
+/// extension names are simple identifiers), which also means a name can never
+/// inject SQL into the INSTALL / LOAD prelude. Empty names and duplicates are
+/// dropped; order is preserved.
+fn parse_extension_names(v: Option<&JsonValue>) -> Vec<String> {
+    let mut raw: Vec<String> = Vec::new();
+    match v {
+        Some(JsonValue::Array(items)) => {
+            for it in items {
+                if let Some(s) = it.as_str() {
+                    raw.push(s.to_string());
+                }
+            }
+        }
+        Some(JsonValue::String(s)) => {
+            for part in s.split(|c: char| c == ',' || c.is_whitespace()) {
+                raw.push(part.to_string());
+            }
+        }
+        _ => {}
+    }
+    let mut out: Vec<String> = Vec::new();
+    for name in raw {
+        let clean: String = name
+            .to_ascii_lowercase()
+            .chars()
+            .filter(|c| c.is_ascii_alphanumeric() || *c == '_')
+            .collect();
+        if !clean.is_empty() && !out.contains(&clean) {
+            out.push(clean);
+        }
+    }
+    out
+}
+
 fn references_spatial(sql: &str) -> bool {
     let lower = sql.to_ascii_lowercase();
     let bytes = lower.as_bytes();
@@ -4406,12 +4447,25 @@ pub(crate) fn attach_prelude(component_id: &str, props: &JsonValue) -> String {
     // #84: SQL Template / Custom SQL can use spatial functions (ST_Point etc)
     // over any source (e.g. lon/lat from a CSV). Load the spatial extension when
     // the user opts in (loadSpatial) or the SQL references an ST_ function.
+    // #113: also INSTALL + LOAD any extensions the user listed in
+    // `loadExtensions` (e.g. h3, a5), so SQL Template can reach the wider DuckDB
+    // ecosystem. Both feed one prelude, returned even when empty.
     if matches!(component_id, "code.sql" | "code.sqltemplate") {
+        let mut prelude = String::new();
         let opt_in = props.get("loadSpatial").and_then(JsonValue::as_bool).unwrap_or(false);
         let auto = string_prop(props, "sql").map(|s| references_spatial(&s)).unwrap_or(false);
-        if opt_in || auto {
-            return "INSTALL spatial; LOAD spatial; ".into();
+        let want_spatial = opt_in || auto;
+        if want_spatial {
+            prelude.push_str("INSTALL spatial; LOAD spatial; ");
         }
+        for ext in parse_extension_names(props.get("loadExtensions")) {
+            // spatial may already be queued above; don't load it twice.
+            if ext == "spatial" && want_spatial {
+                continue;
+            }
+            prelude.push_str(&format!("INSTALL {ext}; LOAD {ext}; "));
+        }
+        return prelude;
     }
     // Network DBs use host/port + libpq-style fields, not the
     // file-style `database` path the file-based ATTACH connectors use.

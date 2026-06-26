@@ -1,4 +1,8 @@
 :root {
+    /* Base UI font size, driven by the Settings > Appearance control. All
+       inheriting text scales from this; the default matches the historical
+       13px. Set on document.documentElement at startup (see font-size.ts). */
+    --app-font-size: 13px;
     /* DuckDB-inspired dark - lemon-yellow brand accent on deep charcoal,
        with a slate-blue selection accent and the DuckDB secondary palette
        (maya blue / hot orange) across the component kinds. */
@@ -117,7 +121,8 @@ body,
     font-family:
         'Inter Variable', 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto,
         'Helvetica Neue', Arial, sans-serif;
-    font-size: 13px;
+    /* Driven by Settings > Appearance (font-size.ts). Default 13px. */
+    font-size: var(--app-font-size, 13px);
     line-height: 1.5;
     font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11', 'ss01', 'ss03', 'tnum', 'calt';
     letter-spacing: -0.005em;
@@ -3363,7 +3368,14 @@ html[dir='rtl'] .topbar-lang {
 }
 
 .preview-tablewrap {
-    overflow-x: auto;
+    /* Own BOTH scroll axes inside a bounded box so the horizontal scrollbar is
+       always reachable. Previously only overflow-x was set, so when the table
+       grew taller than the panel the OUTER .properties-content scrolled
+       vertically and the table's horizontal scrollbar was pushed below the fold
+       - users had to scroll all the way down to reach it (#102). The sticky
+       header keeps working within this scroll context. */
+    overflow: auto;
+    max-height: min(60vh, 460px);
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
     background: var(--bg-2);
@@ -4200,6 +4212,46 @@ html[dir='rtl'] .topbar-lang {
 .modal-body {
     padding: 16px 20px 18px;
     overflow-y: auto;
+}
+
+/* Collapsible Settings categories (#102 - keep the panel simple). Mirrors the
+   palette category header pattern. */
+.settings-section {
+    border-top: 1px solid var(--border-2, #2a2a2a);
+}
+.settings-section:first-child {
+    border-top: none;
+}
+.settings-section-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    background: transparent;
+    border: none;
+    color: var(--text-1);
+    padding: 12px 2px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 13px;
+    text-align: left;
+}
+.settings-section-header:hover {
+    color: var(--accent);
+}
+.settings-cat-chevron {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    color: var(--text-3);
+    flex-shrink: 0;
+}
+.settings-section-title {
+    flex: 1;
+}
+.settings-section-body {
+    padding: 0 2px 14px 22px;
 }
 
 .modal-field + .modal-field {
