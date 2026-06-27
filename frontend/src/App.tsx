@@ -45,7 +45,6 @@ import { DuckleLogo } from './workflow-ui/DuckleLogo';
 import EngineSetupModal from './workflow-ui/EngineSetupModal';
 import ChatPanel from './workflow-ui/ChatPanel';
 import GitPanel from './workflow-ui/GitPanel';
-import CiStatusBadge from './workflow-ui/CiStatusBadge';
 import WindowControls from './workflow-ui/WindowControls';
 import { engineStatus } from './tauri-bridge';
 import { copyText, saveTextFile } from './tauri-io';
@@ -1704,20 +1703,36 @@ export default function App() {
         (raw: unknown) => {
             if (!raw || typeof raw !== 'object') return;
             const obj = raw as {
-                nodes?: Array<{ id?: string; type?: string; data?: { label?: string; properties?: unknown } }>;
+                nodes?: Array<{ id?: string; type?: string; data?: { label?: string; properties?: unknown; props?: unknown } }>;
                 edges?: Array<{ id?: string; source?: string; target?: string }>;
             };
             if (!Array.isArray(obj.nodes)) return;
-            const nodes: Node<DuckleNodeData>[] = obj.nodes.map((n, i) => ({
-                id: n.id ?? `n${i + 1}`,
-                type: nodeKindFromComponent(n.type ?? 'src.csv'),
-                position: { x: 80 + i * 260, y: 160 },
-                data: {
-                    label: n.data?.label ?? (n.type ?? 'Node').replace(/^[^.]+\./, ''),
-                    componentId: n.type ?? 'src.csv',
-                    properties: (n.data?.properties as Record<string, unknown> | undefined) ?? {},
-                } as DuckleNodeData,
-            }));
+            // Normalize the component ids the local model most often gets
+            // wrong, so a near-miss resolves to a real node instead of an
+            // empty / unknown one.
+            const AI_ID_ALIASES: Record<string, string> = {
+                'xf.aggregate': 'xf.groupby',
+                'xf.derive': 'xf.addcol',
+                'xf.select': 'xf.project',
+                'xf.join': 'xf.join.inner',
+            };
+            const nodes: Node<DuckleNodeData>[] = obj.nodes.map((n, i) => {
+                const cid = AI_ID_ALIASES[n.type ?? ''] ?? n.type ?? 'src.csv';
+                return {
+                    id: n.id ?? `n${i + 1}`,
+                    type: nodeKindFromComponent(cid),
+                    position: { x: 80 + i * 260, y: 160 },
+                    data: {
+                        label: n.data?.label ?? cid.replace(/^[^.]+\./, ''),
+                        componentId: cid,
+                        // The local model is told to emit `properties`, but older
+                        // prompt builds said `props` - accept either so its output
+                        // is not silently dropped into an empty node (issue: AI
+                        // assistant produced empty aggregation nodes).
+                        properties: ((n.data?.properties ?? n.data?.props) as Record<string, unknown> | undefined) ?? {},
+                    } as DuckleNodeData,
+                };
+            });
             const edges: Edge[] = (obj.edges ?? []).map((e, i) => ({
                 id: e.id ?? `e${i + 1}`,
                 source: e.source ?? '',
@@ -1961,7 +1976,6 @@ export default function App() {
                         </select>
                     </div>
                 ) : null}
-                {workspacePathState ? <CiStatusBadge workspacePath={workspacePathState} /> : null}
                 {workspacePathState && isInTauri() ? (
                     <button
                         type="button"
