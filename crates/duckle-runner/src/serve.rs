@@ -1039,6 +1039,10 @@ fn execute_one(state: &State, file: &str, trigger: &str) -> Result<Value, String
     let env_file = state.workspace.join("secrets.env");
     crate::apply_env_pass(&mut doc, &state.workspace, &env_file)?;
     duckle_duckdb_engine::context::apply_time_builtins(&mut doc);
+    // Match the web cmd paths and headless `duckle-runner --pipeline`: resolve
+    // ${workspace}/${projectroot} and workspace-relative file paths before run,
+    // so file-loaded pipelines (manual /api/run + scheduled runs) work too.
+    duckle_duckdb_engine::context::apply_workspace_context(&mut doc, &state.workspace);
 
     let engine = DuckdbEngine::new(state.duckdb.clone());
     let result = engine.execute_pipeline_named(&doc, &id);

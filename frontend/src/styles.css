@@ -604,6 +604,15 @@ textarea:focus-visible {
     color: var(--text-3);
 }
 
+.palette-component.is-preview {
+    color: var(--text-2);
+    opacity: 0.88;
+}
+
+.palette-component.is-preview:hover {
+    opacity: 1;
+}
+
 .palette-component.is-planned:hover {
     color: var(--text-2);
 }
@@ -617,6 +626,33 @@ textarea:focus-visible {
 
 .palette-component.is-planned .palette-component-icon {
     opacity: 0.4;
+}
+
+.palette-component.is-preview .palette-component-icon {
+    opacity: 0.65;
+}
+
+.palette-badge {
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    padding: 1px 5px;
+    border-radius: 4px;
+    flex-shrink: 0;
+    line-height: 1.3;
+}
+
+.palette-badge-preview {
+    color: var(--warning, #c9a227);
+    background: color-mix(in srgb, var(--warning, #c9a227) 18%, transparent);
+    border: 1px solid color-mix(in srgb, var(--warning, #c9a227) 35%, transparent);
+}
+
+.palette-badge-planned {
+    color: var(--text-3);
+    background: var(--surface-2, rgba(128, 128, 128, 0.12));
+    border: 1px solid var(--border, rgba(128, 128, 128, 0.2));
 }
 
 .palette-component-label {

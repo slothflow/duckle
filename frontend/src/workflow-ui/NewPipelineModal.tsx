@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import type { RepoItem } from '../repo-types';
 
-export type PipelineTemplate = 'empty' | 'sample-csv-to-parquet' | 'from-sql';
+export type PipelineTemplate = 'empty' | 'sample-csv-to-parquet' | 'sample-join-groupby' | 'from-sql';
 
 type Props = {
     open: boolean;
@@ -24,6 +24,12 @@ const TEMPLATES: { id: PipelineTemplate; label: string; description: string; ava
         id: 'sample-csv-to-parquet',
         label: 'Sample · CSV → Filter → Parquet',
         description: 'Pre-wired three-node pipeline to learn the editor.',
+        available: true,
+    },
+    {
+        id: 'sample-join-groupby',
+        label: 'Sample · Join + Group By',
+        description: 'Join two CSVs and aggregate — uses xf.groupby (not xf.aggregate).',
         available: true,
     },
     {

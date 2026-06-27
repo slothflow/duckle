@@ -1,0 +1,38 @@
+{
+  "nodes": [
+    {
+      "id": "s1",
+      "position": { "x": 0, "y": 0 },
+      "data": {
+        "label": "Orders CSV",
+        "componentId": "src.csv",
+        "properties": {
+          "path": "${workspace}/data/orders.csv",
+          "hasHeader": true
+        }
+      }
+    },
+    {
+      "id": "f1",
+      "position": { "x": 200, "y": 0 },
+      "data": {
+        "label": "Paid only",
+        "componentId": "xf.filter",
+        "properties": { "predicate": "status = 'paid'" }
+      }
+    },
+    {
+      "id": "k1",
+      "position": { "x": 400, "y": 0 },
+      "data": {
+        "label": "Parquet out",
+        "componentId": "snk.parquet",
+        "properties": { "path": "${workspace}/output/paid_orders.parquet" }
+      }
+    }
+  ],
+  "edges": [
+    { "id": "e1", "source": "s1", "target": "f1", "data": { "connectionType": "main" } },
+    { "id": "e2", "source": "f1", "target": "k1", "data": { "connectionType": "main" } }
+  ]
+}

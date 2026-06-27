@@ -219,18 +219,39 @@ export default function Palette() {
                                         {cat.groups.map(g => (
                                             <div className="palette-group" key={g.id}>
                                                 <div className="palette-group-label">{GROUP_LABEL_KEY[g.label] ? t(GROUP_LABEL_KEY[g.label]) : g.label}</div>
-                                                {g.components.map(c => (
+                                                {g.components.map(c => {
+                                                    const availClass =
+                                                        c.availability === 'planned'
+                                                            ? ' is-planned'
+                                                            : c.availability === 'preview'
+                                                              ? ' is-preview'
+                                                              : ' is-available';
+                                                    const badgeLabel =
+                                                        c.availability === 'preview'
+                                                            ? 'Preview'
+                                                            : c.availability === 'planned'
+                                                              ? 'Planned'
+                                                              : null;
+                                                    const titleParts = [
+                                                        c.summary ?? c.label,
+                                                        c.alternateHint,
+                                                        badgeLabel
+                                                            ? `(${badgeLabel} — not executable on DuckDB engine yet)`
+                                                            : null,
+                                                    ].filter(Boolean);
+                                                    return (
                                                     <div
                                                         key={c.id}
                                                         className={
-                                                            'palette-component' +
-                                                            (c.availability === 'planned'
-                                                                ? ' is-planned'
-                                                                : ' is-available')
+                                                            'palette-component' + availClass
                                                         }
-                                                        draggable
-                                                        onDragStart={e => onDragStart(e, c)}
-                                                        title={c.summary ?? c.label}
+                                                        draggable={c.availability === 'available'}
+                                                        onDragStart={
+                                                            c.availability === 'available'
+                                                                ? e => onDragStart(e, c)
+                                                                : undefined
+                                                        }
+                                                        title={titleParts.join(' · ')}
                                                     >
                                                         <ComponentIcon
                                                             componentId={c.id}
@@ -241,7 +262,16 @@ export default function Palette() {
                                                         <span className="palette-component-label">
                                                             {c.label}
                                                         </span>
-                                                        {c.availability === 'available' ? (
+                                                        {badgeLabel ? (
+                                                            <span
+                                                                className={
+                                                                    'palette-badge palette-badge-' +
+                                                                    c.availability
+                                                                }
+                                                            >
+                                                                {badgeLabel}
+                                                            </span>
+                                                        ) : c.availability === 'available' ? (
                                                             <Check
                                                                 className="palette-availability palette-availability-yes"
                                                                 size={12}
@@ -250,11 +280,12 @@ export default function Palette() {
                                                         ) : (
                                                             <span
                                                                 className="palette-availability palette-availability-no"
-                                                                aria-label="planned"
+                                                                aria-label={c.availability}
                                                             />
                                                         )}
                                                     </div>
-                                                ))}
+                                                    );
+                                                })}
                                             </div>
                                         ))}
                                     </div>

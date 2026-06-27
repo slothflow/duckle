@@ -131,7 +131,7 @@ const SAMPLE_NODES: Node<DuckleNodeData>[] = [
             componentId: 'src.csv',
             // No path yet - set one and Autodetect. The subtitle and
             // schema fill in from the real file, they aren't faked.
-            properties: { hasHeader: true },
+            properties: { path: '${workspace}/data/orders.csv', hasHeader: true },
         },
     },
     {
@@ -152,7 +152,7 @@ const SAMPLE_NODES: Node<DuckleNodeData>[] = [
         data: {
             label: 'Parquet',
             componentId: 'snk.parquet',
-            properties: {},
+            properties: { path: '${workspace}/output/paid_orders.parquet' },
         },
     },
 ];
@@ -170,6 +170,104 @@ const SAMPLE_EDGES: Edge[] = [
     {
         id: 'e2',
         source: 't1',
+        sourceHandle: 'main',
+        target: 'k1',
+        targetHandle: 'main',
+        type: 'duckle',
+        data: { connectionType: 'main' },
+    },
+];
+
+const SAMPLE_JOIN_NODES: Node<DuckleNodeData>[] = [
+    {
+        id: 's_orders',
+        type: 'source',
+        position: { x: 40, y: 80 },
+        data: {
+            label: 'Orders',
+            componentId: 'src.csv',
+            properties: { path: '${workspace}/data/orders.csv', hasHeader: true },
+        },
+    },
+    {
+        id: 's_regions',
+        type: 'source',
+        position: { x: 40, y: 220 },
+        data: {
+            label: 'Regions',
+            componentId: 'src.csv',
+            properties: { path: '${workspace}/data/regions.csv', hasHeader: true },
+        },
+    },
+    {
+        id: 'j1',
+        type: 'transform',
+        position: { x: 320, y: 150 },
+        data: {
+            label: 'Inner Join',
+            componentId: 'xf.join.inner',
+            properties: { leftKey: 'region', rightKey: 'region' },
+        },
+    },
+    {
+        id: 'g1',
+        type: 'transform',
+        position: { x: 560, y: 150 },
+        data: {
+            label: 'Group By',
+            componentId: 'xf.groupby',
+            properties: {
+                groupKeys: ['region', 'manager'],
+                aggregations: [{ column: 'amount', function: 'sum', alias: 'total_amount' }],
+            },
+        },
+    },
+    {
+        id: 'k1',
+        type: 'sink',
+        position: { x: 800, y: 150 },
+        data: {
+            label: 'CSV',
+            componentId: 'snk.csv',
+            properties: {
+                path: '${workspace}/output/region_summary.csv',
+                hasHeader: true,
+            },
+        },
+    },
+];
+
+const SAMPLE_JOIN_EDGES: Edge[] = [
+    {
+        id: 'e1',
+        source: 's_orders',
+        sourceHandle: 'main',
+        target: 'j1',
+        targetHandle: 'main',
+        type: 'duckle',
+        data: { connectionType: 'main' },
+    },
+    {
+        id: 'e2',
+        source: 's_regions',
+        sourceHandle: 'main',
+        target: 'j1',
+        targetHandle: 'lookup',
+        type: 'duckle',
+        data: { connectionType: 'lookup' },
+    },
+    {
+        id: 'e3',
+        source: 'j1',
+        sourceHandle: 'main',
+        target: 'g1',
+        targetHandle: 'main',
+        type: 'duckle',
+        data: { connectionType: 'main' },
+    },
+    {
+        id: 'e4',
+        source: 'g1',
         sourceHandle: 'main',
         target: 'k1',
         targetHandle: 'main',
@@ -217,6 +315,9 @@ function freshId(prefix: string): string {
 function seedTemplate(template: PipelineTemplate): PipelineState {
     if (template === 'sample-csv-to-parquet') {
         return { nodes: SAMPLE_NODES, edges: SAMPLE_EDGES };
+    }
+    if (template === 'sample-join-groupby') {
+        return { nodes: SAMPLE_JOIN_NODES, edges: SAMPLE_JOIN_EDGES };
     }
     return { nodes: [], edges: [] };
 }

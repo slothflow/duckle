@@ -1,0 +1,64 @@
+{
+  "nodes": [
+    {
+      "id": "s_orders",
+      "position": { "x": 0, "y": 0 },
+      "data": {
+        "label": "Orders",
+        "componentId": "src.csv",
+        "properties": { "path": "${workspace}/data/orders.csv", "hasHeader": true }
+      }
+    },
+    {
+      "id": "s_regions",
+      "position": { "x": 0, "y": 120 },
+      "data": {
+        "label": "Regions",
+        "componentId": "src.csv",
+        "properties": { "path": "${workspace}/data/regions.csv", "hasHeader": true }
+      }
+    },
+    {
+      "id": "j1",
+      "position": { "x": 220, "y": 60 },
+      "data": {
+        "label": "Inner Join",
+        "componentId": "xf.join.inner",
+        "properties": { "leftKey": "region", "rightKey": "region" }
+      }
+    },
+    {
+      "id": "g1",
+      "position": { "x": 440, "y": 60 },
+      "data": {
+        "label": "Group By",
+        "componentId": "xf.groupby",
+        "properties": {
+          "groupKeys": ["region", "manager"],
+          "aggregations": [{ "column": "amount", "function": "sum", "alias": "total_amount" }]
+        }
+      }
+    },
+    {
+      "id": "k1",
+      "position": { "x": 660, "y": 60 },
+      "data": {
+        "label": "CSV out",
+        "componentId": "snk.csv",
+        "properties": { "path": "${workspace}/output/region_summary.csv", "hasHeader": true }
+      }
+    }
+  ],
+  "edges": [
+    { "id": "e1", "source": "s_orders", "target": "j1", "data": { "connectionType": "main" } },
+    {
+      "id": "e2",
+      "source": "s_regions",
+      "target": "j1",
+      "targetHandle": "lookup",
+      "data": { "connectionType": "lookup" }
+    },
+    { "id": "e3", "source": "j1", "target": "g1", "data": { "connectionType": "main" } },
+    { "id": "e4", "source": "g1", "target": "k1", "data": { "connectionType": "main" } }
+  ]
+}

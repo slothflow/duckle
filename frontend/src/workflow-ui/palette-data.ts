@@ -8,6 +8,8 @@ export type ComponentDef = {
     kind: NodeKind;
     availability: Availability;
     summary?: string;
+    /** When set, shown in the palette for preview/planned tiles. */
+    alternateHint?: string;
 };
 
 export type Group = {
@@ -24,12 +26,19 @@ export type Category = {
     groups: Group[];
 };
 
-const src = (id: string, label: string, availability: Availability, summary?: string): ComponentDef => ({
+const src = (
+    id: string,
+    label: string,
+    availability: Availability,
+    summary?: string,
+    alternateHint?: string,
+): ComponentDef => ({
     id: 'src.' + id,
     label,
     kind: 'source',
     availability,
     summary,
+    alternateHint,
 });
 
 const snk = (id: string, label: string, availability: Availability, summary?: string): ComponentDef => ({
@@ -40,12 +49,19 @@ const snk = (id: string, label: string, availability: Availability, summary?: st
     summary,
 });
 
-const xf = (id: string, label: string, availability: Availability, summary?: string): ComponentDef => ({
+const xf = (
+    id: string,
+    label: string,
+    availability: Availability,
+    summary?: string,
+    alternateHint?: string,
+): ComponentDef => ({
     id: 'xf.' + id,
     label,
     kind: 'transform',
     availability,
     summary,
+    alternateHint,
 });
 
 const ctl = (id: string, label: string, availability: Availability, summary?: string): ComponentDef => ({

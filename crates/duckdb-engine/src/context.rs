@@ -623,6 +623,26 @@ mod tests {
     }
 
     #[test]
+    fn apply_workspace_context_substitutes_workspace_placeholder() {
+        // serve /api/run and scheduled runs load a pipeline file directly and
+        // must resolve ${workspace} the same way the headless CLI runner does.
+        let dir = tempfile::tempdir().unwrap();
+        let ws = dir.path();
+        let mut doc: crate::PipelineDoc = serde_json::from_str(
+            r#"{"nodes":[{"id":"s","position":{"x":0,"y":0},"data":{"label":"CSV","componentId":"src.csv","properties":{"path":"${workspace}/data/orders.csv"}}}],"edges":[]}"#,
+        )
+        .unwrap();
+        super::apply_workspace_context(&mut doc, ws);
+        let props = doc.nodes[0].data.properties.as_ref().unwrap();
+        let root = ws.to_string_lossy().replace('\\', "/");
+        assert_eq!(
+            props["path"],
+            serde_json::json!(format!("{}/data/orders.csv", root)),
+            "apply_workspace_context must resolve ${{workspace}} for file-loaded pipelines"
+        );
+    }
+
+    #[test]
     fn resolve_workspace_does_not_bake_datetime() {
         // Build-safety guard: resolve_workspace (also used by the `build`
         // subcommand) must NOT resolve the date/time builtins, so a built bundle
