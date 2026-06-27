@@ -1194,19 +1194,28 @@ struct WebPanel {
 
 static WEB_PANEL: std::sync::Mutex<Option<WebPanel>> = std::sync::Mutex::new(None);
 
-/// `duckle serve [args...]` - launch the web management console straight from a
-/// terminal using just the desktop binary (no separate runner download needed).
-/// Delegates to the embedded headless runner's `serve` subcommand and forwards
-/// any args (`--workspace`, `--port`, ...). Returns false when the first arg is
-/// not `serve` (normal GUI launch); on the serve path it never returns - it runs
-/// the server and exits with its status.
-pub fn run_serve_cli() -> bool {
+/// `duckle serve [...]` or `duckle run [...]` - delegate to the embedded
+/// headless runner without launching the GUI. Returns false when argv[1] is
+/// neither subcommand; on a headless path this never returns.
+pub fn run_headless_cli() -> bool {
     let mut it = std::env::args();
     let _exe = it.next();
-    if it.next().as_deref() != Some("serve") {
-        return false;
-    }
+    let (label, temp_dir, runner_subcommand) = match it.next().as_deref() {
+        Some("serve") => ("duckle serve", "duckle-serve", Some("serve")),
+        Some("run") => ("duckle run", "duckle-run", None),
+        _ => return false,
+    };
     let rest: Vec<String> = it.collect();
+    run_embedded_runner(label, temp_dir, runner_subcommand, &rest);
+}
+
+/// Stage the embedded runner to a temp dir and exec it with optional subcommand.
+fn run_embedded_runner(
+    label: &str,
+    temp_dir: &str,
+    subcommand: Option<&str>,
+    rest: &[String],
+) -> ! {
     // A GUI-subsystem binary has no console of its own; reattach to the terminal
     // that launched us so the runner's output is visible.
     #[cfg(windows)]
@@ -1217,15 +1226,15 @@ pub fn run_serve_cli() -> bool {
         AttachConsole(0xFFFF_FFFFu32); // ATTACH_PARENT_PROCESS
     }
     if EMBEDDED_RUNNER.is_empty() {
-        eprintln!("duckle serve: this build does not bundle the runner");
+        eprintln!("{label}: this build does not bundle the runner");
         std::process::exit(1);
     }
-    let dir = std::env::temp_dir().join("duckle-serve");
+    let dir = std::env::temp_dir().join(temp_dir);
     let _ = std::fs::create_dir_all(&dir);
     let suffix = if cfg!(windows) { ".exe" } else { "" };
     let runner = dir.join(format!("duckle-runner{suffix}"));
     if let Err(e) = write_if_changed(&runner, EMBEDDED_RUNNER) {
-        eprintln!("duckle serve: {e}");
+        eprintln!("{label}: {e}");
         std::process::exit(1);
     }
     #[cfg(unix)]
@@ -1233,13 +1242,16 @@ pub fn run_serve_cli() -> bool {
         use std::os::unix::fs::PermissionsExt;
         let _ = std::fs::set_permissions(&runner, std::fs::Permissions::from_mode(0o755));
     }
-    let code = std::process::Command::new(&runner)
-        .arg("serve")
-        .args(&rest)
+    let mut cmd = std::process::Command::new(&runner);
+    if let Some(sub) = subcommand {
+        cmd.arg(sub);
+    }
+    let code = cmd
+        .args(rest)
         .status()
         .map(|s| s.code().unwrap_or(0))
         .unwrap_or_else(|e| {
-            eprintln!("duckle serve: failed to start: {e}");
+            eprintln!("{label}: failed to start: {e}");
             1
         });
     std::process::exit(code);

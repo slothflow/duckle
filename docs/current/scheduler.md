@@ -73,13 +73,21 @@ Run it:
 
 ### Headless runner (against an existing workspace)
 
-The same headless runner can also execute a single already-built pipeline JSON directly from a workspace, resolving the context the same way the app does:
+The same headless runner can also execute a single already-built pipeline JSON directly from a workspace, resolving the context the same way the app does.
+
+From a **Duckle desktop install** (no separate runner download):
+
+```bash
+duckle run --pipeline "/path/to/pipeline.json" [--workspace "/path/to/workspace"] [--duckdb "/path/to/duckdb"]
+```
+
+From a standalone **`duckle-runner`** binary (CI, servers, MCP):
 
 ```bash
 duckle-runner --pipeline "/path/to/pipeline.json" [--workspace "/path/to/workspace"] [--duckdb "/path/to/duckdb"]
 ```
 
-There is no `run` subcommand: pass the pipeline with `--pipeline` (or as a bare positional path). It exits `0` on success and non-zero on failure, and writes the same NDJSON run logs under `logs/` for Splunk / Dynatrace ingestion.
+Pass the pipeline with `--pipeline` (or as a bare positional path on `duckle-runner`). Both paths exit `0` on success and non-zero on failure, and write the same NDJSON run logs under `logs/` for Splunk / Dynatrace ingestion.
 
 ### Scheduling on the server
 
