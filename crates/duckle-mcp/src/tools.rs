@@ -110,6 +110,14 @@ pub fn list_tools() -> Value {
                 "column": { "type": "string", "description": "Optional source column name; returns only its downstream dependents." },
                 "duckdb": { "type": "string", "description": "Path to the DuckDB CLI. Defaults to DUCKLE_DUCKDB_BIN or 'duckdb' on PATH." }
             }})),
+        tool("diff_pipelines",
+            "Diff two pipeline versions for review: reports nodes added/removed/changed (by component, properties, or compiled SQL) and edges added/removed, with a summary. Compile-only and read-only; no DuckDB binary needed. Give each side as a 'before'/'after' object or a 'beforePath'/'afterPath' file.",
+            json!({ "type": "object", "properties": {
+                "before": { "type": "object", "description": "Baseline pipeline object." },
+                "after": { "type": "object", "description": "Changed pipeline object." },
+                "beforePath": { "type": "string", "description": "Path to the baseline pipeline .json (use instead of 'before')." },
+                "afterPath": { "type": "string", "description": "Path to the changed pipeline .json (use instead of 'after')." }
+            }})),
         tool("list_pipelines",
             "List pipeline .json files in a directory with their node/edge counts.",
             json!({ "type": "object", "properties": {
@@ -179,6 +187,7 @@ pub fn call_tool(params: Value) -> Result<Value, (i64, String)> {
         "verify_pipeline" => t_verify_pipeline(&args),
         "suggest_contracts" => t_suggest_contracts(&args),
         "pipeline_impact" => t_pipeline_impact(&args),
+        "diff_pipelines" => t_diff_pipelines(&args),
         "list_pipelines" => t_list_pipelines(&args),
         "read_pipeline" => t_read_pipeline(&args),
         "read_run_logs" => t_read_run_logs(&args),
@@ -335,6 +344,137 @@ fn t_pipeline_impact(args: &Value) -> Result<Value, String> {
         }));
     }
     Ok(json!({ "ok": true, "roots": roots }))
+}
+
+/// Load one side of a diff from an inline object or a file path.
+fn load_side(args: &Value, inline: &str, path: &str) -> Result<Value, String> {
+    if let Some(p) = args.get(inline).filter(|v| v.is_object()) {
+        Ok(p.clone())
+    } else if let Some(pth) = arg_str(args, path) {
+        let text = std::fs::read_to_string(pth).map_err(|e| format!("read {pth}: {e}"))?;
+        serde_json::from_str(&text).map_err(|e| format!("parse {pth}: {e}"))
+    } else {
+        Err(format!("provide '{inline}' (object) or '{path}' (string)"))
+    }
+}
+
+/// Compile each node to SQL for plan-level comparison. Best-effort: a compile
+/// failure yields an empty map, so planChanged just falls back to false.
+fn plan_sql_map(p: &Value) -> std::collections::HashMap<String, String> {
+    let mut m = std::collections::HashMap::new();
+    if let Ok(doc) = to_doc(p) {
+        if let Ok(stages) = compile_pipeline_sql(&doc) {
+            for st in stages {
+                m.insert(st.node_id, st.sql);
+            }
+        }
+    }
+    m
+}
+
+fn t_diff_pipelines(args: &Value) -> Result<Value, String> {
+    let before = load_side(args, "before", "beforePath")?;
+    let after = load_side(args, "after", "afterPath")?;
+
+    // Index nodes by id straight off the raw JSON (struct-independent).
+    let index = |p: &Value| -> std::collections::BTreeMap<String, Value> {
+        let mut m = std::collections::BTreeMap::new();
+        if let Some(nodes) = p.get("nodes").and_then(|n| n.as_array()) {
+            for n in nodes {
+                if let Some(id) = n.get("id").and_then(|v| v.as_str()) {
+                    m.insert(id.to_string(), n.clone());
+                }
+            }
+        }
+        m
+    };
+    let a = index(&before);
+    let b = index(&after);
+
+    let comp = |n: &Value| {
+        n.pointer("/data/componentId").and_then(|v| v.as_str()).unwrap_or("").to_string()
+    };
+    let label =
+        |n: &Value| n.pointer("/data/label").and_then(|v| v.as_str()).unwrap_or("").to_string();
+    let props = |n: &Value| n.pointer("/data/properties").cloned().unwrap_or(Value::Null);
+
+    let pa = plan_sql_map(&before);
+    let pb = plan_sql_map(&after);
+
+    let mut added = Vec::new();
+    let mut removed = Vec::new();
+    let mut changed = Vec::new();
+    for (id, n) in &b {
+        if !a.contains_key(id) {
+            added.push(json!({ "node": id, "componentId": comp(n), "label": label(n) }));
+        }
+    }
+    for (id, n) in &a {
+        if !b.contains_key(id) {
+            removed.push(json!({ "node": id, "componentId": comp(n), "label": label(n) }));
+        }
+    }
+    for (id, na) in &a {
+        if let Some(nb) = b.get(id) {
+            let (comp_a, comp_b) = (comp(na), comp(nb));
+            let component_changed = comp_a != comp_b;
+            let properties_changed = props(na) != props(nb);
+            let plan_changed = pa.get(id) != pb.get(id);
+            if component_changed || properties_changed || plan_changed {
+                changed.push(json!({
+                    "node": id,
+                    "label": label(nb),
+                    "componentChanged": if component_changed {
+                        json!({ "from": comp_a, "to": comp_b })
+                    } else {
+                        Value::Null
+                    },
+                    "propertiesChanged": properties_changed,
+                    "planChanged": plan_changed,
+                }));
+            }
+        }
+    }
+
+    // Edges keyed by source/target plus handles, so a rewire is add + remove.
+    let edge_key = |e: &Value| {
+        let g = |k: &str| e.get(k).and_then(|v| v.as_str()).unwrap_or("").to_string();
+        format!("{}->{}|{}|{}", g("source"), g("target"), g("sourceHandle"), g("targetHandle"))
+    };
+    let edge_set = |p: &Value| -> std::collections::BTreeMap<String, Value> {
+        let mut m = std::collections::BTreeMap::new();
+        if let Some(edges) = p.get("edges").and_then(|e| e.as_array()) {
+            for e in edges {
+                let g = |k: &str| e.get(k).and_then(|v| v.as_str()).unwrap_or("").to_string();
+                m.insert(edge_key(e), json!({ "source": g("source"), "target": g("target") }));
+            }
+        }
+        m
+    };
+    let ea = edge_set(&before);
+    let eb = edge_set(&after);
+    let edges_added: Vec<Value> =
+        eb.iter().filter(|(k, _)| !ea.contains_key(*k)).map(|(_, v)| v.clone()).collect();
+    let edges_removed: Vec<Value> =
+        ea.iter().filter(|(k, _)| !eb.contains_key(*k)).map(|(_, v)| v.clone()).collect();
+
+    let plan_changed_any = !added.is_empty()
+        || !removed.is_empty()
+        || changed.iter().any(|c| c["planChanged"] == json!(true));
+
+    Ok(json!({
+        "ok": true,
+        "summary": {
+            "nodesAdded": added.len(),
+            "nodesRemoved": removed.len(),
+            "nodesChanged": changed.len(),
+            "edgesAdded": edges_added.len(),
+            "edgesRemoved": edges_removed.len(),
+            "planChanged": plan_changed_any,
+        },
+        "nodes": { "added": added, "removed": removed, "changed": changed },
+        "edges": { "added": edges_added, "removed": edges_removed },
+    }))
 }
 
 /// Cheap, deterministic graph checks that do not require execution. Reads the
@@ -1452,6 +1592,49 @@ mod verify_tests {
         assert!(deps.contains(&("k".to_string(), "email".to_string())));
         assert!(deps.contains(&("k".to_string(), "email_hash".to_string())));
         assert!(!deps.contains(&("s".to_string(), "email".to_string())));
+    }
+
+    #[test]
+    fn diff_pipelines_reports_node_and_edge_changes() {
+        let before = json!({
+            "nodes": [
+                { "id": "s", "data": { "componentId": "src.csv", "label": "A", "properties": { "path": "old.csv" } } },
+                { "id": "k", "data": { "componentId": "snk.csv", "label": "K", "properties": {} } }
+            ],
+            "edges": [ { "source": "s", "target": "k" } ]
+        });
+        let after = json!({
+            "nodes": [
+                { "id": "s", "data": { "componentId": "src.csv", "label": "A", "properties": { "path": "new.csv" } } },
+                { "id": "x", "data": { "componentId": "xf.addcol", "label": "X", "properties": {} } },
+                { "id": "k", "data": { "componentId": "snk.csv", "label": "K", "properties": {} } }
+            ],
+            "edges": [ { "source": "s", "target": "x" }, { "source": "x", "target": "k" } ]
+        });
+        let out = t_diff_pipelines(&json!({ "before": before, "after": after })).unwrap();
+        assert_eq!(out["summary"]["nodesAdded"], json!(1));
+        assert_eq!(out["nodes"]["added"][0]["node"], json!("x"));
+        assert_eq!(out["summary"]["nodesRemoved"], json!(0));
+        // s changed only in its properties (path), not its component.
+        let changed = out["nodes"]["changed"].as_array().unwrap();
+        let s = changed.iter().find(|c| c["node"] == "s").expect("s is changed");
+        assert_eq!(s["propertiesChanged"], json!(true));
+        assert_eq!(s["componentChanged"], Value::Null);
+        // The s->k edge is gone; s->x and x->k are new.
+        assert_eq!(out["summary"]["edgesAdded"], json!(2));
+        assert_eq!(out["summary"]["edgesRemoved"], json!(1));
+    }
+
+    #[test]
+    fn diff_pipelines_identical_is_empty() {
+        let p = json!({
+            "nodes": [ { "id": "s", "data": { "componentId": "src.csv", "label": "A", "properties": { "path": "x.csv" } } } ],
+            "edges": []
+        });
+        let out = t_diff_pipelines(&json!({ "before": p.clone(), "after": p })).unwrap();
+        assert_eq!(out["summary"]["nodesChanged"], json!(0));
+        assert_eq!(out["summary"]["nodesAdded"], json!(0));
+        assert_eq!(out["summary"]["planChanged"], json!(false));
     }
 
     #[test]
