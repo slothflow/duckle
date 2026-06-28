@@ -124,6 +124,14 @@ pub fn list_tools() -> Value {
                 "pipeline": { "type": "object", "description": "Inline pipeline object." },
                 "path": { "type": "string", "description": "Path to a pipeline .json (use instead of 'pipeline')." }
             }})),
+        tool("schema_drift",
+            "Detect schema drift in a pipeline's sources: for each source node that declares a schema, read the source's LIVE schema from the real data and compare it. Reports missing columns (the source no longer provides a declared column), added columns, and type changes, with a breaking/non-breaking verdict. Read-only; needs a DuckDB binary. Pass 'workspace' to resolve ${workspace}/${date} placeholders in source paths.",
+            json!({ "type": "object", "properties": {
+                "pipeline": { "type": "object", "description": "Inline pipeline object." },
+                "path": { "type": "string", "description": "Path to a pipeline .json (use instead of 'pipeline')." },
+                "workspace": { "type": "string", "description": "Workspace root to resolve ${workspace}/${date} placeholders in source paths." },
+                "duckdb": { "type": "string", "description": "Path to the DuckDB CLI. Defaults to DUCKLE_DUCKDB_BIN or 'duckdb' on PATH." }
+            }})),
         tool("list_pipelines",
             "List pipeline .json files in a directory with their node/edge counts.",
             json!({ "type": "object", "properties": {
@@ -195,6 +203,7 @@ pub fn call_tool(params: Value) -> Result<Value, (i64, String)> {
         "pipeline_impact" => t_pipeline_impact(&args),
         "diff_pipelines" => t_diff_pipelines(&args),
         "trust_report" => t_trust_report(&args),
+        "schema_drift" => t_schema_drift(&args),
         "list_pipelines" => t_list_pipelines(&args),
         "read_pipeline" => t_read_pipeline(&args),
         "read_run_logs" => t_read_run_logs(&args),
@@ -351,6 +360,23 @@ fn t_pipeline_impact(args: &Value) -> Result<Value, String> {
         }));
     }
     Ok(json!({ "ok": true, "roots": roots }))
+}
+
+fn t_schema_drift(args: &Value) -> Result<Value, String> {
+    let (v, _name) = load_pipeline_value(args)?;
+    let mut doc = to_doc(&v)?;
+    // Resolve ${workspace}/${date} placeholders in source paths when a
+    // workspace is supplied, so file paths point at the real data.
+    if let Some(ws) = arg_str(args, "workspace") {
+        let wsp = std::path::Path::new(ws);
+        duckle_duckdb_engine::context::apply_time_builtins(&mut doc);
+        duckle_duckdb_engine::context::apply_workspace_context(&mut doc, wsp);
+    }
+    let duckdb = resolve_duckdb(arg_str(args, "duckdb"))
+        .ok_or("no DuckDB binary found (set DUCKLE_DUCKDB_BIN or pass 'duckdb')")?;
+    std::env::set_var("DUCKLE_DUCKDB_BIN", &duckdb);
+    let engine = DuckdbEngine::new(duckdb);
+    Ok(duckle_duckdb_engine::drift::schema_drift(&engine, &doc))
 }
 
 /// Load one side of a diff from an inline object or a file path.
@@ -1651,6 +1677,40 @@ mod verify_tests {
         let findings = out["findings"].as_array().unwrap();
         assert!(findings.iter().any(|f| f["code"] == "ungoverned_pii"), "{findings:?}");
         assert_eq!(out["score"], json!(90));
+    }
+
+    #[test]
+    fn schema_drift_marks_relational_source_not_introspectable() {
+        // src.postgres has no inspect SELECT builder, so inspect() returns
+        // Unsupported before spawning DuckDB - a hermetic path through the tool.
+        let pipeline = json!({
+            "nodes": [
+                { "id": "s", "position": { "x": 0, "y": 0 }, "data": { "componentId": "src.postgres", "label": "PG",
+                    "properties": { "host": "localhost", "table": "t" },
+                    "schema": [ { "name": "id", "type": "int64" } ] } }
+            ],
+            "edges": []
+        });
+        let out = t_schema_drift(&json!({ "pipeline": pipeline })).unwrap();
+        assert_eq!(out["ok"], json!(true));
+        assert_eq!(out["hasBreaking"], json!(false));
+        assert_eq!(out["sources"][0]["status"], json!("not_introspectable"));
+        assert_eq!(out["summary"]["notIntrospectable"], json!(1));
+    }
+
+    #[test]
+    fn schema_drift_skips_source_without_declared_schema() {
+        // No declared schema -> nothing to compare, skipped before any DuckDB call.
+        let pipeline = json!({
+            "nodes": [
+                { "id": "s", "position": { "x": 0, "y": 0 }, "data": { "componentId": "src.csv", "label": "C",
+                    "properties": { "path": "x.csv" } } }
+            ],
+            "edges": []
+        });
+        let out = t_schema_drift(&json!({ "pipeline": pipeline })).unwrap();
+        assert_eq!(out["summary"]["noDeclaredSchema"], json!(1));
+        assert_eq!(out["sources"][0]["status"], json!("no_declared_schema"));
     }
 
     #[test]

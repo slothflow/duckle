@@ -23,6 +23,7 @@ use std::process::ExitCode;
 mod branch;
 mod build;
 use duckle_duckdb_engine::context;
+mod drift;
 mod manifest;
 mod selfextract;
 mod serve;
@@ -960,6 +961,16 @@ fn main() -> ExitCode {
     // `branch` -> data branches over a DuckDB database file.
     if std::env::args().nth(1).as_deref() == Some("branch") {
         return match branch::run() {
+            Ok(code) => ExitCode::from(code as u8),
+            Err(e) => {
+                eprintln!("duckle-runner: {e}");
+                ExitCode::from(2)
+            }
+        };
+    }
+    // `drift` -> detect schema drift in a pipeline's sources.
+    if std::env::args().nth(1).as_deref() == Some("drift") {
+        return match drift::run() {
             Ok(code) => ExitCode::from(code as u8),
             Err(e) => {
                 eprintln!("duckle-runner: {e}");
