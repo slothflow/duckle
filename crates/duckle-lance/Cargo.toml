@@ -21,7 +21,7 @@ lancedb = { version = "0.30", default-features = false, features = ["remote", "a
 vortex = { version = "0.75", features = ["tokio"] }
 arrow-array = "58"
 arrow-schema = "58"
-arrow-select = "58"
+arrow-select = "59"
 parquet = { version = "58", features = ["arrow"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "fs"] }
 futures = "0.3"
