@@ -358,6 +358,9 @@ fn run() -> Result<bool, String> {
                 rows: st.rows,
             })
             .collect();
+        // Fingerprint the source files this run read, so the signed artifact
+        // pins its inputs as well as its plan and outputs.
+        let inputs = collect_input_fingerprints(&doc);
         match manifest::write_manifest(
             &workspace,
             &name,
@@ -367,6 +370,7 @@ fn run() -> Result<bool, String> {
             stamp,
             lineage,
             &outputs,
+            &inputs,
         ) {
             Ok(path) => println!("manifest : {}", path.display()),
             Err(e) => eprintln!("manifest : skipped ({e})"),
@@ -633,6 +637,36 @@ the compiled SQL changed, and whether each version still compiles.
 
 Exit code: 0 reviewed, 1 the --after version fails to compile (or, with --data,
 fails to run), 2 usage/IO error.";
+
+/// Fingerprint each local-file source the run read, for the provenance manifest.
+/// Files at or under the cap are content-hashed; larger ones record size only.
+/// Non-file sources (databases, cloud, globs) are skipped.
+fn collect_input_fingerprints(doc: &PipelineDoc) -> Vec<manifest::InputFingerprint> {
+    const HASH_CAP: u64 = 256 * 1024 * 1024; // 256 MiB
+    let mut out = Vec::new();
+    for n in &doc.nodes {
+        if !n.data.component_id.as_deref().unwrap_or("").starts_with("src.") {
+            continue;
+        }
+        let path = match n.data.properties.as_ref().and_then(|p| p.get("path")).and_then(|v| v.as_str())
+        {
+            Some(p) if !p.is_empty() => p,
+            _ => continue,
+        };
+        let meta = match std::fs::metadata(path) {
+            Ok(m) if m.is_file() => m,
+            _ => continue,
+        };
+        let bytes = meta.len();
+        let sha256 = if bytes <= HASH_CAP {
+            std::fs::read(path).ok().map(|b| manifest::sha256_hex(&b))
+        } else {
+            None
+        };
+        out.push(manifest::InputFingerprint { node: n.id.clone(), path: path.to_string(), bytes, sha256 });
+    }
+    out
+}
 
 /// Run one side of a `review --data` comparison sink-safely: every sink node is
 /// removed before execution, so sources are read and transforms run but no

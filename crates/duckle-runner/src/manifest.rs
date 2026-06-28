@@ -26,10 +26,20 @@ type Lineage = HashMap<String, Vec<(String, Vec<RootColumn>)>>;
 const SCHEMA_VERSION: u32 = 1;
 const DUCKDB_VERSION: &str = "1.5.4";
 
-fn sha256_hex(bytes: &[u8]) -> String {
+pub(crate) fn sha256_hex(bytes: &[u8]) -> String {
     let mut h = Sha256::new();
     h.update(bytes);
     h.finalize().iter().map(|b| format!("{b:02x}")).collect()
+}
+
+/// A source input file pinned in the manifest: its path, size, and content hash
+/// (omitted when the file is too large to hash). Lets an auditor confirm the run
+/// read the exact same input bytes.
+pub struct InputFingerprint {
+    pub node: String,
+    pub path: String,
+    pub bytes: u64,
+    pub sha256: Option<String>,
 }
 
 /// Load the workspace Ed25519 signing key, generating one on first use.
@@ -101,6 +111,7 @@ pub fn write_manifest(
     stamp_ms: u128,
     lineage: Option<Lineage>,
     outputs: &[NodeOutcome],
+    inputs: &[InputFingerprint],
 ) -> Result<PathBuf, String> {
     let pipeline_hash = sha256_hex(&serde_json::to_vec(doc).unwrap_or_default());
     let compiled_hash = match compile_pipeline_sql(doc) {
@@ -118,6 +129,16 @@ pub fn write_manifest(
             m
         })
         .collect();
+    let inputs_json: Vec<Value> = inputs
+        .iter()
+        .map(|i| {
+            let mut m = json!({ "node": i.node, "path": i.path, "bytes": i.bytes });
+            if let Some(h) = &i.sha256 {
+                m["sha256"] = json!(h);
+            }
+            m
+        })
+        .collect();
     let mut body = json!({
         "schemaVersion": SCHEMA_VERSION,
         "pipeline": name,
@@ -125,6 +146,7 @@ pub fn write_manifest(
         "status": status,
         "durationMs": duration_ms,
         "nodeCount": doc.nodes.len(),
+        "inputs": inputs_json,
         "outputs": outputs_json,
         "pipelineHash": pipeline_hash,
         "compiledPlanHash": compiled_hash,
@@ -198,14 +220,22 @@ mod tests {
         )
         .unwrap();
         let outputs = vec![NodeOutcome { node: "s".into(), status: "ok".into(), rows: Some(3) }];
-        let path =
-            write_manifest(ws, "demo", &doc, "ok", 12, 1_700_000_000_000, None, &outputs).unwrap();
+        let inputs = vec![InputFingerprint {
+            node: "s".into(),
+            path: "a.csv".into(),
+            bytes: 12,
+            sha256: Some("abc123".into()),
+        }];
+        let path = write_manifest(ws, "demo", &doc, "ok", 12, 1_700_000_000_000, None, &outputs, &inputs)
+            .unwrap();
         assert!(verify_manifest(&path).unwrap(), "fresh manifest should verify");
 
-        // The run outcome is recorded.
+        // The run outcome and inputs are recorded.
         let m: Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
         assert_eq!(m["body"]["outputs"][0]["node"], json!("s"));
         assert_eq!(m["body"]["outputs"][0]["rows"], json!(3));
+        assert_eq!(m["body"]["inputs"][0]["sha256"], json!("abc123"));
+        assert_eq!(m["body"]["inputs"][0]["bytes"], json!(12));
 
         // Tamper with a recorded row count: verification must fail.
         let mut m: Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
@@ -230,8 +260,8 @@ mod tests {
                 vec![RootColumn { node: "s".to_string(), column: "email".to_string() }],
             )],
         );
-        let path =
-            write_manifest(ws, "demo", &doc, "ok", 5, 1_700_000_000_001, Some(lineage), &[]).unwrap();
+        let path = write_manifest(ws, "demo", &doc, "ok", 5, 1_700_000_000_001, Some(lineage), &[], &[])
+            .unwrap();
         assert!(verify_manifest(&path).unwrap(), "manifest with lineage should verify");
 
         let m: Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
