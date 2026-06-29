@@ -109,16 +109,67 @@ export function substituteDeep(value: unknown, vars: Record<string, string>): un
     return value;
 }
 
+// Builtins that resolve without a user-supplied value, mirrored from the
+// engine's discover_parameters (context.rs). A `${name}` referencing one of
+// these (or an ${ENV:KEY} secret) is never treated as a run parameter.
+const PARAM_BUILTINS = new Set([
+    'date',
+    'time',
+    'datetime',
+    'timestamp',
+    'now',
+    'workspace',
+    'projectroot',
+]);
+
+/**
+ * Discover the `${name}` placeholders a pipeline's nodes reference that are NOT
+ * already resolvable - i.e. not a date/time or ${workspace} builtin, not an
+ * ${ENV:KEY} secret, and not provided by `knownVars` (the active contexts).
+ * These are the values the editor can prompt for at run time (issue #127), so a
+ * pipeline whose placeholders are all context-backed runs without a prompt.
+ */
+export function discoverParams(
+    nodes: Node<DuckleNodeData>[],
+    knownVars: Record<string, string>,
+): string[] {
+    const found = new Set<string>();
+    const scan = (value: unknown): void => {
+        if (typeof value === 'string') {
+            for (const m of value.matchAll(/\$\{([^}]+)\}/g)) {
+                const key = String(m[1]).trim();
+                if (!key || key.startsWith('ENV:')) continue;
+                if (PARAM_BUILTINS.has(key)) continue;
+                if (Object.prototype.hasOwnProperty.call(knownVars, key)) continue;
+                found.add(key);
+            }
+        } else if (Array.isArray(value)) {
+            value.forEach(scan);
+        } else if (value && typeof value === 'object') {
+            Object.values(value).forEach(scan);
+        }
+    };
+    for (const node of nodes) scan(node.data.properties ?? {});
+    return Array.from(found).sort();
+}
+
 export function resolveForRun(
     nodes: Node<DuckleNodeData>[],
     repo: RepoItem[],
     workspacePath?: string | null,
     extraVars?: Record<string, string>,
+    runtimeParams?: Record<string, string>,
 ): Node<DuckleNodeData>[] {
     // Built-in workspace placeholders first, so an explicit context variable of
     // the same name (unusual) still wins. Global-context (extraVars) is merged
-    // last so its runtime values override the static context defaults.
-    const vars = { ...builtinVars(workspacePath), ...buildContextVars(repo), ...(extraVars ?? {}) };
+    // next so its runtime values override the static context defaults, then the
+    // run-time input parameters (issue #127) win over everything.
+    const vars = {
+        ...builtinVars(workspacePath),
+        ...buildContextVars(repo),
+        ...(extraVars ?? {}),
+        ...(runtimeParams ?? {}),
+    };
     const sqlRoutines = new Map<string, string>();
     // Map a workspace pipeline id (or name) to its on-disk file path so a
     // dropdown-stored id resolves to something the engine can read.

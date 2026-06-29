@@ -36,6 +36,7 @@ import {
 } from './tauri-bridge';
 import ScheduleEditorModal from './workflow-ui/ScheduleEditorModal';
 import BackfillModal from './workflow-ui/BackfillModal';
+import RunParametersModal from './workflow-ui/RunParametersModal';
 import BuildPipelineModal from './workflow-ui/BuildPipelineModal';
 import { McpModal } from './workflow-ui/McpModal';
 import { SettingsModal } from './workflow-ui/SettingsModal';
@@ -52,7 +53,7 @@ import { writeClipboard, readClipboard, instantiateClipboard } from './clipboard
 import { RunStatusContext } from './canvas/run-status-context';
 import { layoutByDependency } from './canvas/layout';
 import { validatePipeline } from './validation';
-import { resolveForRun } from './run-resolve';
+import { resolveForRun, discoverParams, builtinVars, buildContextVars } from './run-resolve';
 import WorkspacePickerModal from './workflow-ui/WorkspacePickerModal';
 import { AccountChip, ProfileSetupModal } from './workflow-ui/AccountMenu';
 import {
@@ -677,6 +678,13 @@ export default function App() {
         setBackfillModalPipelineId(pipelineId);
     }, []);
 
+    // Run-parameters prompt (issue #127): names = the unbound ${...} the user
+    // must value; target = run-to-here node id (null for a full run).
+    const [runParamPrompt, setRunParamPrompt] = useState<{
+        names: string[];
+        target: string | null;
+    } | null>(null);
+
     const [buildModalPipelineId, setBuildModalPipelineId] = useState<string | null>(null);
     const [showMcpModal, setShowMcpModal] = useState(false);
     const [showSettings, setShowSettings] = useState(false);
@@ -1231,65 +1239,81 @@ export default function App() {
         setValidateRequest(n => n + 1);
     }, []);
 
-    const handleRun = useCallback(() => {
-        // Don't launch a run that's guaranteed to fail (e.g. a sink with
-        // no output path) - that only yields a cryptic engine error.
-        // Surface the Problems tab so the user can fix it first.
-        if (validation.errorCount > 0) {
-            setValidateRequest(n => n + 1);
-            return;
-        }
-        setIsRunning(true);
-        setRunResult(null);
-        const start = performance.now();
-        // Inline SQL routines + substitute ${context.var} before running;
-        // the canvas keeps the editable, un-substituted values. Global-context
-        // file vars load fresh each run so a runtime KEY=VALUE file resolves too.
-        const pipelineName = repo.find(r => r.id === activeJobId)?.name ?? activeJobId;
-        void settingsLoadContextVars(workspacePathState ?? '')
-            .then(extra => {
-                const runNodes = resolveForRun(nodes, repo, workspacePathState, extra);
-                return runPipeline(runNodes, edges, handleEvent, activeJobId, workspacePathState, pipelineName);
-            })
-            .then(result => finishRun(start, result))
-            .finally(() => setIsRunning(false));
-    }, [nodes, edges, repo, handleEvent, finishRun, activeJobId, workspacePathState, validation.errorCount]);
-
-    const handleRunFromHere = useCallback(
-        (nodeId: string) => {
+    // Shared run path for the Run and Run-from-here buttons. When the pipeline
+    // references ${name} placeholders that no context or builtin resolves
+    // (issue #127), prompt for those values first, then thread them through
+    // resolveForRun (highest precedence) on both desktop and the web editor.
+    // `target` is the run-to-here node, or null for a full run.
+    const launchRun = useCallback(
+        async (target: string | null, runtimeParams?: Record<string, string>) => {
+            // Don't launch a run that's guaranteed to fail (e.g. a sink with no
+            // output path) - that only yields a cryptic engine error. Surface
+            // the Problems tab so the user can fix it first.
             if (validation.errorCount > 0) {
                 setValidateRequest(n => n + 1);
                 return;
             }
+            const pipelineName = repo.find(r => r.id === activeJobId)?.name ?? activeJobId;
+            // Global-context file vars load fresh each run so a runtime
+            // KEY=VALUE file resolves too.
+            const extra = await settingsLoadContextVars(workspacePathState ?? '');
+            // First pass (no params supplied yet): if any ${name} is unbound,
+            // pop the prompt and defer the run until the user submits.
+            if (!runtimeParams) {
+                const known = {
+                    ...builtinVars(workspacePathState),
+                    ...buildContextVars(repo),
+                    ...extra,
+                };
+                const unbound = discoverParams(nodes, known);
+                if (unbound.length > 0) {
+                    setRunParamPrompt({ names: unbound, target });
+                    return;
+                }
+            }
             setIsRunning(true);
             setRunResult(null);
             const start = performance.now();
-            const pipelineName = repo.find(r => r.id === activeJobId)?.name ?? activeJobId;
-            void settingsLoadContextVars(workspacePathState ?? '')
-                .then(extra =>
-                    runPipelinePartial(
-                        resolveForRun(nodes, repo, workspacePathState, extra),
-                        edges,
-                        nodeId,
-                        handleEvent,
-                        activeJobId,
-                        workspacePathState,
-                        pipelineName,
-                    ),
-                )
-                .then(result => finishRun(start, result))
-                .finally(() => setIsRunning(false));
+            try {
+                // Inline SQL routines + substitute ${context.var} (and the
+                // supplied run params) before running; the canvas keeps the
+                // editable, un-substituted values.
+                const runNodes = resolveForRun(nodes, repo, workspacePathState, extra, runtimeParams);
+                const result = target
+                    ? await runPipelinePartial(
+                          runNodes,
+                          edges,
+                          target,
+                          handleEvent,
+                          activeJobId,
+                          workspacePathState,
+                          pipelineName,
+                      )
+                    : await runPipeline(
+                          runNodes,
+                          edges,
+                          handleEvent,
+                          activeJobId,
+                          workspacePathState,
+                          pipelineName,
+                      );
+                finishRun(start, result);
+            } finally {
+                setIsRunning(false);
+            }
         },
-        [
-            nodes,
-            edges,
-            repo,
-            handleEvent,
-            finishRun,
-            activeJobId,
-            workspacePathState,
-            validation.errorCount,
-        ],
+        [nodes, edges, repo, handleEvent, finishRun, activeJobId, workspacePathState, validation.errorCount],
+    );
+
+    const handleRun = useCallback(() => {
+        void launchRun(null);
+    }, [launchRun]);
+
+    const handleRunFromHere = useCallback(
+        (nodeId: string) => {
+            void launchRun(nodeId);
+        },
+        [launchRun],
     );
 
     // Live-mode preview: a partial run up to the edited node, mirroring
@@ -2496,6 +2520,19 @@ export default function App() {
                     }
                     workspacePath={workspacePathState}
                     onClose={() => setBackfillModalPipelineId(null)}
+                />
+            ) : null}
+
+            {runParamPrompt ? (
+                <RunParametersModal
+                    paramNames={runParamPrompt.names}
+                    pipelineName={repo.find(r => r.id === activeJobId)?.name ?? activeJobId}
+                    onCancel={() => setRunParamPrompt(null)}
+                    onSubmit={values => {
+                        const target = runParamPrompt.target;
+                        setRunParamPrompt(null);
+                        void launchRun(target, values);
+                    }}
                 />
             ) : null}
 
