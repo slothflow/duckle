@@ -163,6 +163,7 @@ export default function EditorHeader({
 
                 <button
                     type="button"
+                    data-tour="live"
                     className={
                         'toolbar-icon-button' + (liveMode ? ' is-active' : '')
                     }

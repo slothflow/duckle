@@ -10,7 +10,9 @@ import { isWebBackend } from './web-fs';
 // the desktop app shows is dropped on the self-hosted web editor, so the step
 // count and spotlights always match what is on screen), and gained Save,
 // Run-parameters and Trust coverage plus richer how-to copy.
-const SEEN_KEY = 'duckle.tour.v3.done';
+// Bumped to v4: added a Live preview step (the lightning toggle is otherwise
+// easy to miss), so prior users who finished v3 see it once.
+const SEEN_KEY = 'duckle.tour.v4.done';
 
 type Placement = 'top' | 'bottom' | 'left' | 'right' | 'center';
 // 'both' shows everywhere; 'desktop' only in the Tauri app; 'web' only in the
@@ -59,6 +61,12 @@ const ALL_STEPS: Step[] = [
         sel: '[data-tour="run"]',
         title: 'Run your pipeline',
         body: 'Run the pipeline locally with DuckDB. The data preview, the compiled execution plan, and run logs appear in the panel below the canvas. You can also Run to here from a node right-click menu. If the pipeline uses ${...} variables that no context fills, a small dialog asks for their values first - so the same pipeline can process, say, a specific month on demand.',
+        placement: 'bottom',
+    },
+    {
+        sel: '[data-tour="live"]',
+        title: 'Live preview',
+        body: 'Click this lightning toggle to turn on live preview. With it on, editing any node\'s settings automatically re-runs the pipeline up to that node and refreshes its Preview tab - so you see the resulting rows update as you tweak, without pressing Run each time. Open the edited node\'s Preview tab to watch it. It stays quiet while the pipeline has validation errors or a run is already in progress; toggle it off to edit without re-running.',
         placement: 'bottom',
     },
     {
