@@ -640,10 +640,11 @@ async fn dbt_install(app: tauri::AppHandle) -> Result<String, String> {
 #[tauri::command]
 async fn seed_sample_workspace(app: tauri::AppHandle, workspace: String) -> Result<bool, String> {
     let dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    // Pass the engine path through even if it is not present yet: seed() lays the
+    // sample pipelines down regardless and only treats data generation (which
+    // needs DuckDB) as best effort, so a not-yet-installed engine no longer
+    // blocks seeding (which would leave the new workspace on the blank default).
     let duckdb = engine_manager::duckdb_path(&dir);
-    if !duckdb.exists() {
-        return Err("DuckDB engine is not installed yet".to_string());
-    }
     let ws = std::path::PathBuf::from(&workspace);
     tokio::task::spawn_blocking(move || samples::seed(&ws, &duckdb))
         .await

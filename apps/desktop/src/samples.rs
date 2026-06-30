@@ -20,10 +20,18 @@ pub fn is_fresh(ws: &Path) -> bool {
     !ws.join("duckle.json").exists() && !ws.join("workspace.json").exists()
 }
 
-/// Seed the bundled sample pipelines + generate their data into `ws`, using the
-/// provisioned `duckdb_bin` to synthesize the input files. No-op (returns
-/// Ok(false)) if the workspace already looks initialised. Returns Ok(true) when
-/// it actually seeded, so the caller knows to re-hydrate.
+/// Seed the bundled sample pipelines into `ws` and generate their input data via
+/// `duckdb_bin`. No-op (returns Ok(false)) if the workspace already looks
+/// initialised. Returns Ok(true) when it seeded, so the caller knows to
+/// re-hydrate.
+///
+/// Seeding the pipeline definitions and generating their data are decoupled: the
+/// pipelines are laid down FIRST and never depend on DuckDB, so a fresh
+/// workspace always gets the sample pipelines (rather than silently reverting to
+/// the blank in-memory default) even if data generation later fails - e.g. the
+/// engine is not installed yet, or an offline / proxied box cannot INSTALL the
+/// sqlite / ducklake extensions the generator needs. A generation failure is
+/// recorded in data/_sample_data_error.log instead of aborting the seed.
 pub fn seed(ws: &Path, duckdb_bin: &Path) -> Result<bool, String> {
     if !is_fresh(ws) {
         return Ok(false);
@@ -32,8 +40,8 @@ pub fn seed(ws: &Path, duckdb_bin: &Path) -> Result<bool, String> {
         std::fs::create_dir_all(ws.join(sub)).map_err(|e| e.to_string())?;
     }
 
-    // Pipeline files: bundled as <id>.pipeline.json, written as <id>.json
-    // (the on-disk name a workspace expects, keyed by repository.json id).
+    // 1) Pipeline files: bundled as <id>.pipeline.json, written as <id>.json
+    //    (the on-disk name a workspace expects, keyed by repository.json id).
     if let Some(dir) = STARTER.get_dir("pipelines") {
         for f in dir.files() {
             let name = f
@@ -49,16 +57,34 @@ pub fn seed(ws: &Path, duckdb_bin: &Path) -> Result<bool, String> {
         }
     }
 
-    // Project tree + metadata, written verbatim.
+    // 2) Project tree + metadata, written verbatim.
     for top in ["repository.json", "duckle.json"] {
         if let Some(f) = STARTER.get_file(top) {
             std::fs::write(ws.join(top), f.contents()).map_err(|e| e.to_string())?;
         }
     }
 
-    // Generate the sample input files via the provisioned DuckDB. The script
-    // uses ${workspace} placeholders; substitute the real path (forward slashes
-    // so the SQL string literals are valid on Windows too).
+    // 3) Generate the sample input data - best effort. The pipelines are already
+    //    on disk, so we keep them (and record why) rather than failing the seed.
+    let gen_result = if duckdb_bin.exists() {
+        generate_sample_data(ws, duckdb_bin)
+    } else {
+        Err("DuckDB engine was not installed yet, so sample input data was not \
+             generated. Reopen this workspace after engine setup finishes to \
+             generate it."
+            .to_string())
+    };
+    if let Err(e) = gen_result {
+        let _ = std::fs::write(ws.join("data").join("_sample_data_error.log"), &e);
+    }
+
+    Ok(true)
+}
+
+/// Run the bundled DuckDB generator script to synthesize the sample input files.
+/// The script uses `${workspace}` placeholders; we substitute the real path with
+/// forward slashes so the SQL string literals are valid on Windows too.
+fn generate_sample_data(ws: &Path, duckdb_bin: &Path) -> Result<(), String> {
     let tmpl = STARTER
         .get_file("gen_samples.sql")
         .and_then(|f| f.contents_utf8())
@@ -68,8 +94,8 @@ pub fn seed(ws: &Path, duckdb_bin: &Path) -> Result<bool, String> {
     let gen_path = ws.join(".duckle-gen.sql");
     std::fs::write(&gen_path, &sql).map_err(|e| e.to_string())?;
 
-    // Run the generator. `.read <file>` as a positional command (dot-commands
-    // are not honored via -c). CREATE_NO_WINDOW: no console flash on Windows.
+    // `.read <file>` as a positional command (dot-commands are not honored via
+    // -c). CREATE_NO_WINDOW: no console flash on Windows.
     let read_cmd = format!(".read {}", gen_path.to_string_lossy().replace('\\', "/"));
     let mut cmd = std::process::Command::new(duckdb_bin);
     cmd.arg(":memory:").arg(&read_cmd);
@@ -86,7 +112,7 @@ pub fn seed(ws: &Path, duckdb_bin: &Path) -> Result<bool, String> {
             String::from_utf8_lossy(&out.stderr)
         ));
     }
-    Ok(true)
+    Ok(())
 }
 
 #[cfg(test)]
@@ -143,6 +169,35 @@ mod tests {
         assert!(
             !seed(&ws, &bin).expect("second seed should succeed"),
             "seeding an already-initialised workspace should be a no-op"
+        );
+
+        let _ = std::fs::remove_dir_all(&ws);
+    }
+
+    // The reported bug: when DuckDB is unavailable, seeding must still lay down
+    // the sample pipelines (so the workspace shows them rather than reverting to
+    // the blank in-memory default) and record why the data is missing. Needs no
+    // DuckDB, so it always runs.
+    #[test]
+    fn seed_without_duckdb_still_lays_down_pipelines() {
+        let ws = std::env::temp_dir().join(format!("duckle-seed-nodb-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&ws);
+        std::fs::create_dir_all(&ws).unwrap();
+
+        let missing = ws.join("no-such-duckdb.exe");
+        let seeded = seed(&ws, &missing).expect("seed should succeed even without DuckDB");
+        assert!(seeded, "a fresh workspace must seed even when DuckDB is missing");
+
+        // Pipelines + metadata are present...
+        assert!(ws.join("duckle.json").exists());
+        assert!(ws.join("pipelines/orders_filter.json").exists());
+        assert!(ws.join("pipelines/enrich_parallel.json").exists());
+        // ...the generator did not run, so input data is absent and the reason
+        // is recorded for the user instead of failing the seed.
+        assert!(!ws.join("data/orders.csv").exists());
+        assert!(
+            ws.join("data/_sample_data_error.log").exists(),
+            "a generation failure should be recorded, not swallowed"
         );
 
         let _ = std::fs::remove_dir_all(&ws);
