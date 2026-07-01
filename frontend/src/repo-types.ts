@@ -43,6 +43,9 @@ export type ConnectionPayload = {
     region?: string;
     accessKey?: string;
     secretKey?: string;
+    // S3-compatible endpoint (MinIO / R2 / B2) + addressing style (#116).
+    endpoint?: string;
+    urlStyle?: string;
     accountName?: string;
     accountKey?: string;
     brokers?: string;

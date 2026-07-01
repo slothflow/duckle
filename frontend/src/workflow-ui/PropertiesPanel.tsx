@@ -370,6 +370,8 @@ export default function PropertiesPanel({
                             'accountKey',
                             'brokers',
                             'url',
+                            'endpoint',
+                            'urlStyle',
                         ];
                         for (const k of keys) {
                             const v = payload[k];

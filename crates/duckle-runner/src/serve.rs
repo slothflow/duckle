@@ -1048,7 +1048,10 @@ fn schedules_path(workspace: &Path) -> PathBuf {
     workspace.join("panel-schedules.json")
 }
 
-/// Schedule store: { "<pipeline id>": { "enabled": bool, "intervalMinutes": n } }.
+/// Schedule store, one entry per pipeline id:
+/// `{ "enabled": bool, "intervalMinutes": n, "cron": "<expr>" }`. A non-empty
+/// `cron` takes precedence over `intervalMinutes`; an absent `cron` (older
+/// stores) reads as empty = interval mode (#132).
 fn load_schedules(state: &State) -> Value {
     std::fs::read_to_string(schedules_path(&state.workspace))
         .ok()
@@ -1056,13 +1059,36 @@ fn load_schedules(state: &State) -> Value {
         .unwrap_or_else(|| json!({}))
 }
 
+/// The `cron` crate expects a 6- or 7-field expression (seconds first). Accept a
+/// standard 5-field cron ("min hour dom mon dow") by prepending a "0 " seconds
+/// field; pass a 6/7-field expression through. Returns None for any other field
+/// count so a malformed expression is rejected rather than silently ignored.
+fn normalize_cron(expr: &str) -> Option<String> {
+    match expr.split_whitespace().count() {
+        5 => Some(format!("0 {}", expr)),
+        6 | 7 => Some(expr.to_string()),
+        _ => None,
+    }
+}
+
 fn save_schedule(state: &State, body: &Value) -> Result<Value, String> {
     let id = body.get("id").and_then(|v| v.as_str()).ok_or("missing id")?;
     let enabled = body.get("enabled").and_then(|v| v.as_bool()).unwrap_or(false);
     let interval = body.get("intervalMinutes").and_then(|v| v.as_u64()).unwrap_or(0);
+    let cron = body.get("cron").and_then(|v| v.as_str()).unwrap_or("").trim().to_string();
+    // Validate a supplied cron expression up front so a bad one is rejected with
+    // a clear message instead of silently never firing (#132).
+    if !cron.is_empty()
+        && normalize_cron(&cron).and_then(|e| e.parse::<cron::Schedule>().ok()).is_none()
+    {
+        return Err("Invalid cron expression (use 5 fields, e.g. `0 9 * * 1`)".to_string());
+    }
     let mut all = load_schedules(state);
     let obj = all.as_object_mut().ok_or("schedule store corrupt")?;
-    obj.insert(id.to_string(), json!({ "enabled": enabled, "intervalMinutes": interval }));
+    obj.insert(
+        id.to_string(),
+        json!({ "enabled": enabled, "intervalMinutes": interval, "cron": cron }),
+    );
     std::fs::write(schedules_path(&state.workspace), all.to_string())
         .map_err(|e| format!("write schedules: {}", e))?;
     Ok(json!({ "ok": true }))
@@ -1150,13 +1176,16 @@ fn execute_one(
 
 // ── Scheduler ──
 
-/// Background loop: every 30s, run any enabled pipeline whose interval has
-/// elapsed since it last ran here. Timing is tracked in-memory from process
-/// start (first run fires one interval after boot), so no clock parsing and no
-/// surprise burst of runs on restart.
+/// Background loop: every 30s, run any enabled pipeline whose schedule is due.
+/// Interval schedules are tracked in-memory from process start (first run fires
+/// one interval after boot). Cron schedules are evaluated in LOCAL time so
+/// "0 9 * * *" means 9am local, matching how the dashboard displays run times
+/// (#132). Both keep next-run state in-memory, so a restart re-arms from the
+/// next occurrence with no surprise burst of catch-up runs.
 fn spawn_scheduler(state: Arc<State>) {
     std::thread::spawn(move || {
         let mut last_fired: HashMap<String, Instant> = HashMap::new();
+        let mut cron_next: HashMap<String, chrono::DateTime<chrono::Local>> = HashMap::new();
         loop {
             std::thread::sleep(Duration::from_secs(30));
             let scheds = load_schedules(&state);
@@ -1168,6 +1197,49 @@ fn spawn_scheduler(state: Arc<State>) {
             let pipes: HashMap<String, PathBuf> =
                 discover_pipelines(&state.workspace).into_iter().map(|(p, id, _)| (id, p)).collect();
             for (id, cfg) in obj {
+                // Cron schedule (local time) takes precedence over interval when
+                // set (#132). Kept separate so the interval path below is unchanged.
+                {
+                    let enabled = cfg.get("enabled").and_then(|v| v.as_bool()).unwrap_or(false);
+                    let cron = cfg.get("cron").and_then(|v| v.as_str()).unwrap_or("").trim();
+                    if enabled && !cron.is_empty() {
+                        last_fired.remove(id);
+                        match normalize_cron(cron).and_then(|e| e.parse::<cron::Schedule>().ok()) {
+                            None => {
+                                cron_next.remove(id);
+                            }
+                            Some(sched) => {
+                                let now = chrono::Local::now();
+                                let due = matches!(cron_next.get(id), Some(next) if now >= *next);
+                                if cron_next.get(id).is_none() {
+                                    // First sighting: arm the next occurrence, don't fire.
+                                    if let Some(next) = sched.after(&now).next() {
+                                        cron_next.insert(id.clone(), next);
+                                    }
+                                } else if due {
+                                    if let Some(path) = pipes.get(id) {
+                                        let file = rel(&state.workspace, path);
+                                        match execute_one(&state, &file, "scheduled", &HashMap::new()) {
+                                            Ok(v) => eprintln!(
+                                                "duckle-runner: scheduled {} -> {}",
+                                                id,
+                                                v.get("status").and_then(|s| s.as_str()).unwrap_or("?")
+                                            ),
+                                            Err(e) => eprintln!("duckle-runner: scheduled {} failed: {}", id, e),
+                                        }
+                                    }
+                                    // Re-arm from now so we don't double-fire this minute.
+                                    cron_next
+                                        .insert(id.clone(), sched.after(&now).next().unwrap_or(now));
+                                }
+                            }
+                        }
+                        continue;
+                    }
+                    // Not a cron schedule: drop any stale cron state and fall
+                    // through to the interval logic below.
+                    cron_next.remove(id);
+                }
                 let enabled = cfg.get("enabled").and_then(|v| v.as_bool()).unwrap_or(false);
                 let minutes = cfg.get("intervalMinutes").and_then(|v| v.as_u64()).unwrap_or(0);
                 if !enabled || minutes == 0 {
@@ -1201,4 +1273,26 @@ fn spawn_scheduler(state: Arc<State>) {
             }
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::normalize_cron;
+
+    #[test]
+    fn normalize_cron_pads_five_fields_and_validates() {
+        // A standard 5-field cron gets a "0 " seconds field prepended so the
+        // `cron` crate (which wants 6/7 fields) accepts it, and the result parses.
+        let five = normalize_cron("0 9 * * 1").expect("5-field accepted");
+        assert_eq!(five, "0 0 9 * * 1");
+        assert!(five.parse::<cron::Schedule>().is_ok(), "padded expr parses");
+        // A 6-field expression passes through unchanged and parses.
+        let six = normalize_cron("*/30 * * * * *").expect("6-field accepted");
+        assert_eq!(six, "*/30 * * * * *");
+        assert!(six.parse::<cron::Schedule>().is_ok());
+        // Garbage / wrong field counts are rejected (never fire silently).
+        assert!(normalize_cron("not a cron").is_none());
+        assert!(normalize_cron("* * *").is_none());
+        assert!(normalize_cron("").is_none());
+    }
 }

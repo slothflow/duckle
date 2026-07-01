@@ -404,7 +404,17 @@ fn compile_impl(pipeline: &PipelineDoc, allow_view_upgrade: bool) -> Result<Comp
         }
         // Resolve which materialized table this edge actually reads, based
         // on the SOURCE node's output handle (main vs reject).
-        let source_ref = output_table_ref(&edge.source, edge.source_handle.as_deref());
+        let mut source_ref = output_table_ref(&edge.source, edge.source_handle.as_deref());
+        // A Pure SQL producer registers only the relation its own body created
+        // (named by the node's SQL name / alias), never a `"<node_id>"` one, so
+        // a consumer on its main output must read the alias, not the id (#102).
+        if source_ref == edge.source {
+            if let Some(node) = node_index.get(edge.source.as_str()) {
+                if let Some(alias) = pure_sql_alias_ref(node) {
+                    source_ref = alias;
+                }
+            }
+        }
         // Don't double-count an attach-parquet source: its rows are already
         // materialized once to a local parquet, so a reject-split downstream
         // re-reads that cheap file (not the remote). Counting it as two would

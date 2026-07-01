@@ -37,6 +37,15 @@ pub fn source_select_for_format(format: &str, props: &JsonValue) -> Option<Strin
         "s3" | "gcs" | "azureblob" | "http" | "https" => {
             return build_cloud_source(format, props, None).ok()
         }
+        // ATTACH-based relational sources. The catalog is ATTACHed as duckle_src
+        // by the inspect prelude (source_prelude), so the SELECT is identical to
+        // the run path. Without this arm, autodetect returned None and the UI
+        // fell back to a col_1/col_2/col_3 placeholder even though running the
+        // node worked (#129: Postgres autodetect showed col_1/col_2/col_3).
+        "postgres" | "cockroach" | "mysql" | "mariadb" | "redshift" | "pgvector"
+        | "motherduck" | "bigquery" | "quack" => {
+            return build_relational_source(&format!("src.{format}"), props).ok()
+        }
         _ => return None,
     })
 }
@@ -4039,6 +4048,56 @@ fn csv_read_args_base(props: &JsonValue) -> Vec<String> {
     args
 }
 
+/// Best-effort read of a local CSV file's HEADER column names, used only to
+/// reconcile a declared schema against the actual file (#133). Returns Some
+/// ONLY when the header can be read confidently: a local, existing, non-glob
+/// `path`, `hasHeader` not false, and no non-UTF-8 `encoding` declared. Any
+/// other case (glob, missing file, headerless, custom encoding, read error)
+/// returns None, which keeps build_csv_source's original behavior verbatim so
+/// issue #3 and the SQL-export / MCP-validate paths are never weakened.
+fn csv_header_names(props: &JsonValue) -> Option<std::collections::HashSet<String>> {
+    let path = string_prop(props, "path").filter(|s| !s.is_empty())?;
+    // A glob reads many files; a single header is not authoritative.
+    if path.contains('*') || path.contains('?') || path.contains('[') {
+        return None;
+    }
+    // Headerless files expose no names to reconcile against.
+    if !props.get("hasHeader").and_then(JsonValue::as_bool).unwrap_or(true) {
+        return None;
+    }
+    // A non-UTF-8 encoding means our byte-level split may misread the names.
+    if let Some(enc) = string_prop(props, "encoding").filter(|s| !s.is_empty()) {
+        if !matches!(enc.to_ascii_lowercase().as_str(), "utf-8" | "utf8") {
+            return None;
+        }
+    }
+    let content = std::fs::read(&path).ok()?;
+    // Strip a leading UTF-8 BOM, then decode lossily (headers are ASCII in
+    // practice; lossy keeps us from failing on a stray non-UTF-8 byte).
+    let bytes = content.strip_prefix(&[0xEF, 0xBB, 0xBF]).unwrap_or(&content[..]);
+    let text = String::from_utf8_lossy(bytes);
+    let skip = props.get("skipLines").and_then(JsonValue::as_u64).unwrap_or(0) as usize;
+    let header_line = text.lines().nth(skip)?;
+    let delim = string_prop(props, "delimiter")
+        .filter(|s| !s.is_empty())
+        .and_then(|s| s.chars().next())
+        .unwrap_or(',');
+    let quote = string_prop(props, "quoteChar")
+        .filter(|s| !s.is_empty())
+        .and_then(|s| s.chars().next())
+        .unwrap_or('"');
+    let names: std::collections::HashSet<String> = header_line
+        .split(delim)
+        .map(|f| f.trim().trim_matches(quote).trim().to_string())
+        .filter(|f| !f.is_empty())
+        .collect();
+    if names.is_empty() {
+        None
+    } else {
+        Some(names)
+    }
+}
+
 pub(crate) fn build_csv_source(props: &JsonValue, declared: Option<&[duckle_metadata::Column]>) -> String {
     let mut args = csv_read_args_base(props);
     // Explicit date / timestamp parsing format. DuckDB's strptime tokens
@@ -4076,9 +4135,19 @@ pub(crate) fn build_csv_source(props: &JsonValue, declared: Option<&[duckle_meta
     // NULL (not an error) on a value the format can't parse.
     if let Some(cols) = declared.filter(|c| !c.is_empty()) {
         use duckle_metadata::DataType;
+        // #133: reconcile the declaration against the file's real header so a
+        // stale/seeded schema whose columns aren't in the file doesn't trip
+        // read_csv_auto's COLUMN_TYPES binder error. None = header not
+        // confidently readable -> keep every declared column (issue #3 intact).
+        let header = csv_header_names(props);
         let mut pairs = Vec::with_capacity(cols.len());
         let mut replaces = Vec::new();
         for c in cols {
+            if let Some(h) = header.as_ref() {
+                if !h.contains(c.name.as_str()) {
+                    continue;
+                }
+            }
             let fmt = c.format.as_deref().filter(|s| !s.is_empty());
             let datey = matches!(c.data_type, DataType::Date | DataType::Timestamp);
             match (fmt, datey) {
@@ -4103,6 +4172,12 @@ pub(crate) fn build_csv_source(props: &JsonValue, declared: Option<&[duckle_meta
                     data_type_to_duckdb_sql(&c.data_type)
                 )),
             }
+        }
+        if pairs.is_empty() {
+            // Every declared column was absent from the file (stale seeded
+            // schema): skip `types=` and auto-detect the whole file (#133),
+            // which is exactly what the reporter expects.
+            return format!("SELECT * FROM read_csv_auto({})", args.join(", "));
         }
         args.push(format!("types = {{{}}}", pairs.join(", ")));
         if !replaces.is_empty() {

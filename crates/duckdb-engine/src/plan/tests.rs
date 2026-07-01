@@ -876,6 +876,23 @@
     }
 
     #[test]
+    fn source_select_postgres_autodetect_uses_attach_not_placeholder() {
+        // #129: Postgres autodetect returned None -> the UI fell back to a
+        // col_1/col_2/col_3 placeholder. source_select_for_format must build the
+        // ATTACH-based SELECT for the relational families, same as the run path.
+        use serde_json::json;
+        let sel = source_select_for_format("postgres", &json!({"tableName": "orders"}))
+            .expect("postgres autodetect select should be Some");
+        assert!(sel.contains("duckle_src"), "reads via the attached catalog: {}", sel);
+        assert!(sel.contains("orders"), "references the table: {}", sel);
+        // mysql / motherduck / bigquery route through the same path.
+        assert!(source_select_for_format("mysql", &json!({"tableName": "t"})).is_some());
+        assert!(source_select_for_format("motherduck", &json!({"tableName": "t"})).is_some());
+        // An unknown format still returns None (unchanged behavior).
+        assert!(source_select_for_format("nope", &json!({})).is_none());
+    }
+
+    #[test]
     fn ducklake_diff_builds_change_feed_between_versions() {
         // src.ducklake.diff: the change feed between two explicit snapshots.
         use serde_json::json;
@@ -1813,6 +1830,55 @@
     }
 
     #[test]
+    fn pure_sql_alias_is_used_by_downstream_consumer() {
+        // #102 follow-up: a Pure SQL node with a custom SQL name (alias) registers
+        // ONLY the relation its body created (the alias), never "<node_id>". A
+        // downstream sink must therefore read the alias, not the raw node id -
+        // otherwise it fails with "Upstream view '<node_id>' doesn't exist".
+        let doc = pipeline_from_json(
+            r#"{
+              "nodes": [
+                {"id":"o","position":{"x":0,"y":0},"data":{"label":"orders","componentId":"src.csv","properties":{"path":"/tmp/o.csv","hasHeader":true}}},
+                {"id":"n_pure","position":{"x":0,"y":0},"data":{"label":"Filter","alias":"t_filter2","componentId":"code.sql","properties":{
+                  "pureSql":true,
+                  "sql":"create view t_filter2 as select * from \"o\""}}},
+                {"id":"k","position":{"x":0,"y":0},"data":{"label":"CSV out","componentId":"snk.csv","properties":{"path":"/tmp/out.csv","hasHeader":true}}}
+              ],
+              "edges":[
+                {"id":"e1","source":"o","target":"n_pure","data":{"connectionType":"main"}},
+                {"id":"e2","source":"n_pure","target":"k","data":{"connectionType":"main"}}
+              ]
+            }"#,
+        );
+        let sink = compile(&doc).unwrap().stages.into_iter().find(|s| s.node_id == "k").unwrap();
+        assert!(sink.sql.contains("t_filter2"), "sink FROM must reference the alias: {}", sink.sql);
+        assert!(!sink.sql.contains("n_pure"), "sink must not reference the raw pure-SQL node id: {}", sink.sql);
+    }
+
+    #[test]
+    fn pure_sql_without_alias_still_uses_node_id() {
+        // #102: a Pure SQL node with NO alias defaults to the node id, so the
+        // user creates "<node_id>" themselves and downstream keeps reading it.
+        let doc = pipeline_from_json(
+            r#"{
+              "nodes": [
+                {"id":"o","position":{"x":0,"y":0},"data":{"label":"orders","componentId":"src.csv","properties":{"path":"/tmp/o.csv","hasHeader":true}}},
+                {"id":"n_pure","position":{"x":0,"y":0},"data":{"label":"Filter","componentId":"code.sql","properties":{
+                  "pureSql":true,
+                  "sql":"create or replace view \"n_pure\" as select * from \"o\""}}},
+                {"id":"k","position":{"x":0,"y":0},"data":{"label":"CSV out","componentId":"snk.csv","properties":{"path":"/tmp/out.csv","hasHeader":true}}}
+              ],
+              "edges":[
+                {"id":"e1","source":"o","target":"n_pure","data":{"connectionType":"main"}},
+                {"id":"e2","source":"n_pure","target":"k","data":{"connectionType":"main"}}
+              ]
+            }"#,
+        );
+        let sink = compile(&doc).unwrap().stages.into_iter().find(|s| s.node_id == "k").unwrap();
+        assert!(sink.sql.contains("n_pure"), "no alias -> downstream reads the node id: {}", sink.sql);
+    }
+
+    #[test]
     fn csv_declared_schema_overrides_autodetect() {
         // Regression for issue #3: when the user sets a column to
         // VARCHAR in the Schema panel (typical fix for dd/mm/yy dates
@@ -1856,6 +1922,86 @@
             "int64 not mapped to BIGINT: {}",
             src_sql
         );
+    }
+
+    #[test]
+    fn csv_declared_schema_absent_from_file_falls_back_to_autodetect() {
+        // #133: a stale/seeded declaration whose columns are not in the actual
+        // file must NOT emit `types=` (which would raise DuckDB's COLUMN_TYPES
+        // binder error); instead fall through to plain auto-detect.
+        let path = std::env::temp_dir()
+            .join(format!("duckle_csv133_absent_{}.csv", std::process::id()));
+        std::fs::write(&path, "a,b,c\n1,2,3\n").unwrap();
+        let path_s = path.to_string_lossy().replace('\\', "\\\\");
+        let p = pipeline_from_json(&format!(
+            r#"{{
+              "nodes": [
+                {{"id":"s1","position":{{"x":0,"y":0}},"data":{{
+                  "label":"CSV","componentId":"src.csv",
+                  "properties":{{"path":"{path_s}","hasHeader":true}},
+                  "schema":[
+                    {{"name":"order_id","type":"int64","nullable":false}},
+                    {{"name":"amount","type":"string","nullable":true}}
+                  ]}}}},
+                {{"id":"k1","position":{{"x":0,"y":0}},"data":{{
+                  "label":"CSV out","componentId":"snk.csv",
+                  "properties":{{"path":"/tmp/out.csv","hasHeader":true}}}}}}
+              ],
+              "edges": [
+                {{"id":"e1","source":"s1","target":"k1","data":{{"connectionType":"main"}}}}
+              ]
+            }}"#
+        ));
+        let compiled = compile(&p).unwrap();
+        let src_sql = &compiled.stages[0].sql;
+        assert!(
+            !src_sql.contains("types = {"),
+            "stale declaration should fall back to auto-detect: {}",
+            src_sql
+        );
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn csv_declared_schema_partially_present_narrows_types() {
+        // #133: when SOME declared columns exist in the file, keep only those in
+        // `types=` and silently drop the absent ones (no binder error).
+        let path = std::env::temp_dir()
+            .join(format!("duckle_csv133_partial_{}.csv", std::process::id()));
+        std::fs::write(&path, "id,event_date\n1,2026-01-01\n").unwrap();
+        let path_s = path.to_string_lossy().replace('\\', "\\\\");
+        let p = pipeline_from_json(&format!(
+            r#"{{
+              "nodes": [
+                {{"id":"s1","position":{{"x":0,"y":0}},"data":{{
+                  "label":"CSV","componentId":"src.csv",
+                  "properties":{{"path":"{path_s}","hasHeader":true}},
+                  "schema":[
+                    {{"name":"event_date","type":"string","nullable":true}},
+                    {{"name":"missing_col","type":"int64","nullable":true}}
+                  ]}}}},
+                {{"id":"k1","position":{{"x":0,"y":0}},"data":{{
+                  "label":"CSV out","componentId":"snk.csv",
+                  "properties":{{"path":"/tmp/out.csv","hasHeader":true}}}}}}
+              ],
+              "edges": [
+                {{"id":"e1","source":"s1","target":"k1","data":{{"connectionType":"main"}}}}
+              ]
+            }}"#
+        ));
+        let compiled = compile(&p).unwrap();
+        let src_sql = &compiled.stages[0].sql;
+        assert!(
+            src_sql.contains("'event_date': 'VARCHAR'"),
+            "present column kept in types=: {}",
+            src_sql
+        );
+        assert!(
+            !src_sql.contains("missing_col"),
+            "absent column dropped from types=: {}",
+            src_sql
+        );
+        let _ = std::fs::remove_file(&path);
     }
 
     #[test]

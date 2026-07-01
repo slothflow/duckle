@@ -89,7 +89,11 @@ const CONNECTION_TYPES: ConnectionType[] = [
         fields: ['host', 'port', 'username', 'password'],
         defaultPort: 9200,
     },
-    { kind: 's3', label: 'Amazon S3', fields: ['bucket', 'region', 'accessKey', 'secretKey'] },
+    {
+        kind: 's3',
+        label: 'Amazon S3 / MinIO',
+        fields: ['bucket', 'region', 'accessKey', 'secretKey', 'endpoint', 'urlStyle'],
+    },
     {
         kind: 'gcs',
         label: 'Google Cloud Storage',
@@ -118,6 +122,8 @@ const FIELD_LABELS: Partial<Record<keyof ConnectionPayload, string>> = {
     accountKey: 'Account key',
     brokers: 'Bootstrap servers',
     url: 'Base URL',
+    endpoint: 'Endpoint (MinIO / R2 / B2, blank for AWS)',
+    urlStyle: 'URL style (path or vhost)',
 };
 
 const SECRET_FIELDS = new Set<keyof ConnectionPayload>(['password', 'secretKey', 'accountKey']);

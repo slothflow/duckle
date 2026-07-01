@@ -18,6 +18,10 @@ duckle-duckdb-engine = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 regex = "1"
+# Web-console scheduler: cron expressions (evaluated in local time) alongside
+# the existing interval schedules (issue #132). Already in the workspace lock.
+chrono = { workspace = true }
+cron = { workspace = true }
 aes-gcm = "0.10"
 sha2 = "0.10"
 base64 = "0.22"

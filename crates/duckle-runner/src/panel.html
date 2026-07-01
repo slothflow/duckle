@@ -302,8 +302,9 @@ function renderJobs(){
   if(q) list=list.filter(p=>(p.name||p.id).toLowerCase().includes(q));
   $('jobs-empty').classList.toggle('hidden', list.length>0);
   $('jobs').innerHTML=list.map(p=>{
-    const sc=p.schedule||{}; const on=sc.enabled&&sc.intervalMinutes>0;
-    const schedHtml=on?`<span class="sched on">◷ every ${sc.intervalMinutes}m</span>`:`<span class="sched">manual</span>`;
+    const sc=p.schedule||{}; const on=sc.enabled&&(sc.cron?true:sc.intervalMinutes>0);
+    const schedLabel=sc.cron?esc(sc.cron):('every '+sc.intervalMinutes+'m');
+    const schedHtml=on?`<span class="sched on">◷ ${schedLabel}</span>`:`<span class="sched">manual</span>`;
     const rate=p.st.rate==null?'':`<div class="rate"><i style="width:${p.st.rate}%"></i></div>`;
     const open=OPEN_JOB===p.id?'open':'';
     return `<div class="job ${open}" data-id="${esc(p.id)}">
@@ -388,17 +389,22 @@ function renderSchedules(){
       <td><b>${esc(p.name||p.id)}</b><div class="job-file">${esc(p.file)}</div></td>
       <td>${p.lastStatus?pill(p.lastStatus):'<span class="muted">never</span>'}</td>
       <td><label class="muted" style="display:inline-flex;gap:6px;align-items:center"><input type="checkbox" id="en-${esc(p.id)}" ${sc.enabled?'checked':''}> every</label>
-        <input type="number" min="0" id="iv-${esc(p.id)}" value="${sc.intervalMinutes||0}"> min</td>
+        <input type="number" min="0" id="iv-${esc(p.id)}" value="${sc.intervalMinutes||0}"> min
+        <span class="muted" style="margin:0 4px">or cron</span>
+        <input type="text" id="cr-${esc(p.id)}" value="${esc(sc.cron||'')}" placeholder="0 9 * * 1" title="5-field cron in local time (min hour day-of-month month day-of-week); overrides the interval when set" style="width:104px"></td>
       <td style="text-align:right"><button class="btn" onclick="saveSched('${esc(p.id)}')">Save</button>
         <button class="btn primary" onclick="runJob('${esc(p.file)}','${esc(p.id)}',this)">Run now</button></td>
     </tr>`;
   }).join('');
 }
 async function saveSched(id){
-  await api('/api/schedules',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({id, enabled:$('en-'+id).checked, intervalMinutes:parseInt($('iv-'+id).value||'0',10)})});
+  const cron=($('cr-'+id).value||'').trim();
+  const enabled=$('en-'+id).checked, intervalMinutes=parseInt($('iv-'+id).value||'0',10);
+  const r=await api('/api/schedules',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({id, enabled, intervalMinutes, cron})});
+  if(r&&r.error){ toast(r.error); return; }
   toast('Schedule saved for '+id);
-  const p=PIPES.find(x=>x.id===id); if(p) p.schedule={enabled:$('en-'+id).checked,intervalMinutes:parseInt($('iv-'+id).value||'0',10)};
+  const p=PIPES.find(x=>x.id===id); if(p) p.schedule={enabled,intervalMinutes,cron};
   renderJobs();
 }
 
@@ -410,7 +416,7 @@ async function showLog(id, rowId){
   const d=await api('/api/log?id='+encodeURIComponent(id)+'&tail=200');
   if(!d.entries||!d.entries.length){ box.textContent='No log entries yet for this pipeline.'; return; }
   box.textContent=d.entries.map(e=> e.raw!=null? e.raw :
-    [e.ts||e.time||'', e.event||'', e.component||'', e.node_id||e.label||'', e.error||e.message||(e.rows!=null?e.rows+' rows':(e.status||''))]
+    [(e.ts||e.time)?fullTime(e.ts||e.time):'', e.event||'', e.component||'', e.node_id||e.label||'', e.error||e.message||(e.rows!=null?e.rows+' rows':(e.status||''))]
       .filter(Boolean).join('  ')).join('\n');
 }
 function collectParams(id){

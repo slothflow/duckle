@@ -1215,11 +1215,27 @@ export default function App() {
             if (result) {
                 // The engine's RunResult has no messages; carry over the
                 // log/warn lines accumulated from the streamed events.
-                setRunResult(prev =>
-                    prev?.messages?.length
-                        ? { ...result, messages: prev.messages }
-                        : result,
-                );
+                setRunResult(prev => {
+                    // The Output and Console tabs iterate runResult.nodes in
+                    // insertion order, but the engine serializes a BTreeMap
+                    // (sorted by internal node id), which doesn't match execution
+                    // order. The streamed stage_started events inserted prev.nodes
+                    // keys in true execution order, so reorder the final result to
+                    // follow that; any keys only in the result are appended
+                    // (fallback for a run that didn't stream events). (#134)
+                    const streamOrder = prev ? Object.keys(prev.nodes) : [];
+                    const orderedNodes: RunResult['nodes'] = {};
+                    for (const id of streamOrder) {
+                        if (id in result.nodes) orderedNodes[id] = result.nodes[id];
+                    }
+                    for (const id of Object.keys(result.nodes)) {
+                        if (!(id in orderedNodes)) orderedNodes[id] = result.nodes[id];
+                    }
+                    const ordered = { ...result, nodes: orderedNodes };
+                    return prev?.messages?.length
+                        ? { ...ordered, messages: prev.messages }
+                        : ordered;
+                });
                 // Merge the previews back into each node's data so the
                 // Preview tab and the inline schema badge stay in sync
                 // with what just ran.

@@ -4155,6 +4155,8 @@ version = "0.0.1"
 dependencies = [
  "aes-gcm",
  "base64 0.22.1",
+ "chrono",
+ "cron",
  "duckle-duckdb-engine",
  "ed25519-dalek",
  "getrandom 0.2.17",

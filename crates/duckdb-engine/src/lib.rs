@@ -439,6 +439,24 @@ impl DuckdbEngine {
         if format == "ducklake" || format == "ducklake_snapshots" {
             p.push_str(&plan::ducklake_attach(options, true));
         }
+        // ATTACH-based relational sources need their catalog attached as
+        // duckle_src before the inspect DESCRIBE / sample SELECT can resolve the
+        // table, exactly as the run path does (#129: Postgres autodetect
+        // returned col_1/col_2/col_3 because no arm attached the catalog).
+        if matches!(
+            format,
+            "postgres"
+                | "cockroach"
+                | "mysql"
+                | "mariadb"
+                | "redshift"
+                | "pgvector"
+                | "motherduck"
+                | "bigquery"
+                | "quack"
+        ) {
+            p.push_str(&plan::attach_prelude(&format!("src.{format}"), options));
+        }
         p
     }
 

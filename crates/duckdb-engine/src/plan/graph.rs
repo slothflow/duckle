@@ -383,6 +383,36 @@ pub(crate) fn output_table_ref(source_id: &str, source_handle: Option<&str>) -> 
     }
 }
 
+/// A Pure SQL node (`code.sql` / `code.sqltemplate` with `pureSql: true`) runs
+/// its body verbatim with no CREATE wrapper, so it never registers a
+/// `"<node_id>"` relation - only the relation its own SQL created, which the
+/// properties panel tells the user to name with the node's SQL name (`alias`).
+/// A consumer on such a node's main output must therefore reference it by that
+/// alias, not the auto-generated node id (#102). Returns the alias only when it
+/// is a distinct, non-empty name; None means "reference by node id as usual".
+pub(crate) fn pure_sql_alias_ref(node: &PipelineNode) -> Option<String> {
+    let cid = node.data.component_id.as_deref()?;
+    if !matches!(cid, "code.sql" | "code.sqltemplate") {
+        return None;
+    }
+    let is_pure = node
+        .data
+        .properties
+        .as_ref()
+        .and_then(|p| p.get("pureSql"))
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    if !is_pure {
+        return None;
+    }
+    node.data
+        .alias
+        .as_deref()
+        .map(str::trim)
+        .filter(|a| !a.is_empty() && *a != node.id)
+        .map(str::to_string)
+}
+
 /// SQL for a `ctl.*` node that exposes its single upstream unchanged under
 /// its own name (wait, throttle, barrier, checkpoint, runpipeline, iterate,
 /// try, trigger, foreach, gate, ...). Their real effect (delay, sub-pipeline
